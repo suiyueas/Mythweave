@@ -1,0 +1,16 @@
+import { get, post, put, del } from './request'
+
+export const chapterApi = {
+  listVolumes: (projectId) => get(`/api/projects/${projectId}/chapters/volumes`),
+  createVolume: (projectId, data) => post(`/api/projects/${projectId}/chapters/volumes`, data),
+  listChapters: (projectId) => get(`/api/projects/${projectId}/chapters`),
+  getChapter: (projectId, chapterId) => get(`/api/projects/${projectId}/chapters/${chapterId}`),
+  createChapter: (projectId, data) => post(`/api/projects/${projectId}/chapters`, data),
+  updateChapter: (projectId, data, silent) => {
+    const url = `/api/projects/${projectId}/chapters/${data.id}` + (silent ? '?silent=true' : '')
+    return put(url, data)
+  },
+  deleteChapter: (projectId, chapterId) => del(`/api/projects/${projectId}/chapters/${chapterId}`),
+  reorderChapters: (projectId, orderedIds) => put(`/api/projects/${projectId}/chapters/reorder`, { orderedIds }),
+  listVersions: (projectId, chapterId) => get(`/api/projects/${projectId}/chapters/${chapterId}/versions`)
+}

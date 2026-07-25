@@ -1,0 +1,43 @@
+# ─── Java / Maven ───
+target/
+*.class
+*.jar
+*.war
+*.log
+*.tmp
+*.bak
+springboot/target/
+springboot/*.log
+
+# ─── Node / Vue ───
+node_modules/
+vue/node_modules/
+vue/dist/
+vue/dist-dev/
+*.log
+
+# ─── IDE ───
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Env ───
+.env
+.env.local
+.env.*.local
+application-local.yml
+application-dev.yml
+
+# ─── Misc ───
+*.pid
+*.seed
+*.sublime-workspace

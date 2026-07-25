@@ -1,0 +1,203 @@
+/* ═══════════════════════════════════════════
+   AI小说创作平台 · 编辑/杂志风 · 暖调设计系统
+   ═══════════════════════════════════════════ */
+
+:root {
+  --bg: #faf7f2;
+  --sidebar-bg: #f3efe8;
+  --card: #ffffff;
+  --text: #1a1815;
+  --text-secondary: #6b6560;
+  --text-muted: #9c9690;
+  --accent: #d97706;
+  --accent-glow: rgba(217,119,6,0.15);
+  --teal: #0e7490;
+  --teal-subtle: rgba(14,116,144,0.08);
+  --rose: #be123c;
+  --rose-subtle: rgba(190,18,60,0.08);
+  --emerald: #0d9488;
+  --emerald-subtle: rgba(13,148,136,0.08);
+  --purple: #7c3aed;
+  --purple-subtle: rgba(124,58,237,0.08);
+  --border: #e8e3dc;
+  --border-hover: #d4cec6;
+  --shadow-sm: 0 1px 3px rgba(26,24,21,0.04);
+  --shadow-md: 0 4px 16px rgba(26,24,21,0.06);
+  --shadow-lg: 0 12px 40px rgba(26,24,21,0.08);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --sidebar-width: 260px;
+  --header-height: 56px;
+  --font-display: 'Playfair Display', 'Noto Serif SC', serif;
+  --font-body: 'Crimson Pro', 'Noto Serif SC', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* 编辑器设置 */
+  --editor-font-size: 16px;
+  --editor-line-height: 1.65;
+  --editor-font-family: 'Crimson Pro', 'Noto Serif SC', serif;
+}
+
+/* 紧凑模式 */
+.compact-mode {
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-sm: none;
+  --shadow-md: 0 2px 8px rgba(26,24,21,0.04);
+}
+
+/* 侧边栏位置：右侧时交换 Sidebar 和 main-area 的顺序 */
+[data-sidebar-position="right"] .app-shell {
+  flex-direction: row-reverse;
+}
+
+/* 侧边栏宽度 */
+[data-sidebar-width="compact"] {
+  --sidebar-width: 200px;
+}
+[data-sidebar-width="wide"] {
+  --sidebar-width: 320px;
+}
+
+/* ═══ 动效控制 ═══ */
+
+/* 背景纹理控制 */
+body.no-bg-texture::before {
+  display: none !important;
+}
+
+/* 页面切换动画控制 */
+:root.no-page-transition .panel-slide-enter-active,
+:root.no-page-transition .panel-slide-leave-active,
+:root.no-page-transition .fade-enter-active,
+:root.no-page-transition .fade-leave-active,
+:root.no-page-transition .toast-pop-enter-active,
+:root.no-page-transition .toast-pop-leave-active,
+:root.no-page-transition .modal-fade-enter-active,
+:root.no-page-transition .modal-fade-leave-active,
+:root.no-page-transition .toast-fade-enter-active,
+:root.no-page-transition .toast-fade-leave-active {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* 悬停效果控制 */
+:root.no-hover-effect .card:hover,
+:root.no-hover-effect .btn:hover,
+:root.no-hover-effect .btn-ghost:hover,
+:root.no-hover-effect .btn-primary:hover,
+:root.no-hover-effect .btn-outline:hover,
+:root.no-hover-effect .nav-item:hover,
+:root.no-hover-effect .color-swatch-btn:hover,
+:root.no-hover-effect .btn-option:hover,
+:root.no-hover-effect .btn-tag:hover,
+:root.no-hover-effect .shortcut-row:hover,
+:root.no-hover-effect .stat-card:hover,
+:root.no-hover-effect .theme-card:hover,
+:root.no-hover-effect .setting-card:hover,
+:root.no-hover-effect .top-bar-btn:hover,
+:root.no-hover-effect .filter-tab:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-color: var(--border) !important;
+  background-image: none !important;
+}
+
+/* 加载动画控制 */
+:root.no-loading-anim [class*="spinner"],
+:root.no-loading-anim [class*="skeleton"],
+:root.no-loading-anim [class*="loading"],
+:root.no-loading-anim .animate-pulse {
+  animation: none !important;
+  display: none !important;
+}
+
+/* ═══ 全局暗色主题覆盖 ═══
+   .theme-dark 添加到 :root，覆盖各组件中硬编码的 Tailwind 颜色 */
+
+.theme-dark [class*="bg-\[#faf7f2\]"],
+.theme-dark [class*="bg-\[#faf8f5\]"],
+.theme-dark [class*="bg-\[#f5f3ef\]"],
+.theme-dark [style*="background: #faf7f2"],
+.theme-dark [style*="background: #faf8f5"] {
+  background: var(--sidebar-bg) !important;
+}
+
+.theme-dark [class*="bg-white"],
+.theme-dark [class*="bg-\[white\]"],
+.theme-dark [style*="background: #fff"],
+.theme-dark [style*="background: white"],
+.theme-dark [style*="background-color: #fff"],
+.theme-dark [style*="background-color: white"] {
+  background: var(--card) !important;
+}
+
+.theme-dark [class*="bg-\[#fef3c7\]"],
+.theme-dark [style*="background: #fef3c7"] {
+  background: #374151 !important;
+}
+
+.theme-dark [class*="text-\[#9c9690\]"],
+.theme-dark [class*="text-\[#b8b0a8\]"],
+.theme-dark [class*="text-\[#94a3b8\]"],
+.theme-dark [style*="color: #9c9690"],
+.theme-dark [style*="color: #b8b0a8"],
+.theme-dark [style*="color: #94a3b8"] {
+  color: var(--text-muted) !important;
+}
+
+.theme-dark [class*="text-\[#6b6560\]"],
+.theme-dark [class*="text-\[#1a1815\]"],
+.theme-dark [style*="color: #6b6560"],
+.theme-dark [style*="color: #1a1815"] {
+  color: var(--text-secondary) !important;
+}
+
+.theme-dark [class*="text-\[#d4cec6\]"],
+.theme-dark [class*="text-\[#d0c8be\]"],
+.theme-dark [style*="color: #d4cec6"] {
+  color: var(--border-hover) !important;
+}
+
+.theme-dark [class*="text-\[#92400e\]"],
+.theme-dark [class*="text-\[#b45309\]"],
+.theme-dark [style*="color: #92400e"] {
+  color: #fbbf24 !important;
+}
+
+.theme-dark [class*="border-\[#e8e3dc\]"],
+.theme-dark [class*="border-\[#f0ece6\]"],
+.theme-dark [class*="border-\[#f3efe8\]"],
+.theme-dark [style*="border-color: #e8e3dc"],
+.theme-dark [style*="border-color: #f0ece6"] {
+  border-color: var(--border) !important;
+}
+
+.theme-dark [class*="hover\:bg-\[#f3efe8\]"]:hover {
+  background: #3a3a52 !important;
+}
+
+.theme-dark [class*="hover\:bg-white"]:hover,
+.theme-dark [class*="hover\:bg-\[white\]"]:hover {
+  background: #3a3a52 !important;
+}
+
+.theme-dark .sidebar {
+  background: var(--sidebar-bg) !important;
+}
+
+.theme-dark .card,
+.theme-dark [class*="bg-\[\#ffffff\]"],
+.theme-dark [class*="bg-\[#ffff\]"],
+.theme-dark .setting-section,
+.theme-dark .setting-card,
+.theme-dark .stats-strip,
+.theme-dark .profile-hero,
+.theme-dark .password-modal {
+  background: var(--card) !important;
+}

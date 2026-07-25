@@ -1,0 +1,123 @@
+// 开发环境走 Vite 代理（同源无 CORS），生产环境直连后端
+const BASE_URL = import.meta.env.DEV ? '' : 'http://localhost:8080'
+
+async function request(url, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...options.headers }
+  const token = localStorage.getItem('token')
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  const config = {
+    headers,
+    ...options
+  }
+  if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
+    config.body = JSON.stringify(config.body)
+  } else if (config.body instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
+
+  let response
+  try {
+    response = await fetch(`${BASE_URL}${url}`, config)
+  } catch (e) {
+    const err = new Error('服务器连接失败，请确认后端服务已启动')
+    err.code = 0
+    err.originalError = e
+    throw err
+  }
+
+  const json = await response.json()
+
+  if (json.code === 401) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    window.location.href = '/login'
+    throw new Error(json.message || '请先登录')
+  }
+
+  if (json.code != 200) {
+    const err = new Error(json.message || `请求失败 (${json.code})`)
+    err.code = json.code
+    throw err
+  }
+  return json.data
+}
+
+function get(url, params) {
+  if (params) {
+    const qs = new URLSearchParams(Object.entries(params).filter(([_, v]) => v != null)).toString()
+    url = `${url}?${qs}`
+  }
+  return request(url)
+}
+
+function post(url, body) { return request(url, { method: 'POST', body }) }
+function put(url, body) { return request(url, { method: 'PUT', body }) }
+function del(url) { return request(url, { method: 'DELETE' }) }
+
+function streamGet(url, params, onToken, onDone, onError) {
+  if (params) {
+    const qs = new URLSearchParams(Object.entries(params).filter(([_, v]) => v != null)).toString()
+    url = `${url}?${qs}`
+  }
+  let hasToken = false
+  const token = localStorage.getItem('token')
+  const headers = { 'Accept': 'text/event-stream' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return fetch(`${BASE_URL}${url}`, { headers })
+    .then(async (response) => {
+      // 检查 HTTP 状态码
+      if (!response.ok) {
+        let errMsg = `HTTP ${response.status}`
+        try {
+          const text = await response.text()
+          try {
+            const json = JSON.parse(text)
+            errMsg = json.message || json.error || text
+          } catch { errMsg = text || errMsg }
+        } catch { /* ignore */ }
+        throw new Error(errMsg)
+      }
+      if (!response.body) {
+        throw new Error('响应体为空')
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (!hasToken && onToken) {
+            onToken('⚠️ 服务器未返回有效响应，请检查后端 AI 配置（DeepSeek API Key）')
+          }
+          onDone && onDone()
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const raw = line.slice(5)
+            // 后端发送 JSON 编码的 token（"\n" 等特殊字符被转义）
+            let data
+            try {
+              data = JSON.parse(raw)
+            } catch {
+              data = raw  // 兼容非 JSON 格式
+            }
+            if (data !== undefined && data !== null) {
+              hasToken = true
+              onToken(data)
+            }
+          }
+        }
+      }
+    })
+    .catch((e) => { onError && onError(e) })
+}
+
+export { get, post, put, del, streamGet, request }
