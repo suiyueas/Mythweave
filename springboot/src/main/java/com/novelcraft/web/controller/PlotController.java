@@ -26,6 +26,7 @@ public class PlotController {
     @DeleteMapping("/threads/{id}") public R<Void> deleteThread(@PathVariable Long id) { threadMapper.deleteById(id); return R.ok(); }
 
     @GetMapping("/foreshadowing") public R<List<NovelForeshadowing>> listForeshadowing(@PathVariable Long projectId) { return R.ok(foreshadowingMapper.selectByProjectId(projectId)); }
+    @GetMapping("/foreshadowing/urgent") public R<List<NovelForeshadowing>> listUrgentForeshadowing(@PathVariable Long projectId, @RequestParam(defaultValue = "999") Integer currentChapter) { return R.ok(foreshadowingMapper.selectUrgentByProject(projectId, currentChapter)); }
     @PostMapping("/foreshadowing") public R<NovelForeshadowing> createForeshadowing(@PathVariable Long projectId, @RequestBody NovelForeshadowing f) { f.setProjectId(projectId); foreshadowingMapper.insert(f); return R.ok(f); }
     @PutMapping("/foreshadowing/{id}") public R<NovelForeshadowing> updateForeshadowing(@PathVariable Long id, @RequestBody NovelForeshadowing f) { f.setId(id); foreshadowingMapper.updateById(f); return R.ok(foreshadowingMapper.selectById(id)); }
 

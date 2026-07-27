@@ -1,6 +1,7 @@
 package com.novelcraft.web.service;
 
 import com.novelcraft.web.client.DeepSeekClient;
+import com.novelcraft.web.config.AiProperties;
 import com.novelcraft.web.template.PromptTemplates;
 import com.novelcraft.web.entity.*;
 import com.novelcraft.web.mapper.*;
@@ -31,6 +32,7 @@ public class AiChatService {
     private final NovelChapterMapper chapterMapper;
     private final NovelForeshadowingMapper foreshadowingMapper;
     private final NovelProjectMapper projectMapper;
+    private final AiProperties aiProperties;
 
     /**
      * 流式续写
@@ -111,6 +113,18 @@ public class AiChatService {
      * AI 生成章节标题（上下文感知版）
      */
     public String generateTitle(Long projectId, Map<String, Object> params) throws IOException {
+        try {
+            return generateTitleInternal(projectId, params);
+        } catch (Exception e) {
+            log.error("AI生成标题失败，使用降级方案: {}", e.getMessage(), e);
+            return generateTitleFallback(projectId, params);
+        }
+    }
+
+    /**
+     * AI 生成章节标题（内部实现）
+     */
+    private String generateTitleInternal(Long projectId, Map<String, Object> params) throws IOException {
         NovelProject project = projectMapper.selectById(projectId);
         String projectTitle = project != null ? project.getTitle() : "未命名作品";
 
@@ -125,132 +139,94 @@ public class AiChatService {
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一位专业小说作家，正在为小说《").append(projectTitle).append("》")
-              .append("的第 ").append(chapterIndex).append(" 章创作标题。\n\n");
+              .append("第 ").append(chapterIndex).append(" 章创作标题。\n\n");
 
-        // 1. 已有标题风格分析
-        prompt.append("【已有章节标题】\n");
+        // 已有标题
+        prompt.append("【已有标题】（参考风格，勿重复）：");
         if (existingTitles != null && !existingTitles.isEmpty()) {
-            int max = Math.min(existingTitles.size(), 10);
-            for (int i = 0; i < max; i++) {
-                prompt.append("第").append(i + 1).append("章：").append(existingTitles.get(i)).append("\n");
-            }
-            String style = analyzeTitleStyle(existingTitles);
-            prompt.append("\n【风格分析】").append(style).append("\n");
-        } else {
-            prompt.append("（暂无已有标题，请自由发挥）\n");
+            prompt.append(String.join(" | ", existingTitles.stream().limit(8).toList()));
         }
         prompt.append("\n");
 
-        // 2. 大纲
+        // 核心意象词禁用
+        Set<String> usedKeywords = TitleDeduplicator.extractAllKeywords(existingTitles);
+        if (!usedKeywords.isEmpty()) {
+            prompt.append("【禁用词】：").append(String.join("、", usedKeywords)).append("\n");
+        }
+
+        // 大纲
         List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
+        log.info("[标题生成] 项目{}查询到大纲{}条", projectId, outlines != null ? outlines.size() : 0);
         if (outlines != null && !outlines.isEmpty()) {
-            prompt.append("【大纲结构】\n");
+            prompt.append("【大纲】：");
             for (NovelOutline o : outlines) {
-                prompt.append("- ").append(o.getTitle() != null ? o.getTitle() : "");
-                if (o.getDescription() != null && !o.getDescription().isEmpty()) {
-                    prompt.append("：").append(o.getDescription());
-                }
-                prompt.append("\n");
+                prompt.append(o.getTitle() != null ? o.getTitle() : "");
             }
             prompt.append("\n");
         }
 
-        // 3. 世界观关键词
+        // 世界观关键词
         List<NovelWorldSetting> worlds = worldSettingMapper.selectByProjectId(projectId);
+        log.info("[标题生成] 项目{}查询到世界观{}条", projectId, worlds != null ? worlds.size() : 0);
         if (worlds != null && !worlds.isEmpty()) {
             List<String> keywords = new java.util.ArrayList<>();
             for (NovelWorldSetting w : worlds) {
                 if (w.getName() != null) keywords.add(w.getName());
             }
             if (!keywords.isEmpty()) {
-                prompt.append("【世界观关键词】").append(String.join("、", keywords.stream().limit(5).toList()))
-                      .append("\n（标题应融入这些世界观元素）\n\n");
+                prompt.append("【世界观】：").append(String.join("、", keywords.stream().limit(5).toList())).append("\n");
             }
         }
 
-        // 4. 人物
+        // 人物
         List<NovelCharacter> chars = characterMapper.selectByProjectId(projectId);
+        log.info("[标题生成] 项目{}查询到人物{}条", projectId, chars != null ? chars.size() : 0);
         if (chars != null && !chars.isEmpty()) {
-            prompt.append("【本章涉及人物】\n");
-            int max = Math.min(chars.size(), 5);
-            for (int i = 0; i < max; i++) {
-                NovelCharacter c = chars.get(i);
-                prompt.append("- ").append(c.getName() != null ? c.getName() : "")
-                      .append("（").append(c.getRole() != null ? c.getRole() : "未知").append("）\n");
+            List<String> names = new java.util.ArrayList<>();
+            for (int i = 0; i < Math.min(chars.size(), 5); i++) {
+                if (chars.get(i).getName() != null) names.add(chars.get(i).getName());
             }
-            prompt.append("\n");
+            if (!names.isEmpty()) {
+                prompt.append("【人物】：").append(String.join("、", names)).append("\n");
+            }
         }
 
-        // 5. 情节
-        List<NovelPlotThread> threads = plotThreadMapper.selectByProjectId(projectId);
-        if (threads != null && !threads.isEmpty()) {
-            prompt.append("【情节状态】\n");
-            for (NovelPlotThread t : threads) {
-                prompt.append("- ").append(t.getName() != null ? t.getName() : "")
-                      .append(" 进度").append(t.getProgress() != null ? t.getProgress() : 0).append("%\n");
-            }
-            prompt.append("\n");
-        }
-
-        // 6. 伏笔
+        // 待回收伏笔
         List<NovelForeshadowing> foreshadowings = foreshadowingMapper.selectByProjectId(projectId);
         if (foreshadowings != null) {
             List<NovelForeshadowing> pending = foreshadowings.stream()
                     .filter(f -> "pending".equals(f.getStatus()) || "developing".equals(f.getStatus()))
                     .toList();
+            log.info("[标题生成] 项目{}查询到待回收伏笔{}条", projectId, pending.size());
             if (!pending.isEmpty()) {
-                prompt.append("【待回收伏笔】\n");
+                prompt.append("【伏笔】：");
                 for (NovelForeshadowing f : pending) {
-                    prompt.append("- ").append(f.getName() != null ? f.getName() : "");
-                    if (f.getDescription() != null && !f.getDescription().isEmpty()) {
-                        prompt.append("：").append(f.getDescription());
-                    }
-                    prompt.append("\n");
+                    prompt.append(f.getName() != null ? f.getName() : "");
                 }
-                prompt.append("（标题可暗示即将回收的伏笔）\n\n");
+                prompt.append("\n");
             }
         }
 
-        // 7. 用户方向
-        prompt.append("【用户要求】").append(direction != null ? direction : "延续主线剧情").append("\n\n");
-
-        // 8. 哨兵告警约束（创作指导）
+        // 哨兵约束
         if (sentinelHints != null && !sentinelHints.isEmpty()) {
-            prompt.append("【🔍 智能哨兵创作约束】\n");
-            prompt.append("以下哨兵告警信息需要在本章中处理，标题应体现这些关键点：\n");
-            for (int i = 0; i < sentinelHints.size(); i++) {
-                prompt.append((i + 1)).append(". ").append(sentinelHints.get(i)).append("\n");
-            }
-            prompt.append("（标题应体现或暗示上述关键剧情点）\n\n");
+            prompt.append("【创作要点】：").append(String.join("；", sentinelHints.stream().limit(2).toList())).append("\n");
         }
 
-        // 9. 核心意象词禁用列表（明确标记为 "禁止使用"
-        Set<String> usedKeywords = TitleDeduplicator.extractAllKeywords(existingTitles);
-        if (!usedKeywords.isEmpty()) {
-            prompt.append("【⚠️ 已使用的核心意象词（严禁重复使用）】\n");
-            prompt.append("以下词汇已在已有标题中出现，新标题中严禁使用：\n");
-            prompt.append(String.join("、", usedKeywords)).append("\n\n");
-        }
+        // 用户方向
+        prompt.append("【方向】：").append(direction).append("\n\n");
 
-        // 10. 去重指令（最强约束）
-        prompt.append("【⚠️ 去重约束（最高优先级）】\n");
-        prompt.append("1. 生成的标题必须与上述所有已有标题**完全不同**，包括同义或相似表达\n");
-        prompt.append("2. 严禁使用上述已使用的核心意象词\n");
-        prompt.append("3. 标题应暗示本章核心事件或情感，与大纲节点紧密关联\n");
-        prompt.append("4. 优先使用全新的意象词，形成递进而非重复\n\n");
+        // 生成要求
+        prompt.append("要求：5-8字标题，需与已有标题风格一致、禁止重复用词、融入世界观和大纲元素。\n");
+        prompt.append("请只返回标题文本：");
 
-        // 11. 生成要求
-        prompt.append("【生成要求】\n");
-        prompt.append("1. 标题 5-8 个字，与已有标题风格保持一致（意象化、诗意）\n");
-        prompt.append("2. 标题必须与大纲节点的主题紧密相关，但表达方式不能重复\n");
-        prompt.append("3. 融入世界观元素，暗示本章核心事件或情感\n");
-        prompt.append("4. 与上一章标题形成叙事递进\n");
-        prompt.append("5. 如果章节涉及新人物或新冲突，标题应体现这一点\n");
-        prompt.append("6. 如果存在待回收伏笔，标题可做暗示\n");
-        prompt.append("\n请只返回标题文本，不要任何解释或前缀：");
+        int maxTokens = aiProperties.getDeepseek().getMaxToken();
+        log.info("[标题生成] 项目{}使用maxTokens={}", projectId, maxTokens);
 
-        // 12. 去重校验：最多重试 3 次
-        String reply = deepSeekClient.chat("你是一位专业小说作家", prompt.toString(), 0.7, 256);
+        // 调用 AI 生成标题
+        String fullPrompt = prompt.toString();
+        log.info("[标题生成] 项目{}最终Prompt长度{}字，前150字：{}", projectId, fullPrompt.length(), fullPrompt.substring(0, Math.min(150, fullPrompt.length())));
+        String reply = deepSeekClient.chat("你是一位专业小说作家", fullPrompt, 0.7, maxTokens);
+        log.info("[标题生成] 项目{} AI原始回复：{}", projectId, reply);
         String title = cleanTitle(reply);
         int retry = 0;
         while (TitleDeduplicator.isDuplicate(title, existingTitles) && retry < 3) {
@@ -357,6 +333,45 @@ public class AiChatService {
     }
 
     /**
+     * 构建伏笔回收上下文（按紧急程度排序）
+     * 只包含未回收且接近回收期限的伏笔
+     */
+    private String buildForeshadowingRecoveryPrompt(Long projectId, int currentChapter, int maxEntries) {
+        List<NovelForeshadowing> urgent = foreshadowingMapper.selectUrgentByProject(projectId, currentChapter);
+        if (urgent == null || urgent.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("【伏笔回收任务】（重要！）\n");
+        sb.append("当前有 ").append(urgent.size()).append(" 条伏笔已到回收时机，请在生成本章内容时以合理、自然的方式回收至少一条：\n\n");
+
+        int count = 0;
+        for (NovelForeshadowing f : urgent) {
+            if (count >= maxEntries) break;
+            int buriedIn = f.getChapterId() != null ? f.getChapterId().intValue() : 1;
+            int passed = currentChapter - buriedIn;
+            String urgency = passed >= 3 ? "⚠️紧急" : (passed >= 1 ? "📍届时" : "🔜即将");
+
+            sb.append("- ").append(urgency).append(" 伏笔「").append(f.getName() != null ? f.getName() : "").append("」");
+            sb.append("（埋于第").append(buriedIn).append("章，已过").append(passed).append("章）");
+            if (f.getDescription() != null && !f.getDescription().isEmpty()) {
+                sb.append("\n  描述：").append(f.getDescription());
+            }
+            sb.append("\n");
+            count++;
+        }
+
+        sb.append("\n回收要求：\n");
+        sb.append("1. 以自然、流畅的方式将伏笔融入本章情节\n");
+        sb.append("2. 可通过角色对话、回忆、事件等方式揭示伏笔\n");
+        sb.append("3. 不要生硬地为了回收而回收，保持故事连贯性\n");
+        sb.append("4. 如果无法在本章自然回收，可适当铺垫但不要忽略\n\n");
+
+        return sb.toString();
+    }
+
+    /**
      * AI 流式生成章节内容（带章节衔接上下文）
      */
     public void streamGenerateContent(Long projectId, Integer chapterIndex, String title,
@@ -373,13 +388,18 @@ public class AiChatService {
             prevEnding = "（第一章，无上一章内容）";
         }
 
-        String prompt = String.format(PromptTemplates.GENERATE_CONTENT,
+        String basePrompt = String.format(PromptTemplates.GENERATE_CONTENT,
                 projectTitle,
                 chapterIndex,
                 prevEnding,
                 title != null ? title : "未命名章节",
                 direction != null ? direction : "延续故事主线，推动情节发展",
                 targetWords != null ? targetWords : 2000);
+
+        // 注入伏笔回收上下文
+        String foreshadowingContext = buildForeshadowingRecoveryPrompt(projectId, chapterIndex, 3);
+        String prompt = foreshadowingContext.isEmpty() ? basePrompt
+                : basePrompt + "\n\n" + foreshadowingContext + "\n请在遵循上述要求的同时，自然地融入伏笔回收。";
 
         int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家", prompt, 0.8, 4096, onToken);
 
@@ -523,22 +543,29 @@ public class AiChatService {
             prompt.append("\n");
         }
 
-        // 6. 伏笔
-        List<NovelForeshadowing> foreshadowings = foreshadowingMapper.selectByProjectId(projectId);
+        // 6. 伏笔（按紧迫程度排序）
+        List<NovelForeshadowing> foreshadowings = foreshadowingMapper.selectUrgentByProject(projectId, chapterIndex);
         if (foreshadowings != null && !foreshadowings.isEmpty()) {
-            long pending = foreshadowings.stream().filter(f -> f.getStatus() != null &&
-                    (f.getStatus().equals("pending") || f.getStatus().equals("developing"))).count();
-            if (pending > 0) {
-                prompt.append("【待回收伏笔】\n");
-                foreshadowings.stream().filter(f -> f.getStatus() != null &&
-                        (f.getStatus().equals("pending") || f.getStatus().equals("developing"))).forEach(f -> {
-                    prompt.append("- ").append(f.getName() != null ? f.getName() : "");
+            List<NovelForeshadowing> pending = foreshadowings.stream().filter(f -> f.getStatus() != null &&
+                    (f.getStatus().equals("pending") || f.getStatus().equals("developing"))).toList();
+            if (!pending.isEmpty()) {
+                prompt.append("【伏笔回收任务】（重要！）\n");
+                prompt.append("以下伏笔已埋设一段时间，请在本章中以自然方式回收至少一条：\n\n");
+                int count = 0;
+                for (NovelForeshadowing f : pending) {
+                    if (count >= 5) break;
+                    int buriedIn = f.getChapterId() != null ? f.getChapterId().intValue() : 1;
+                    int passed = chapterIndex - buriedIn;
+                    String urgency = passed >= 3 ? "⚠️紧急" : (passed >= 1 ? "📍届时" : "🔜即将");
+                    prompt.append("- ").append(urgency).append(" 伏笔「").append(f.getName() != null ? f.getName() : "").append("」");
+                    prompt.append("（埋于第").append(buriedIn).append("章，已过").append(passed).append("章）");
                     if (f.getDescription() != null && !f.getDescription().isEmpty()) {
-                        prompt.append("：").append(f.getDescription());
+                        prompt.append("\n  描述：").append(f.getDescription());
                     }
                     prompt.append("\n");
-                });
-                prompt.append("\n");
+                    count++;
+                }
+                prompt.append("\n回收要求：自然融入情节，可通过对话、回忆、事件等方式揭示\n\n");
             }
         }
 
@@ -574,7 +601,7 @@ public class AiChatService {
         prompt.append("1. 开头必须从上一章结尾处自然延续，不要跳跃时间或场景\n");
         prompt.append("2. 人物状态、情感、场景保持连贯，与上一章结尾无缝衔接\n");
         prompt.append("3. 请严格遵循以上世界观、人物设定进行创作\n");
-        prompt.append("4. 推动主线进度，呼应已有伏笔\n");
+        prompt.append("4. 【重要】积极回收上述伏笔，以自然方式揭示或推进伏笔情节\n");
         prompt.append("5. 保持人物性格一致\n");
         prompt.append("6. 目标字数：约 ").append(targetWords).append(" 字\n");
         prompt.append("\n【强制格式要求】\n");
@@ -604,11 +631,19 @@ public class AiChatService {
     /**
      * AI 扩写
      */
-    public String expand(Long projectId, String currentContent, String direction, String style) throws IOException {
+    public String expand(Long projectId, String currentContent, String direction, String style, Integer chapterIndex) throws IOException {
         String prompt = PromptTemplates.EXPAND
                 .replace("{currentContent}", currentContent != null ? currentContent : "")
                 .replace("{direction}", direction != null ? direction : "延续故事主线，丰富细节")
                 .replace("{style}", style != null ? style : "自然流畅");
+
+        // 注入伏笔回收上下文
+        if (chapterIndex != null && chapterIndex > 0) {
+            String foreshadowingContext = buildForeshadowingRecoveryPrompt(projectId, chapterIndex, 2);
+            if (!foreshadowingContext.isEmpty()) {
+                prompt = prompt + "\n\n" + foreshadowingContext + "\n请在扩写时自然地融入伏笔回收。";
+            }
+        }
 
         String reply = deepSeekClient.chat("你是一位专业小说作家", prompt, 0.7, 8192);
 
@@ -622,5 +657,65 @@ public class AiChatService {
         sessionMapper.insert(session);
 
         return reply;
+    }
+
+    /**
+     * AI 生成标题降级方案（当 AI 调用失败时使用）
+     * 基于已有标题和章节序号生成一个基础标题
+     */
+    private String generateTitleFallback(Long projectId, Map<String, Object> params) {
+        Integer chapterIndex = params.get("chapterIndex") != null
+                ? ((Number) params.get("chapterIndex")).intValue() : 1;
+        @SuppressWarnings("unchecked")
+        List<String> existingTitles = (List<String>) params.get("existingTitles");
+        @SuppressWarnings("unchecked")
+        List<String> sentinelHints = (List<String>) params.get("sentinelHints");
+
+        String direction = params.get("direction") != null
+                ? params.get("direction").toString() : "";
+        String tone = params.get("tone") != null
+                ? params.get("tone").toString() : "诗意意象";
+
+        String fallbackTitle = "第" + chapterIndex + "章";
+
+        // 尝试从哨兵建议中提取关键词
+        if (sentinelHints != null && !sentinelHints.isEmpty()) {
+            String hint = sentinelHints.get(0);
+            // 提取前6个字作为标题后缀
+            String keyword = hint.replaceAll("[^\\u4e00-\\u9fa5]", "").trim();
+            if (keyword.length() > 0) {
+                keyword = keyword.length() > 6 ? keyword.substring(0, 6) : keyword;
+                fallbackTitle = "第" + chapterIndex + "章 · " + keyword;
+                log.info("降级标题（基于哨兵建议）：{}", fallbackTitle);
+                return fallbackTitle;
+            }
+        }
+
+        // 尝试从方向描述中提取关键词
+        if (direction != null && !direction.isEmpty()) {
+            String keyword = direction.replaceAll("[^\\u4e00-\\u9fa5]", "").trim();
+            if (keyword.length() > 0) {
+                keyword = keyword.length() > 6 ? keyword.substring(0, 6) : keyword;
+                fallbackTitle = "第" + chapterIndex + "章 · " + keyword;
+                log.info("降级标题（基于方向描述）：{}", fallbackTitle);
+                return fallbackTitle;
+            }
+        }
+
+        // 如果有已有标题，尝试生成递进式标题
+        if (existingTitles != null && !existingTitles.isEmpty()) {
+            String lastTitle = existingTitles.get(existingTitles.size() - 1);
+            // 提取已有标题中的意象词
+            Set<String> keywords = TitleDeduplicator.extractAllKeywords(existingTitles);
+            if (!keywords.isEmpty()) {
+                String lastKeyword = keywords.iterator().next();
+                fallbackTitle = "第" + chapterIndex + "章 · " + lastKeyword;
+                log.info("降级标题（基于已有标题意象）：{}", fallbackTitle);
+                return fallbackTitle;
+            }
+        }
+
+        log.info("降级标题（默认）：{}", fallbackTitle);
+        return fallbackTitle;
     }
 }

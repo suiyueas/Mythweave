@@ -130,9 +130,9 @@ export const aiApi = {
   },
 
   // ─── AI 扩写（非流式，一次性生成完整内容） ───
-  async expand(projectId, { chapterId, currentContent, direction, style }) {
+  async expand(projectId, { chapterIndex, currentContent, direction, style }) {
     return post(`/api/projects/${projectId}/ai/expand`, {
-      chapterId,
+      chapterIndex,
       currentContent: currentContent || '',
       direction: direction || '延续故事主线，丰富细节',
       style: style || '自然流畅'

@@ -54,11 +54,42 @@ public class DeepSeekClient {
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "";
             if (!response.isSuccessful()) {
-                throw new IOException("DeepSeek API error: " + response.code() + " " + response.message());
+                log.error("DeepSeek API HTTP错误: code={}, message={}, body={}", response.code(), response.message(), responseBody);
+                throw new IOException("DeepSeek API error: " + response.code() + " " + response.message() + ", body: " + responseBody);
             }
-            JsonNode root = objectMapper.readTree(response.body().string());
-            return root.path("choices").get(0).path("message").path("content").asText();
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode choices = root.path("choices");
+            if (choices.isMissingNode() || choices.isEmpty() || choices.get(0) == null) {
+                log.error("DeepSeek API 响应中无choices: {}", responseBody);
+                throw new IOException("DeepSeek API 响应格式错误：无choices");
+            }
+            JsonNode message = choices.get(0).path("message");
+            if (message.isMissingNode()) {
+                log.error("DeepSeek API 响应中无message: {}", responseBody);
+                throw new IOException("DeepSeek API 响应格式错误：无message");
+            }
+
+            String content = message.path("content").asText();
+            String reasoningContent = message.path("reasoning_content").asText();
+            String finishReason = choices.get(0).path("finish_reason").asText();
+
+            log.info("DeepSeek响应: finish_reason={}, content长度={}, reasoning_content长度={}",
+                    finishReason, content != null ? content.length() : 0, reasoningContent != null ? reasoningContent.length() : 0);
+
+            if (content != null && !content.trim().isEmpty()) {
+                return content.trim();
+            } else if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
+                log.warn("AI仅返回推理过程，无最终内容。finish_reason={}", finishReason);
+                if ("length".equals(finishReason)) {
+                    throw new IOException("AI输出被截断（max_tokens不足），当前max_tokens=" + maxTokens + "，请增加max_tokens或简化Prompt");
+                }
+                throw new IOException("AI仅返回推理过程，无最终内容。请检查模型配置或重试。");
+            } else {
+                log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
+                throw new IOException("AI 返回空内容");
+            }
         }
     }
 

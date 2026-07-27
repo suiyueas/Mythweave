@@ -134,7 +134,11 @@ public class AiChatController {
     public R<String> generateTitle(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
         try {
             String title = aiChatService.generateTitle(projectId, body);
-            return R.ok(title);
+            if (title == null || title.trim().isEmpty()) {
+                log.warn("AI标题生成返回空，使用默认标题");
+                return R.ok("第" + body.get("chapterIndex") + "章");
+            }
+            return R.ok(title.trim());
         } catch (Exception e) {
             log.error("AI标题生成异常", e);
             return R.fail("AI服务异常: " + e.getMessage());
@@ -198,12 +202,19 @@ public class AiChatController {
      */
     @Operation(summary = "AI扩写")
     @PostMapping("/expand")
-    public R<String> expand(@PathVariable Long projectId, @RequestBody Map<String, String> body) {
+    public R<String> expand(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
         try {
-            String currentContent = body.getOrDefault("currentContent", "");
-            String direction = body.getOrDefault("direction", "延续故事主线，丰富细节");
-            String style = body.getOrDefault("style", "自然流畅");
-            String result = aiChatService.expand(projectId, currentContent, direction, style);
+            String currentContent = body.getOrDefault("currentContent", "") instanceof String
+                    ? (String) body.get("currentContent") : "";
+            String direction = body.getOrDefault("direction", "延续故事主线，丰富细节") instanceof String
+                    ? (String) body.get("direction") : "延续故事主线，丰富细节";
+            String style = body.getOrDefault("style", "自然流畅") instanceof String
+                    ? (String) body.get("style") : "自然流畅";
+            Integer chapterIndex = null;
+            if (body.get("chapterIndex") != null) {
+                chapterIndex = ((Number) body.get("chapterIndex")).intValue();
+            }
+            String result = aiChatService.expand(projectId, currentContent, direction, style, chapterIndex);
             return R.ok(result);
         } catch (Exception e) {
             log.error("AI扩写异常", e);

@@ -300,31 +300,6 @@
             </div>
           </template>
 
-          <!-- Agent -->
-          <template v-else-if="activeAiTab === 'agent'">
-            <div class="text-xs text-[#9c9690] mb-3">选择 Agent 执行自动化任务</div>
-            <div v-for="ag in editorAgents" :key="ag.key"
-              class="mb-2 p-2.5 rounded-lg border border-[#e8e3dc] cursor-pointer hover:border-[#d97706] transition-colors"
-              :class="activeEditorAgent === ag.key ? 'bg-[#fef3c7] border-[#d97706]' : 'bg-white'"
-              @click="activeEditorAgent = ag.key">
-              <div class="flex items-center gap-2">
-                <span class="text-base">{{ ag.icon }}</span>
-                <div class="flex-1 min-w-0">
-                  <div class="text-xs font-semibold text-[#6b6560]">{{ ag.label }}</div>
-                  <div class="text-[11px] text-[#9c9690]">{{ ag.desc }}</div>
-                </div>
-              </div>
-              <button
-                class="mt-1.5 w-full py-1 rounded text-[11px] font-medium transition-colors"
-                :class="activeEditorAgent === ag.key ? 'bg-[#d97706] text-white' : 'bg-[#f3efe8] text-[#6b6560] hover:bg-[#e8e3dc]'"
-                :disabled="agentLoading === ag.key"
-                @click.stop="handleExecuteAgent(ag)"
-              >
-                {{ agentLoading === ag.key ? '执行中...' : '执行任务' }}
-              </button>
-            </div>
-          </template>
-
           <!-- 协同创作 -->
           <template v-else-if="activeAiTab === 'cowrite'">
             <AICoWriter
@@ -383,6 +358,65 @@
                 <div class="text-3xl mb-2">✅</div>
                 <div class="text-xs text-[#9c9690]">本章通过哨兵检查</div>
                 <div class="text-[11px] text-[#d1d5db] mt-1">点击上方按钮重新扫描</div>
+              </div>
+            </div>
+          </template>
+
+          <!-- 伏笔回收 -->
+          <template v-else-if="activeAiTab === 'foreshadow'">
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-[#6b6560]">待回收伏笔</span>
+                <button
+                  class="px-2 py-1 text-[11px] rounded bg-[#dcfce7] text-[#16a34a] hover:bg-[#bbf7d0] transition-colors font-medium"
+                  :disabled="pendingForeshadowingsLoading"
+                  @click="fetchPendingForeshadowings"
+                >
+                  {{ pendingForeshadowingsLoading ? '加载中...' : '🔄 刷新' }}
+                </button>
+              </div>
+
+              <!-- 加载状态 -->
+              <div v-if="pendingForeshadowingsLoading" class="space-y-2">
+                <div v-for="n in 2" :key="n" class="p-3 rounded-lg border border-[#e8e3dc] animate-pulse">
+                  <div class="h-3 bg-[#e8e3dc] rounded w-2/3 mb-2"></div>
+                  <div class="h-2 bg-[#f3efe8] rounded w-full mb-1"></div>
+                  <div class="h-2 bg-[#f3efe8] rounded w-3/4"></div>
+                </div>
+              </div>
+
+              <!-- 伏笔列表 -->
+              <div v-else-if="pendingForeshadowings.length > 0" class="space-y-2">
+                <div v-for="fs in pendingForeshadowings" :key="fs.id" class="p-3 rounded-lg border text-xs"
+                  :class="fs.urgency === 'urgent' ? 'border-[#ef4444] bg-[#fef2f2]' : fs.urgency === 'warning' ? 'border-[#f59e0b] bg-[#fffbeb]' : 'border-[#e8e3dc] bg-white'">
+                  <div class="flex items-start gap-2">
+                    <span class="text-sm flex-shrink-0">{{ fs.urgency === 'urgent' ? '⚠️' : fs.urgency === 'warning' ? '📍' : '🔜' }}</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-semibold text-[#6b6560]">{{ fs.name }}</div>
+                      <p class="text-[#9c9690] mt-1 leading-relaxed">{{ fs.description || '暂无描述' }}</p>
+                      <div class="text-[11px] text-[#9c9690] mt-1.5">
+                        埋于第 {{ fs.chapterId }} 章 · 已过 {{ fs.passedChapters || 0 }} 章
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-2 flex gap-2">
+                    <button
+                      class="px-2 py-1 text-[11px] rounded bg-[#fef3c7] text-[#92400e] hover:bg-[#fde68a] transition-colors font-medium"
+                      @click="handleIntegrateForeshadow(fs)"
+                    >✨ 融入生成</button>
+                    <button
+                      class="px-2 py-1 text-[11px] rounded bg-[#e8e3dc] text-[#6b6560] hover:bg-[#d4cec6] transition-colors font-medium"
+                      @click="handleMarkResolved(fs)"
+                    >✅ 已回收</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 空状态 -->
+              <div v-else class="text-center py-8">
+                <div class="text-3xl mb-2">🎉</div>
+                <div class="text-xs text-[#9c9690]">暂无待回收伏笔</div>
+                <div class="text-[11px] text-[#d1d5db] mt-1">继续创作，保持情节推进</div>
               </div>
             </div>
           </template>
@@ -459,7 +493,7 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useNovelStore } from '@/stores/novel'
 import { useSettingsStore } from '@/stores/settings'
-import { aiApi, sentinelApi } from '@/api'
+import { aiApi, sentinelApi, plotApi } from '@/api'
 import CreateChapterModal from '@/components/common/CreateChapterModal.vue'
 import AiWritePanel from '@/components/common/AiWritePanel.vue'
 import AICoWriter from '@/components/editor/AICoWriter.vue'
@@ -535,6 +569,12 @@ watch(() => store.wordProgress, (progress) => {
     })
   } else if (progress < 100) {
     lastGoalNotified = false
+  }
+})
+
+watch(() => activeAiTab.value, (tab) => {
+  if (tab === 'foreshadow') {
+    fetchPendingForeshadowings()
   }
 })
 
@@ -741,8 +781,8 @@ const activeAiTab = ref('suggest')
 const aiTabs = [
   { key: 'suggest', label: '智能提示' },
   { key: 'chat', label: '对话' },
-  { key: 'agent', label: 'Agent' },
   { key: 'cowrite', label: '协同创作' },
+  { key: 'foreshadow', label: '伏笔回收' },
   { key: 'sentinel', label: '哨兵监测' }
 ]
 const chatInput = ref('')
@@ -750,6 +790,52 @@ const chatLoading = ref(false)
 const chatMessages = ref([
   { role: 'ai', text: '你好！我是AI写作助手。你可以让我帮你写场景、润色文字、构思情节。生成的内容会自动插入编辑器光标位置。' }
 ])
+
+// ─── 伏笔回收 ───
+const pendingForeshadowings = ref([])
+const pendingForeshadowingsLoading = ref(false)
+
+async function fetchPendingForeshadowings() {
+  const pid = store.currentProjectId
+  if (!pid) return
+  pendingForeshadowingsLoading.value = true
+  try {
+    const currentCh = currentChapterIndex.value + 1
+    const list = await plotApi.listUrgentForeshadowing(pid, currentCh)
+    pendingForeshadowings.value = (list || []).map(f => {
+      const buriedIn = f.chapterId || 1
+      const passed = currentCh - buriedIn
+      let urgency = 'normal'
+      if (passed >= 3) urgency = 'urgent'
+      else if (passed >= 1) urgency = 'warning'
+      return { ...f, passedChapters: passed, urgency }
+    })
+  } catch (e) {
+    console.error('获取伏笔失败：', e)
+  } finally {
+    pendingForeshadowingsLoading.value = false
+  }
+}
+
+function handleIntegrateForeshadow(fs) {
+  const instruction = `【伏笔回收任务】请在本章中自然融入并回收伏笔「${fs.name}」：${fs.description || ''}`
+  navigator.clipboard.writeText(instruction).then(() => {
+    showToast('伏笔回收指令已复制到剪贴板，请在"协同创作"中粘贴使用', 'success')
+  }).catch(() => {
+    showToast('伏笔回收指令已准备，请在"协同创作"中使用', 'success')
+  })
+  activeAiTab.value = 'cowrite'
+}
+
+async function handleMarkResolved(fs) {
+  try {
+    await plotApi.updateForeshadowing(store.currentProjectId, fs.id, { ...fs, status: 'resolved' })
+    pendingForeshadowings.value = pendingForeshadowings.value.filter(f => f.id !== fs.id)
+    showToast('已标记为已回收', 'success')
+  } catch (e) {
+    showToast('标记失败：' + (e.message || '网络错误'), 'error')
+  }
+}
 
 async function handleSendChat() {
   const text = chatInput.value.trim()
@@ -946,38 +1032,6 @@ async function handleAIFixAlert(alert) {
 async function handleScanChapter() {
   await fetchChapterAlerts()
   sentinelExpanded.value = true
-}
-
-// ─── Agent 执行 ───
-const activeEditorAgent = ref('edit')
-const agentLoading = ref(null)
-const editorAgents = [
-  { key: 'edit', icon: '📝', label: '编辑 Agent', desc: '节奏分析 + 逻辑检查' },
-  { key: 'character', icon: '👤', label: '人物 Agent', desc: '人物行为一致性守护' },
-  { key: 'style', icon: '🎨', label: '风格 Agent', desc: '风格指纹比照约束' },
-  { key: 'reader', icon: '📖', label: '读者 Agent', desc: '多视角阅读反馈' }
-]
-
-async function handleExecuteAgent(ag) {
-  const pid = store.currentProjectId
-  if (!pid || !store.currentChapterId) return
-  agentLoading.value = ag.key
-  try {
-    const result = await aiApi.chat(pid,
-      `你作为「${ag.label}」Agent（职责：${ag.desc}），请分析以下小说章节并提供反馈：\n\n标题：${store.chapterTitle}\n内容：${store.editorContent.substring(0, 2000)}`
-    )
-    const responseText = typeof result === 'string' ? result : (result.content || result.text || '分析完成，暂无特殊发现。')
-    chatMessages.value.push({
-      role: 'ai',
-      text: `[${ag.icon} ${ag.label}] ${responseText}`
-    })
-    activeAiTab.value = 'chat'
-    showToast(`${ag.label} 分析完成`, 'success')
-  } catch (e) {
-    showToast(`${ag.label} 执行失败：${e.message || '网络错误'}`, 'error')
-  } finally {
-    agentLoading.value = null
-  }
 }
 
 // ─── Toast ───

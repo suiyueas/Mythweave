@@ -1,5 +1,6 @@
 package com.novelcraft.web.service.scanner;
 
+import com.novelcraft.web.entity.NovelChapter;
 import com.novelcraft.web.entity.NovelCharacter;
 import com.novelcraft.web.entity.NovelSentinelAlert;
 import com.novelcraft.web.mapper.NovelChapterMapper;
@@ -52,14 +53,43 @@ public class CharacterScanner {
     }
 
     private void checkLongAbsence(NovelCharacter ch, int currentChapter, List<NovelSentinelAlert> alerts) {
-        // lastSeen 存储的是人物最后出场的章节序号（sort_order）
-        if (ch.getLastSeen() == null || ch.getLastSeen().isEmpty()) {
-            // 从未出场过的角色，如果已经写了超过 3 章则提醒引入
-            if (currentChapter >= 3 && isMajorCharacter(ch)) {
+        List<NovelChapter> publishedChapters = chapterMapper.selectPublishedChapters(ch.getProjectId());
+        if (publishedChapters.isEmpty()) {
+            return;
+        }
+
+        String characterName = ch.getName();
+        int firstThreeChaptersCount = 0;
+        int totalOccurrences = 0;
+        int firstAppearanceChapter = -1;
+        int lastSeenChapter = 0;
+
+        for (int i = 0; i < publishedChapters.size(); i++) {
+            NovelChapter chapter = publishedChapters.get(i);
+            String content = chapter.getContent();
+            if (content == null || content.isEmpty()) {
+                continue;
+            }
+
+            int countInChapter = countOccurrences(content, characterName);
+            if (countInChapter > 0) {
+                totalOccurrences += countInChapter;
+                lastSeenChapter = chapter.getSortOrder();
+                if (firstAppearanceChapter == -1) {
+                    firstAppearanceChapter = chapter.getSortOrder();
+                }
+                if (i < 3) {
+                    firstThreeChaptersCount += countInChapter;
+                }
+            }
+        }
+
+        if (totalOccurrences == 0) {
+            if (publishedChapters.size() >= 3 && isMajorCharacter(ch)) {
                 alerts.add(createAlert(
                         "character",
                         "主角「" + ch.getName() + "」尚未登场",
-                        "当前已创作 " + currentChapter + " 章，主角「" + ch.getName() + "」仍未出场，建议在近期章节中引入",
+                        "当前已发布 " + publishedChapters.size() + " 章，主角「" + ch.getName() + "」仍未出场，建议在近期章节中引入",
                         "warning",
                         "考虑在下一章安排该角色的首次登场，或通过其他角色对话提及"
                 ));
@@ -67,29 +97,51 @@ public class CharacterScanner {
             return;
         }
 
-        try {
-            int lastSeenChapter = Integer.parseInt(ch.getLastSeen());
+        if (firstThreeChaptersCount >= 3) {
+            return;
+        }
+
+        if (!isMajorCharacter(ch)) {
             int absentChapters = currentChapter - lastSeenChapter;
-
-            if (absentChapters <= 0) return;
-
-            boolean isMain = isMajorCharacter(ch);
-            int threshold = isMain ? protagonistThreshold : supportingThreshold;
-
+            int threshold = supportingThreshold;
             if (absentChapters > threshold) {
-                String severity = isMain || absentChapters > threshold * 2 ? "warning" : "info";
                 alerts.add(createAlert(
                         "character",
                         "角色「" + ch.getName() + "」长期未出场",
-                        ch.getName() + "已连续 " + absentChapters + " 章未出场（上次出场于第 " + lastSeenChapter + " 章）"
-                                + (isMain ? "，该角色为" + getRoleLabel(ch.getRole()) : ""),
-                        severity,
+                        ch.getName() + "已连续 " + absentChapters + " 章未出场（上次出场于第 " + lastSeenChapter + " 章）",
+                        "info",
                         "建议在后续章节中安排该角色回归，或交代其动向避免读者遗忘"
                 ));
             }
-        } catch (NumberFormatException e) {
-            log.warn("角色 {} 的 lastSeen 格式异常: {}", ch.getId(), ch.getLastSeen());
+            return;
         }
+
+        int absentChapters = currentChapter - lastSeenChapter;
+        if (absentChapters > protagonistThreshold) {
+            alerts.add(createAlert(
+                    "character",
+                    "角色「" + ch.getName() + "」长期未出场",
+                    ch.getName() + "已连续 " + absentChapters + " 章未出场（上次出场于第 " + lastSeenChapter + " 章）"
+                            + "，该角色为" + getRoleLabel(ch.getRole()),
+                    absentChapters > protagonistThreshold * 2 ? "warning" : "info",
+                    "建议在后续章节中安排该角色回归，或交代其动向避免读者遗忘"
+            ));
+        }
+    }
+
+    private int countOccurrences(String text, String keyword) {
+        if (text == null || keyword == null || keyword.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int index = 0;
+        String lowerText = text.toLowerCase();
+        String lowerKeyword = keyword.toLowerCase();
+        while ((index = lowerText.indexOf(lowerKeyword, index)) != -1) {
+            count++;
+            index += lowerKeyword.length();
+        }
+        return count;
     }
 
     private void checkArcStagnation(NovelCharacter ch, List<NovelSentinelAlert> alerts) {

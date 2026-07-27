@@ -64,4 +64,8 @@ public interface NovelChapterMapper extends BaseMapper<NovelChapter> {
             "WHERE project_id = #{projectId} AND deleted = 0 " +
             "AND ((DATE(create_time) BETWEEN #{start} AND #{end}) OR (DATE(update_time) BETWEEN #{start} AND #{end}))")
     Integer sumWordCountByProjectAndDateRange(@Param("projectId") Long projectId, @Param("start") LocalDate start, @Param("end") LocalDate end);
+
+    /** 获取所有已发布的章节（按 sort_order 排序），用于智能哨兵检测 */
+    @Select("SELECT * FROM novel_chapter WHERE project_id = #{projectId} AND deleted = 0 AND status = 'COMPLETED' ORDER BY sort_order")
+    List<NovelChapter> selectPublishedChapters(@Param("projectId") Long projectId);
 }

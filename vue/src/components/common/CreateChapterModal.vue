@@ -239,12 +239,13 @@ async function handleGenerateTitle() {
       chapterTitle.value = title.trim()
       showFeedback('✨ 标题已生成', 'success')
     } else {
-      throw new Error('AI 未返回有效标题')
+      chapterTitle.value = `第${nextIndex.value}章`
+      showFeedback('⚠️ 使用默认标题，可自行修改', 'warning')
     }
   } catch (e) {
     console.error('AI 标题生成失败：', e)
-    showFeedback(`❌ 生成失败：${e.message || '请重试'}`, 'error')
-    chapterTitle.value = chapterTitle.value || `第${nextIndex.value}章`
+    chapterTitle.value = `第${nextIndex.value}章`
+    showFeedback(`⚠️ 生成失败，使用默认标题：${e.message || ''}`, 'warning')
   } finally {
     aiTitleLoading.value = false
   }
@@ -439,6 +440,11 @@ watch(activeTab, (tab) => {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #fca5a5;
+}
+.feedback-message.warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
 }
 
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f3efe8; }
