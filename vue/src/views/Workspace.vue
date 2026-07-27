@@ -85,7 +85,7 @@
           </div>
           <div class="flex-1 overflow-y-auto px-10 py-8">
             <div class="grid grid-cols-3 gap-3">
-              <div v-for="char in characterList" :key="char.id" class="border border-[#e8e3dc] rounded-xl p-4 hover:border-[#d97706] hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer" :class="{ '!border-[#d97706] !shadow-md ring-2 ring-[#d97706]/20': selectedCharacter?.id === char.id }" @click="viewCharacter(char)">
+              <div v-for="char in characterList" :key="char.id" class="border border-[#e8e3dc] rounded-xl p-4 hover:border-[#d97706] hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-white" :class="{ '!border-[#d97706] !shadow-md ring-2 ring-[#d97706]/20': selectedCharacter?.id === char.id }" @click="viewCharacter(char)">
                 <div class="flex items-center gap-3 mb-3">
                   <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" :style="{ background: char.color }">{{ char.avatar }}</div>
                   <div class="min-w-0"><div class="text-sm font-semibold text-[#6b6560] truncate">{{ char.name }}</div><div class="text-xs text-[#9c9690]">{{ char.role }}</div></div>

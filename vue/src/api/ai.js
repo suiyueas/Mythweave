@@ -1,4 +1,4 @@
-import { get, post, streamGet } from './request'
+import { post, streamPost } from './request'
 
 // ─── 工具函数：分析已有标题风格（纯前端计算，仅用于生成 Prompt 上下文） ───
 function analyzeTitleStyle(titles) {
@@ -79,8 +79,7 @@ export const aiApi = {
   generateContentStream(projectId, params, onToken, onDone, onError) {
     const { chapterIndex, title, direction, existingContent, style } = params
 
-    // 前端只负责发送请求参数，Prompt 构建和流式处理由后端完成
-    return streamGet(
+    return streamPost(
       `/api/projects/${projectId}/ai/stream/content`,
       {
         chapterIndex,
@@ -90,7 +89,6 @@ export const aiApi = {
         style: style || '自然流畅'
       },
       (token) => {
-        // 前端只负责传递 token，不做额外处理（由后端保证分段）
         onToken(token)
       },
       onDone,
@@ -105,15 +103,19 @@ export const aiApi = {
 
   // ─── AI 流式对话 ───
   streamChat(projectId, params, onToken, onDone, onError) {
-    // 兼容 message 和 userMessage 两种参数名
     const userMessage = params.userMessage || params.message || ''
     const novelTitle = params.novelTitle || ''
     const genre = params.genre || ''
     const currentChapter = params.currentChapter || ''
     const context = params.context || ''
-    return streamGet(
+    const agent = params.agent || ''
+    const sessionId = params.sessionId || null
+    const temperature = params.temperature || 0.7
+    const maxTokens = params.maxTokens || 4096
+
+    return streamPost(
       `/api/projects/${projectId}/ai/stream/chat`,
-      { userMessage, novelTitle, genre, currentChapter, context },
+      { userMessage, novelTitle, genre, currentChapter, context, agent, sessionId, temperature, maxTokens },
       onToken,
       onDone,
       onError
@@ -152,7 +154,7 @@ export const aiApi = {
 
   // ─── AI 流式协同创作（带章节衔接上下文，逐字输出） ───
   generateChapterStream(projectId, { chapterIndex, title, existingContent, direction, style, targetWords }, onToken, onDone, onError) {
-    return streamGet(
+    return streamPost(
       `/api/projects/${projectId}/ai/stream/content`,
       {
         chapterIndex,

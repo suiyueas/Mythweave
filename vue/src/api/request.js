@@ -54,7 +54,7 @@ function get(url, params) {
 
 function post(url, body) { return request(url, { method: 'POST', body }) }
 function put(url, body) { return request(url, { method: 'PUT', body }) }
-function del(url) { return request(url, { method: 'DELETE' }) }
+function del(url, body) { return request(url, { method: 'DELETE', body }) }
 
 function streamGet(url, params, onToken, onDone, onError) {
   if (params) {
@@ -68,6 +68,69 @@ function streamGet(url, params, onToken, onDone, onError) {
     headers['Authorization'] = `Bearer ${token}`
   }
   return fetch(`${BASE_URL}${url}`, { headers })
+    .then(async (response) => {
+      // 检查 HTTP 状态码
+      if (!response.ok) {
+        let errMsg = `HTTP ${response.status}`
+        try {
+          const text = await response.text()
+          try {
+            const json = JSON.parse(text)
+            errMsg = json.message || json.error || text
+          } catch { errMsg = text || errMsg }
+        } catch { /* ignore */ }
+        throw new Error(errMsg)
+      }
+      if (!response.body) {
+        throw new Error('响应体为空')
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (!hasToken && onToken) {
+            onToken('⚠️ 服务器未返回有效响应，请检查后端 AI 配置（DeepSeek API Key）')
+          }
+          onDone && onDone()
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const raw = line.slice(5)
+            let data
+            try {
+              data = JSON.parse(raw)
+            } catch {
+              data = raw
+            }
+            if (data !== undefined && data !== null) {
+              hasToken = true
+              onToken(data)
+            }
+          }
+        }
+      }
+    })
+    .catch((e) => { onError && onError(e) })
+}
+
+function streamPost(url, body, onToken, onDone, onError) {
+  let hasToken = false
+  const token = localStorage.getItem('token')
+  const headers = { 'Accept': 'text/event-stream', 'Content-Type': 'application/json' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return fetch(`${BASE_URL}${url}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body)
+  })
     .then(async (response) => {
       // 检查 HTTP 状态码
       if (!response.ok) {
@@ -120,4 +183,4 @@ function streamGet(url, params, onToken, onDone, onError) {
     .catch((e) => { onError && onError(e) })
 }
 
-export { get, post, put, del, streamGet, request }
+export { get, post, put, del, streamGet, streamPost, request }

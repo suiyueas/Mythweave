@@ -1,4 +1,4 @@
-import { get, post, del, streamGet } from './request'
+import { get, post, del, streamPost } from './request'
 
 const REQUEST_TIMEOUT = 30000
 const MAX_RETRIES = 2
@@ -55,7 +55,7 @@ export const chatApi = {
         reject(new Error('请求超时，请重试'))
       }, REQUEST_TIMEOUT)
 
-      const stream = streamGet(
+      const stream = streamPost(
         `/api/projects/${projectId}/ai/stream/chat`,
         { userMessage, agent, sessionId, novelTitle, genre, currentChapter, context },
         (token) => {

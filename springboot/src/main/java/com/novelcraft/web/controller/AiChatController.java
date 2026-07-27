@@ -2,6 +2,9 @@ package com.novelcraft.web.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelcraft.web.common.R;
+import com.novelcraft.web.dto.ContentGenerateRequest;
+import com.novelcraft.web.dto.StreamChatRequest;
+import com.novelcraft.web.dto.StreamWriteRequest;
 import com.novelcraft.web.entity.NovelAiSession;
 import com.novelcraft.web.mapper.NovelAiSessionMapper;
 import com.novelcraft.web.service.AiChatService;
@@ -34,17 +37,18 @@ public class AiChatController {
      * SSE流式续写
      */
     @Operation(summary = "AI流式续写")
-    @GetMapping(value = "/stream/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/stream/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamWrite(@PathVariable Long projectId,
-                                   @RequestParam(defaultValue = "") String context,
-                                   @RequestParam(defaultValue = "") String existingText,
-                                   @RequestParam(defaultValue = "0.7") double temperature,
-                                   @RequestParam(defaultValue = "4096") int maxTokens) {
+                                   @RequestBody StreamWriteRequest request) {
         SseEmitter emitter = new SseEmitter(180_000L);
         CompletableFuture.runAsync(() -> {
             try {
-                aiChatService.streamContinueWriting(projectId, context, existingText,
-                        temperature, maxTokens, token -> {
+                aiChatService.streamContinueWriting(projectId,
+                        request.getContext() != null ? request.getContext() : "",
+                        request.getExistingText() != null ? request.getExistingText() : "",
+                        request.getTemperature() != null ? request.getTemperature() : 0.7,
+                        request.getMaxTokens() != null ? request.getMaxTokens() : 4096,
+                        token -> {
                             try {
                                 String jsonToken = objectMapper.writeValueAsString(token);
                                 emitter.send(SseEmitter.event().data(jsonToken));
@@ -65,30 +69,32 @@ public class AiChatController {
      * SSE流式对话
      */
     @Operation(summary = "AI流式对话")
-    @GetMapping(value = "/stream/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/stream/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(@PathVariable Long projectId,
-                                  @RequestParam String userMessage,
-                                  @RequestParam(defaultValue = "") String novelTitle,
-                                  @RequestParam(defaultValue = "") String genre,
-                                  @RequestParam(defaultValue = "") String currentChapter,
-                                  @RequestParam(defaultValue = "") String context,
-                                  @RequestParam(defaultValue = "") String agent,
-                                  @RequestParam(required = false) Long sessionId,
-                                  @RequestParam(defaultValue = "0.7") double temperature,
-                                  @RequestParam(defaultValue = "4096") int maxTokens) {
+                                  @RequestBody StreamChatRequest request) {
         SseEmitter emitter = new SseEmitter(180_000L);
         CompletableFuture.runAsync(() -> {
             try {
+                String userMessage = request.getUserMessage() != null ? request.getUserMessage() : "";
+                String agent = request.getAgent() != null ? request.getAgent() : "";
+                Long sessionId = request.getSessionId();
+
                 log.info("AI流式对话开始, projectId={}, agent={}, sessionId={}, userMessage前50字={}",
                         projectId, agent, sessionId,
-                        userMessage != null ? userMessage.substring(0, Math.min(50, userMessage.length())) : "null");
+                        userMessage.length() > 50 ? userMessage.substring(0, 50) : userMessage);
 
-                // 先保存用户消息到数据库（确保即使流式失败也不丢失）
                 saveUserMessage(projectId, sessionId, agent, userMessage);
 
                 StringBuilder fullReply = new StringBuilder();
-                aiChatService.streamChat(projectId, novelTitle, genre, currentChapter,
-                        context, userMessage, temperature, maxTokens, token -> {
+                aiChatService.streamChat(projectId,
+                        request.getNovelTitle() != null ? request.getNovelTitle() : "",
+                        request.getGenre() != null ? request.getGenre() : "",
+                        request.getCurrentChapter() != null ? request.getCurrentChapter() : "",
+                        request.getContext() != null ? request.getContext() : "",
+                        userMessage,
+                        request.getTemperature() != null ? request.getTemperature() : 0.7,
+                        request.getMaxTokens() != null ? request.getMaxTokens() : 4096,
+                        token -> {
                             try {
                                 fullReply.append(token);
                                 String jsonToken = objectMapper.writeValueAsString(token);
@@ -149,21 +155,16 @@ public class AiChatController {
      * SSE流式生成章节内容
      */
     @Operation(summary = "AI流式生成章节内容")
-    @GetMapping(value = "/stream/content", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/stream/content", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamContent(@PathVariable Long projectId,
-                                     @RequestParam(defaultValue = "1") Integer chapterIndex,
-                                     @RequestParam(defaultValue = "未命名章节") String title,
-                                     @RequestParam(defaultValue = "延续故事主线") String direction,
-                                     @RequestParam(defaultValue = "") String existingContent,
-                                     @RequestParam(defaultValue = "自然流畅") String style,
-                                     @RequestParam(defaultValue = "2000") Integer targetWords) {
+                                     @RequestBody ContentGenerateRequest request) {
         SseEmitter emitter = new SseEmitter(300_000L);
         CompletableFuture.runAsync(() -> {
             try {
-                aiChatService.streamGenerateContent(projectId, chapterIndex, title,
-                        direction, existingContent, style, targetWords, token -> {
+                aiChatService.streamGenerateContent(projectId, request.getChapterIndex(), request.getTitle(),
+                        request.getDirection(), request.getExistingContent(), request.getStyle(),
+                        request.getTargetWords(), token -> {
                             try {
-                                // JSON 编码 token，确保换行符等特殊字符在 SSE 中不丢失
                                 String jsonToken = objectMapper.writeValueAsString(token);
                                 emitter.send(SseEmitter.event().data(jsonToken));
                             } catch (IOException e) {
