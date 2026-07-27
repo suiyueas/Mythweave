@@ -315,13 +315,22 @@
             <div class="flex flex-col gap-3">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-[#6b6560]">本章哨兵告警</span>
-                <button
-                  class="px-2 py-1 text-[11px] rounded bg-[#dcfce7] text-[#16a34a] hover:bg-[#bbf7d0] transition-colors font-medium"
-                  :disabled="chapterAlertsLoading"
-                  @click="handleScanChapter"
-                >
-                  {{ chapterAlertsLoading ? '扫描中...' : '🔍 扫描本章' }}
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    v-if="chapterAlerts.some(a => a.status === 'resolved' || a.status === '已处理')"
+                    class="px-2 py-1 text-[11px] rounded bg-[#fee2e2] text-[#be123c] hover:bg-[#fecaca] transition-colors font-medium"
+                    @click="handleClearResolvedAlerts"
+                  >
+                    清空已处理
+                  </button>
+                  <button
+                    class="px-2 py-1 text-[11px] rounded bg-[#dcfce7] text-[#16a34a] hover:bg-[#bbf7d0] transition-colors font-medium"
+                    :disabled="chapterAlertsLoading"
+                    @click="handleScanChapter"
+                  >
+                    {{ chapterAlertsLoading ? '扫描中...' : '🔍 扫描本章' }}
+                  </button>
+                </div>
               </div>
 
               <!-- 加载状态 -->
@@ -335,10 +344,15 @@
 
               <!-- 告警列表 -->
               <div v-else-if="chapterAlerts.length > 0" class="space-y-2">
-                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-3 rounded-lg border text-xs">
+                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-3 rounded-lg border text-xs relative">
+                  <button
+                    class="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9c9690] hover:text-[#be123c] hover:bg-[#fee2e2] transition-colors"
+                    title="删除该告警"
+                    @click="handleDeleteAlert(alert)"
+                  >🗑️</button>
                   <div class="flex items-start gap-2">
                     <span :class="['ni-cat', sentinelTypeClass(alert.type)]">{{ sentinelTypeLabel(alert.type) }}</span>
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 pr-6">
                       <div class="font-semibold text-[#6b6560]">{{ alert.title }}</div>
                       <p class="text-[#9c9690] mt-1 leading-relaxed">{{ alert.description }}</p>
                     </div>
@@ -449,6 +463,22 @@
           <div class="flex justify-end gap-2">
             <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="showDeleteConfirm = false">取消</button>
             <button class="px-4 py-1.5 bg-[#be123c] text-white rounded-lg text-xs font-semibold hover:bg-[#9f1239] transition-colors" @click="confirmDelete">删除</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ═══ 哨兵告警删除确认弹窗 ═══ -->
+    <Teleport to="body">
+      <div v-if="showAlertDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/20" @click.self="showAlertDeleteConfirm = false">
+        <div class="bg-white rounded-xl p-6 shadow-lg max-w-sm w-full mx-4">
+          <div class="text-sm font-semibold text-[#1a1815] mb-2">{{ alertDeleteType === 'single' ? '确认删除告警' : '确认清空已处理告警' }}</div>
+          <div class="text-xs text-[#6b6560] mb-4">
+            {{ alertDeleteType === 'single' ? '确定要删除该告警吗？此操作不可恢复。' : '确定要删除所有已处理的告警吗？此操作不可恢复。' }}
+          </div>
+          <div class="flex justify-end gap-2">
+            <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="showAlertDeleteConfirm = false">取消</button>
+            <button class="px-4 py-1.5 bg-[#be123c] text-white rounded-lg text-xs font-semibold hover:bg-[#9f1239] transition-colors" @click="confirmAlertDelete">{{ alertDeleteType === 'single' ? '删除' : '清空' }}</button>
           </div>
         </div>
       </div>
@@ -571,6 +601,16 @@ watch(() => store.wordProgress, (progress) => {
     lastGoalNotified = false
   }
 })
+
+// ─── AI Tab 状态 ───
+const activeAiTab = ref('suggest')
+const aiTabs = [
+  { key: 'suggest', label: '智能提示' },
+  { key: 'chat', label: '对话' },
+  { key: 'cowrite', label: '协同创作' },
+  { key: 'foreshadow', label: '伏笔回收' },
+  { key: 'sentinel', label: '哨兵监测' }
+]
 
 watch(() => activeAiTab.value, (tab) => {
   if (tab === 'foreshadow') {
@@ -777,14 +817,6 @@ async function handleAiPolish() {
 }
 
 // ─── AI 对话 ───
-const activeAiTab = ref('suggest')
-const aiTabs = [
-  { key: 'suggest', label: '智能提示' },
-  { key: 'chat', label: '对话' },
-  { key: 'cowrite', label: '协同创作' },
-  { key: 'foreshadow', label: '伏笔回收' },
-  { key: 'sentinel', label: '哨兵监测' }
-]
 const chatInput = ref('')
 const chatLoading = ref(false)
 const chatMessages = ref([
@@ -1032,6 +1064,44 @@ async function handleAIFixAlert(alert) {
 async function handleScanChapter() {
   await fetchChapterAlerts()
   sentinelExpanded.value = true
+}
+
+// ─── 哨兵告警删除 ───
+const showAlertDeleteConfirm = ref(false)
+const alertDeleteType = ref('single')
+const alertDeleteTarget = ref(null)
+
+function handleDeleteAlert(alert) {
+  alertDeleteType.value = 'single'
+  alertDeleteTarget.value = alert
+  showAlertDeleteConfirm.value = true
+}
+
+function handleClearResolvedAlerts() {
+  alertDeleteType.value = 'resolved'
+  alertDeleteTarget.value = null
+  showAlertDeleteConfirm.value = true
+}
+
+async function confirmAlertDelete() {
+  const pid = store.currentProjectId
+  if (!pid) return
+  try {
+    if (alertDeleteType.value === 'single') {
+      await sentinelApi.deleteAlert(pid, alertDeleteTarget.value.id)
+      chapterAlerts.value = chapterAlerts.value.filter(a => a.id !== alertDeleteTarget.value.id)
+      showToast('告警已删除', 'success')
+    } else {
+      await sentinelApi.clearResolvedAlerts(pid)
+      chapterAlerts.value = chapterAlerts.value.filter(a => a.status !== 'resolved' && a.status !== '已处理')
+      showToast('已处理告警已清空', 'success')
+    }
+  } catch (e) {
+    showToast('删除失败：' + (e.message || '网络错误'), 'error')
+  } finally {
+    showAlertDeleteConfirm.value = false
+    alertDeleteTarget.value = null
+  }
 }
 
 // ─── Toast ───

@@ -49,5 +49,13 @@ export const sentinelApi = {
 
   /** 轻量级单章节检查（编辑器用） */
   checkChapterLightweight: (projectId, chapterId, content) =>
-    get(`/api/projects/${projectId}/sentinel/check-chapter/${chapterId}`, { content })
+    get(`/api/projects/${projectId}/sentinel/check-chapter/${chapterId}`, { content }),
+
+  /** 删除单条告警 */
+  deleteAlert: (projectId, alertId) =>
+    del(`/api/projects/${projectId}/sentinel/alerts/${alertId}`),
+
+  /** 清空所有已处理告警 */
+  clearResolvedAlerts: (projectId) =>
+    del(`/api/projects/${projectId}/sentinel/alerts/resolved`)
 }
