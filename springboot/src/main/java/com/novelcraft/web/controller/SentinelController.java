@@ -108,6 +108,20 @@ public class SentinelController {
         return R.ok();
     }
 
+    @Operation(summary = "删除单条告警")
+    @DeleteMapping("/sentinel/alerts/{id}")
+    public R<Void> deleteAlert(@PathVariable Long projectId, @PathVariable Long id) {
+        sentinelService.deleteAlert(projectId, id);
+        return R.ok();
+    }
+
+    @Operation(summary = "清空所有已处理告警")
+    @DeleteMapping("/sentinel/alerts/resolved")
+    public R<Void> clearResolvedAlerts(@PathVariable Long projectId) {
+        sentinelService.clearResolvedAlerts(projectId);
+        return R.ok();
+    }
+
     @Operation(summary = "执行巡查（异步，四维并行扫描）")
     @PostMapping("/sentinel/scan")
     public R<Map<String, Object>> scan(@PathVariable Long projectId) {

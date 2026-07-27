@@ -198,7 +198,14 @@
 
             <!-- ═══ 告警列表 ═══ -->
             <div v-if="filteredSentinelAlerts.length > 0">
-              <div class="text-xs font-semibold text-[#6b6560] mb-2">告警列表（{{ filteredSentinelAlerts.length }} 条）</div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-[#6b6560]">告警列表（{{ filteredSentinelAlerts.length }} 条）</span>
+                <button
+                  v-if="store.sentinelAlerts.some(a => a.resolved)"
+                  class="text-[10px] px-2 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors border border-red-200"
+                  @click="handleClearResolvedAlerts"
+                >🗑️ 清空已处理</button>
+              </div>
               <div v-for="alert in filteredSentinelAlerts" :key="alert.id"
                 class="group relative flex items-start gap-3 p-3.5 rounded-xl mb-2 border transition-all cursor-pointer"
                 :class="[alert.severity === 'critical' ? 'bg-red-50/70 border-red-200 hover:border-red-400' : alert.severity === 'warning' ? 'bg-[#fffbeb] border-[#fcd34d] hover:border-amber-400' : 'bg-[#f0f9ff] border-[#bae6fd] hover:border-blue-400', alert.resolved ? 'opacity-60' : '']"
@@ -220,6 +227,7 @@
                 <div class="absolute right-2 bottom-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button v-if="!alert.resolved" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors" @click.stop="handleResolveAlert(alert.id)">✓ 已处理</button>
                   <button v-if="!alert.resolved" class="text-[10px] px-2 py-0.5 rounded bg-gray-400 text-white hover:bg-gray-500 transition-colors" @click.stop="handleIgnoreAlert(alert.id)">✕ 忽略</button>
+                  <button class="text-[10px] px-2 py-0.5 rounded bg-red-400 text-white hover:bg-red-500 transition-colors" @click.stop="handleDeleteSentinelAlert(alert.id)">🗑️ 删除</button>
                 </div>
               </div>
             </div>
@@ -1378,8 +1386,6 @@
             </div>
             <!-- 操作按钮 -->
             <div class="flex justify-end gap-2 p-4 border-t border-[#e8e3dc]">
-              <button v-if="!detailAlert?.resolved" class="px-4 py-2 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors font-medium" @click="handleResolveFromDetail">✓ 已处理</button>
-              <button v-if="!detailAlert?.resolved" class="px-4 py-2 text-xs rounded-lg bg-gray-400 text-white hover:bg-gray-500 transition-colors font-medium" @click="handleIgnoreFromDetail">✕ 忽略</button>
               <button class="px-4 py-2 text-xs rounded-lg border border-[#e8e3dc] text-[#6b6560] hover:bg-[#faf8f5] transition-colors" @click="closeAlertDetail">关闭</button>
             </div>
           </div>
@@ -1635,7 +1641,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import OutlinePanel from '@/components/outline/OutlinePanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
-import { plotApi, inspirationApi, characterApi, aiApi } from '@/api'
+import { plotApi, inspirationApi, characterApi, aiApi, sentinelApi } from '@/api'
 import { CHARACTER_CATEGORIES, PLOT_CATEGORIES, getCategoryLabel, getCategoryOptions } from '@/config/categories'
 import { formatNumber, formatFileSize } from '@/utils/format'
 import Editor from '@/views/Editor.vue'
@@ -2126,6 +2132,28 @@ async function handleIgnoreAlert(id) {
   await store.ignoreSentinelAlert(store.currentProjectId, id)
 }
 
+async function handleDeleteSentinelAlert(id) {
+  if (!confirm('确定要删除该告警吗？此操作不可恢复。')) return
+  try {
+    await sentinelApi.deleteAlert(store.currentProjectId, id)
+    store.sentinelAlerts = store.sentinelAlerts.filter(a => a.id !== id)
+    showToast('告警已删除', 'success')
+  } catch (e) {
+    showToast('删除失败：' + (e.message || '网络错误'), 'error')
+  }
+}
+
+async function handleClearResolvedAlerts() {
+  if (!confirm('确定要删除所有已处理的告警吗？此操作不可恢复。')) return
+  try {
+    await sentinelApi.clearResolvedAlerts(store.currentProjectId)
+    store.sentinelAlerts = store.sentinelAlerts.filter(a => !a.resolved)
+    showToast('已处理告警已清空', 'success')
+  } catch (e) {
+    showToast('清空失败：' + (e.message || '网络错误'), 'error')
+  }
+}
+
 // 告警详情弹窗
 function openAlertDetail(alert) {
   detailAlert.value = alert
@@ -2135,21 +2163,6 @@ function openAlertDetail(alert) {
 function closeAlertDetail() {
   sentinelDetailVisible.value = false
   detailAlert.value = null
-}
-
-async function handleResolveFromDetail() {
-  if (detailAlert.value?.id) {
-    await store.resolveSentinelAlert(store.currentProjectId, detailAlert.value.id)
-    detailAlert.value = { ...detailAlert.value, resolved: true }
-    closeAlertDetail()
-  }
-}
-
-async function handleIgnoreFromDetail() {
-  if (detailAlert.value?.id) {
-    await store.ignoreSentinelAlert(store.currentProjectId, detailAlert.value.id)
-    closeAlertDetail()
-  }
 }
 
 // 告警类型映射

@@ -322,6 +322,28 @@ public class SentinelService {
     }
 
     /**
+     * 删除单条告警（物理删除）
+     */
+    @Transactional
+    public void deleteAlert(Long projectId, Long alertId) {
+        NovelSentinelAlert alert = alertMapper.selectById(alertId);
+        if (alert != null && alert.getProjectId().equals(projectId)) {
+            alertMapper.deleteById(alertId);
+        }
+    }
+
+    /**
+     * 清空所有已处理的告警（物理删除）
+     */
+    @Transactional
+    public void clearResolvedAlerts(Long projectId) {
+        LambdaQueryWrapper<NovelSentinelAlert> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(NovelSentinelAlert::getProjectId, projectId)
+               .eq(NovelSentinelAlert::getResolved, true);
+        alertMapper.delete(wrapper);
+    }
+
+    /**
      * 获取巡查日志
      */
     public List<NovelSentinelCheckLog> getRecentLogs(Long projectId, int limit) {

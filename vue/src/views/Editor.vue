@@ -317,8 +317,7 @@
                 <span class="text-xs font-semibold text-[#6b6560]">本章哨兵告警</span>
                 <div class="flex items-center gap-2">
                   <button
-                    v-if="chapterAlerts.some(a => a.status === 'resolved' || a.status === '已处理')"
-                    class="px-2 py-1 text-[11px] rounded bg-[#fee2e2] text-[#be123c] hover:bg-[#fecaca] transition-colors font-medium"
+                    class="px-2 py-1 text-[11px] rounded bg-[#fee2e2] text-[#be123c] hover:bg-[#fecaca] transition-colors font-medium border border-[#fecaca]"
                     @click="handleClearResolvedAlerts"
                   >
                     清空已处理
@@ -344,25 +343,24 @@
 
               <!-- 告警列表 -->
               <div v-else-if="chapterAlerts.length > 0" class="space-y-2">
-                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-3 rounded-lg border text-xs relative">
-                  <button
-                    class="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9c9690] hover:text-[#be123c] hover:bg-[#fee2e2] transition-colors"
-                    title="删除该告警"
-                    @click="handleDeleteAlert(alert)"
-                  >🗑️</button>
+                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-3 rounded-lg border border-red-200 text-xs bg-white">
                   <div class="flex items-start gap-2">
                     <span :class="['ni-cat', sentinelTypeClass(alert.type)]">{{ sentinelTypeLabel(alert.type) }}</span>
-                    <div class="flex-1 min-w-0 pr-6">
-                      <div class="font-semibold text-[#6b6560]">{{ alert.title }}</div>
-                      <p class="text-[#9c9690] mt-1 leading-relaxed">{{ alert.description }}</p>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-semibold text-gray-700">{{ alert.title }}</div>
+                      <p class="text-gray-500 mt-1 leading-relaxed">{{ alert.description }}</p>
+                      <div class="mt-2 flex gap-2 flex-wrap">
+                        <button
+                          v-if="alert.suggestion"
+                          class="px-2 py-1 text-[11px] rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                          @click="handleAIFixAlert(alert)"
+                        >🤖 AI修复</button>
+                        <button
+                          class="px-2 py-1 text-[11px] rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium border border-red-200"
+                          @click="handleDeleteAlert(alert)"
+                        >🗑️ 删除</button>
+                      </div>
                     </div>
-                  </div>
-                  <div class="mt-2 flex gap-2">
-                    <button
-                      v-if="alert.suggestion"
-                      class="px-2 py-1 text-[11px] rounded bg-[#fef3c7] text-[#92400e] hover:bg-[#fde68a] transition-colors font-medium"
-                      @click="handleAIFixAlert(alert)"
-                    >🤖 AI修复</button>
                   </div>
                 </div>
               </div>
