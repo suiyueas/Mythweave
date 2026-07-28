@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS novel_chapter (
     PRIMARY KEY (id),
     INDEX idx_chapter_project (project_id),
     INDEX idx_chapter_volume (volume_id),
-    INDEX idx_chapter_deleted (deleted)
+    INDEX idx_chapter_deleted (deleted),
+    INDEX idx_chapter_list_covering (project_id, deleted, sort_order, word_count, title, status),
+    INDEX idx_chapter_update_time (project_id, deleted, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='章节';
 
 -- =====================================================
@@ -344,7 +346,8 @@ CREATE TABLE IF NOT EXISTS novel_writing_log (
     PRIMARY KEY (id),
     UNIQUE INDEX idx_wl_project_date (project_id, date),
     INDEX idx_wl_chapter (chapter_id),
-    INDEX idx_wl_deleted (deleted)
+    INDEX idx_wl_deleted (deleted),
+    INDEX idx_writing_log_date_covering (project_id, date, deleted, word_count, writing_duration)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='写作日志';
 
 -- =====================================================
