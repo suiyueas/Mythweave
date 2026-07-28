@@ -16,7 +16,9 @@ import com.novelcraft.web.mapper.NovelWritingLogMapper;
 import com.novelcraft.web.service.DashboardCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,10 @@ public class ChapterService {
     private final NovelWritingLogMapper writingLogMapper;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final DashboardCacheService dashboardCacheService;
+    private final SentinelService sentinelService;
+
+    @Value("${app.sentinel.auto-check-enabled:true}")
+    private boolean autoCheckEnabled;
 
     private static final java.time.ZoneId ZONE_CN = java.time.ZoneId.of("Asia/Shanghai");
 
@@ -70,6 +76,7 @@ public class ChapterService {
         updateProjectStats(chapter.getProjectId());
         dashboardCacheService.invalidate(chapter.getProjectId());
         recordWritingLog(chapter.getProjectId(), chapter.getId(), chapter.getWordCount(), 0);
+        triggerChapterCheck(chapter);
         return chapter;
     }
 
@@ -115,6 +122,10 @@ public class ChapterService {
         // 同步更新项目统计
         updateProjectStats(exist.getProjectId());
         dashboardCacheService.invalidate(exist.getProjectId());
+        // 内容变化时触发章节检查
+        if (contentChanged) {
+            triggerChapterCheck(chapterMapper.selectByIdWithDeleted(chapter.getId()));
+        }
         return chapterMapper.selectByIdWithDeleted(chapter.getId());
     }
 
@@ -215,5 +226,24 @@ public class ChapterService {
 
     public List<NovelChapterVersion> listVersions(Long chapterId) {
         return versionMapper.selectByChapterId(chapterId);
+    }
+
+    /**
+     * 异步触发章节内容检查（智能哨兵实时检测）
+     * 仅在内容变化时触发，异步执行不阻塞主业务流程
+     */
+    @Async("sentinelTaskExecutor")
+    public void triggerChapterCheck(NovelChapter chapter) {
+        if (chapter == null) return;
+        if (!autoCheckEnabled) {
+            log.debug("章节自动检测已禁用，跳过章节 {}", chapter.getId());
+            return;
+        }
+        try {
+            sentinelService.saveChapterAlerts(chapter);
+            log.info("章节 {} 自动检测完成", chapter.getId());
+        } catch (Exception e) {
+            log.error("章节 {} 自动检测失败: {}", chapter.getId(), e.getMessage(), e);
+        }
     }
 }

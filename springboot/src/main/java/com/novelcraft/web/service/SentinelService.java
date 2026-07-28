@@ -41,6 +41,7 @@ public class SentinelService {
     private final LogicScanner logicScanner;
     private final CharacterScanner characterScanner;
     private final RhythmScanner rhythmScanner;
+    private final WebSocketNotificationService wsNotificationService;
 
     @Value("${app.sentinel.overdue-threshold:10}")
     private int overdueThreshold;
@@ -411,5 +412,141 @@ public class SentinelService {
         alert.setSuggestion(suggestion);
         alert.setChapterId(chapterId);
         return alert;
+    }
+
+    /**
+     * 章节保存后自动检测并保存告警（去重）
+     * 用于 ChapterService 在 create/update 章节后异步调用
+     */
+    @Transactional
+    public void saveChapterAlerts(NovelChapter chapter) {
+        if (chapter == null) return;
+
+        List<NovelSentinelAlert> alerts = checkChapterLightweight(chapter.getId(), null);
+        List<NovelSentinelAlert> newAlerts = new ArrayList<>();
+
+        if (alerts == null || alerts.isEmpty()) {
+            log.debug("章节 {} 检测无告警", chapter.getId());
+            return;
+        }
+
+        for (NovelSentinelAlert alert : alerts) {
+            alert.setProjectId(chapter.getProjectId());
+            alert.setChapterId(chapter.getId());
+            alert.setResolved(false);
+            alert.setCreateTime(LocalDateTime.now());
+            alert.setUpdateTime(LocalDateTime.now());
+
+            LambdaQueryWrapper<NovelSentinelAlert> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(NovelSentinelAlert::getProjectId, chapter.getProjectId())
+                    .eq(NovelSentinelAlert::getChapterId, chapter.getId())
+                    .eq(NovelSentinelAlert::getType, alert.getType())
+                    .eq(NovelSentinelAlert::getTitle, alert.getTitle())
+                    .eq(NovelSentinelAlert::getResolved, false)
+                    .eq(NovelSentinelAlert::getDeleted, 0);
+            NovelSentinelAlert existing = alertMapper.selectOne(wrapper);
+
+            if (existing == null) {
+                alertMapper.insert(alert);
+                newAlerts.add(alert);
+                log.info("✅ 新增告警：{} - {}", alert.getType(), alert.getTitle());
+            } else {
+                existing.setDescription(alert.getDescription());
+                existing.setSuggestion(alert.getSuggestion());
+                existing.setUpdateTime(LocalDateTime.now());
+                alertMapper.updateById(existing);
+                log.debug("🔄 更新已有告警：{} - {}", alert.getType(), alert.getTitle());
+            }
+        }
+        log.info("章节 {} 共保存 {} 条哨兵告警（其中 {} 条新增）", chapter.getId(), alerts.size(), newAlerts.size());
+
+        if (!newAlerts.isEmpty()) {
+            wsNotificationService.pushSentinelAlerts(chapter.getProjectId(), newAlerts);
+        }
+    }
+
+    /**
+     * 增量扫描：仅扫描受当前章节影响的关联章节
+     * 适用于章节保存后的精准检测，减少全量扫描开销
+     *
+     * @param chapterId 刚保存的章节ID
+     * @return 受影响的告警列表
+     */
+    @Transactional
+    public List<NovelSentinelAlert> incrementalScan(Long chapterId) {
+        NovelChapter chapter = chapterMapper.selectByIdWithDeleted(chapterId);
+        if (chapter == null) {
+            log.warn("增量扫描：章节 {} 不存在", chapterId);
+            return Collections.emptyList();
+        }
+
+        List<NovelSentinelAlert> allAlerts = new ArrayList<>();
+        Set<Long> affectedChapterIds = new java.util.HashSet<>();
+        affectedChapterIds.add(chapterId);
+
+        List<NovelForeshadowing> relatedForeshadowings = foreshadowingMapper.selectRelatedByChapterId(
+                chapter.getProjectId(), chapterId);
+
+        for (NovelForeshadowing fs : relatedForeshadowings) {
+            if (fs.getChapterId() != null) {
+                affectedChapterIds.add(fs.getChapterId());
+            }
+            if (fs.getResolvedChapterId() != null) {
+                affectedChapterIds.add(fs.getResolvedChapterId());
+            }
+        }
+
+        List<NovelChapter> nearbyChapters = chapterMapper.selectNearbyChaptersForIncremental(
+                chapter.getProjectId(), chapter.getSortOrder(), 3);
+        for (NovelChapter nc : nearbyChapters) {
+            if (nc.getId() != null) {
+                affectedChapterIds.add(nc.getId());
+            }
+        }
+
+        log.info("🔍 增量扫描：章节 {} 影响到 {} 个章节",
+                chapterId, affectedChapterIds.size());
+
+        for (Long affectedId : affectedChapterIds) {
+            NovelChapter affected = chapterMapper.selectByIdWithDeleted(affectedId);
+            if (affected != null) {
+                List<NovelSentinelAlert> alerts = checkChapterLightweight(affected.getId(), null);
+                if (alerts != null && !alerts.isEmpty()) {
+                    alerts.forEach(a -> a.setProjectId(chapter.getProjectId()));
+                    allAlerts.addAll(alerts);
+                }
+            }
+        }
+
+        for (NovelSentinelAlert alert : allAlerts) {
+            alert.setProjectId(chapter.getProjectId());
+            alert.setResolved(false);
+            alert.setCreateTime(LocalDateTime.now());
+            alert.setUpdateTime(LocalDateTime.now());
+
+            LambdaQueryWrapper<NovelSentinelAlert> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(NovelSentinelAlert::getProjectId, chapter.getProjectId())
+                    .eq(NovelSentinelAlert::getChapterId, alert.getChapterId())
+                    .eq(NovelSentinelAlert::getType, alert.getType())
+                    .eq(NovelSentinelAlert::getTitle, alert.getTitle())
+                    .eq(NovelSentinelAlert::getResolved, false)
+                    .eq(NovelSentinelAlert::getDeleted, 0);
+            NovelSentinelAlert existing = alertMapper.selectOne(wrapper);
+
+            if (existing == null) {
+                alertMapper.insert(alert);
+            } else {
+                existing.setDescription(alert.getDescription());
+                existing.setSuggestion(alert.getSuggestion());
+                existing.setUpdateTime(LocalDateTime.now());
+                alertMapper.updateById(existing);
+            }
+        }
+
+        if (!allAlerts.isEmpty()) {
+            wsNotificationService.pushSentinelAlerts(chapter.getProjectId(), allAlerts);
+        }
+
+        return allAlerts;
     }
 }

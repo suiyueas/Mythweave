@@ -18,4 +18,9 @@ public interface NovelForeshadowingMapper extends BaseMapper<NovelForeshadowing>
 
     @Select("SELECT * FROM novel_foreshadowing WHERE project_id = #{projectId} AND status != 'resolved' AND deleted = 0 AND chapter_id <= #{currentChapter} ORDER BY chapter_id ASC")
     List<NovelForeshadowing> selectUrgentByProject(@Param("projectId") Long projectId, @Param("currentChapter") Integer currentChapter);
+
+    @Select("SELECT * FROM novel_foreshadowing " +
+            "WHERE project_id = #{projectId} AND deleted = 0 " +
+            "AND (chapter_id = #{chapterId} OR resolved_chapter_id = #{chapterId})")
+    List<NovelForeshadowing> selectRelatedByChapterId(@Param("projectId") Long projectId, @Param("chapterId") Long chapterId);
 }

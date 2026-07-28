@@ -76,4 +76,20 @@ public interface NovelChapterMapper extends BaseMapper<NovelChapter> {
     /** 获取所有已发布的章节（按 sort_order 排序），用于智能哨兵检测 */
     @Select("SELECT * FROM novel_chapter WHERE project_id = #{projectId} AND deleted = 0 AND status = 'COMPLETED' ORDER BY sort_order")
     List<NovelChapter> selectPublishedChapters(@Param("projectId") Long projectId);
+
+    @Select("<script>" +
+            "SELECT c.* FROM novel_chapter c " +
+            "JOIN novel_chapter_character cc ON c.id = cc.chapter_id " +
+            "WHERE c.project_id = #{projectId} AND c.deleted = 0 AND cc.character_id = #{characterId}" +
+            "</script>")
+    List<NovelChapter> selectChaptersMentioningCharacter(@Param("projectId") Long projectId, @Param("characterId") Long characterId);
+
+    @Select("SELECT * FROM novel_chapter " +
+            "WHERE project_id = #{projectId} AND deleted = 0 " +
+            "AND sort_order BETWEEN #{currentOrder} - #{range} AND #{currentOrder} + #{range} " +
+            "ORDER BY sort_order")
+    List<NovelChapter> selectNearbyChaptersForIncremental(
+            @Param("projectId") Long projectId,
+            @Param("currentOrder") Integer currentOrder,
+            @Param("range") int range);
 }
