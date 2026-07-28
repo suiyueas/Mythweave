@@ -14,12 +14,9 @@ import java.util.List;
 public interface NovelChapterMapper extends BaseMapper<NovelChapter> {
 
     /**
-     * 查询项目的章节列表（利用覆盖索引，避免回表）
-     * 仅返回列表展示所需的字段
+     * 查询项目的章节列表（包含 content，避免切换章节时的 N+1 查询）
      */
-    @Select("SELECT id, project_id, volume_id, title, status, word_count, sort_order, version, " +
-            "sentinel_status, prev_version_id, create_time, update_time " +
-            "FROM novel_chapter " +
+    @Select("SELECT * FROM novel_chapter " +
             "WHERE project_id = #{projectId} AND deleted = 0 " +
             "ORDER BY sort_order")
     List<NovelChapter> selectByProjectId(@Param("projectId") Long projectId);

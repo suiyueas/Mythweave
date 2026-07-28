@@ -93,8 +93,7 @@ public class ChapterService {
             throw new BusinessException(404, "章节不存在");
         }
         // 仅内容变化且非静默保存时才创建历史版本
-        boolean contentChanged = chapter.getContent() != null
-                && !chapter.getContent().equals(exist.getContent());
+        boolean contentChanged = isContentChanged(chapter.getContent(), exist.getContent());
         if (contentChanged && !silent) {
             NovelChapterVersion version = new NovelChapterVersion();
             version.setChapterId(exist.getId());
@@ -115,8 +114,12 @@ public class ChapterService {
                 }
             }
         }
-        // 用 MyBatis-Plus updateById：仅更新非 null 字段
-        chapterMapper.updateById(chapter);
+        // 用 MyBatis-Plus updateById：仅更新非 null 字段（但 updateTime 会被自动更新）
+        // 优化：仅在内容或标题实际变化时才更新 updateTime，避免"查看就更新时间"
+        if (contentChanged || isTitleChanged(chapter, exist)) {
+            chapter.setUpdateTime(LocalDateTime.now());
+            chapterMapper.updateById(chapter);
+        }
         // 记录写作日志（热力图数据源）
         recordWritingLog(exist.getProjectId(), chapter.getId(), chapter.getWordCount(), exist.getWordCount());
         // 同步更新项目统计
@@ -127,6 +130,20 @@ public class ChapterService {
             triggerChapterCheck(chapterMapper.selectByIdWithDeleted(chapter.getId()));
         }
         return chapterMapper.selectByIdWithDeleted(chapter.getId());
+    }
+
+    private boolean isTitleChanged(NovelChapter newChapter, NovelChapter exist) {
+        return newChapter.getTitle() != null && !newChapter.getTitle().equals(exist.getTitle());
+    }
+
+    private boolean isContentChanged(String newContent, String existContent) {
+        if (newContent == null && existContent == null) return false;
+        // ⚠️ 保护：前端可能因覆盖索引优化返回空 content，禁止用空字符串覆盖已有内容
+        if (newContent != null && newContent.isEmpty() && existContent != null && !existContent.isEmpty()) {
+            return false;
+        }
+        if (newContent == null || existContent == null) return true;
+        return !newContent.equals(existContent);
     }
 
     @Transactional

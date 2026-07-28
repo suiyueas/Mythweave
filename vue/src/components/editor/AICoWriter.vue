@@ -49,7 +49,7 @@
         v-model="direction"
         class="direction-input"
         placeholder="例如：请重点描写主角的内心挣扎，并暗示下一章的冲突..."
-        rows="2"
+        rows="4"
       />
     </div>
 

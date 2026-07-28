@@ -191,45 +191,45 @@
 
       <!-- ══ 右栏：AI 写作助手 (15%) ══ -->
       <aside class="w-64 bg-[#faf8f5] border-l border-[#e8e3dc] flex flex-col flex-shrink-0">
-        <div class="p-3 border-b border-[#e8e3dc]">
+        <div class="px-2 py-2.5 border-b border-[#e8e3dc]">
           <span class="text-xs font-bold text-[#9c9690] uppercase tracking-wider">🤖 AI 写作助手</span>
         </div>
 
         <!-- Tab切换 -->
-        <div class="flex border-b border-[#e8e3dc]">
+        <div class="flex border-b border-[#e8e3dc] gap-0">
           <button
             v-for="tab in aiTabs"
             :key="tab.key"
-            class="flex-1 py-1.5 text-xs font-medium transition-colors"
+            class="flex-1 px-1 py-1 text-[10px] font-medium transition-colors whitespace-nowrap flex-shrink-0 overflow-hidden"
             :class="activeAiTab === tab.key ? 'text-[#d97706] border-b-2 border-[#d97706] bg-white' : 'text-[#9c9690] hover:text-[#6b6560]'"
             @click="activeAiTab = tab.key"
           >{{ tab.label }}</button>
         </div>
 
         <!-- Tab内容区 -->
-        <div class="flex-1 overflow-y-auto p-3">
+        <div class="flex-1 overflow-y-auto p-2">
           <!-- 智能提示 -->
           <template v-if="activeAiTab === 'suggest'">
-            <div class="text-xs text-[#9c9690] mb-3">
+            <div class="text-xs text-[#9c9690] mb-2">
               AI 将自动分析当前内容并提供实时建议
             </div>
             <!-- 加载中 -->
-            <div v-if="store.aiSuggestLoading" class="space-y-2.5">
-              <div v-for="n in 3" :key="n" class="p-2.5 rounded-lg border border-[#e8e3dc] animate-pulse">
+            <div v-if="store.aiSuggestLoading" class="space-y-2">
+              <div v-for="n in 3" :key="n" class="p-2 rounded-lg border border-[#e8e3dc] animate-pulse">
                 <div class="h-2.5 bg-[#e8e3dc] rounded w-3/4 mb-2"></div>
                 <div class="h-2 bg-[#f3efe8] rounded w-full mb-1"></div>
                 <div class="h-2 bg-[#f3efe8] rounded w-2/3"></div>
               </div>
             </div>
             <!-- 建议列表 -->
-            <div v-for="tip in aiTips" :key="tip.id" class="mb-2.5 p-2.5 rounded-lg border transition-all"
+            <div v-for="tip in aiTips" :key="tip.id" class="mb-2 p-2 rounded-lg border transition-all overflow-hidden"
               :class="tip.applied ? 'opacity-50' : ''"
               :style="{ background: tipLevelBg(tip.level), borderColor: tipLevelBorder(tip.level) }">
               <div class="flex items-start gap-1.5">
                 <span class="text-sm flex-shrink-0">{{ tip.icon }}</span>
-                <div class="min-w-0">
+                <div class="min-w-0 break-words">
                   <div class="text-xs font-semibold" :style="{ color: tipLevelColor(tip.level) }">{{ tip.title }}</div>
-                  <p class="text-xs leading-relaxed mt-0.5" :style="{ color: tipLevelColor(tip.level) }">{{ tip.content || '' }}</p>
+                  <p class="text-xs leading-relaxed mt-0.5 break-words" :style="{ color: tipLevelColor(tip.level) }">{{ tip.content || '' }}</p>
                 </div>
               </div>
               <div class="flex gap-1.5 mt-1.5">
@@ -255,7 +255,7 @@
             <!-- 刷新按钮 -->
             <button
               v-if="store.currentChapter"
-              class="w-full mt-2 py-1.5 text-[11px] rounded font-medium border border-[#e8e3dc] text-[#6b6560] hover:border-[#d97706] hover:text-[#d97706] transition-colors"
+              class="w-full mt-1.5 py-1 text-[11px] rounded font-medium border border-[#e8e3dc] text-[#6b6560] hover:border-[#d97706] hover:text-[#d97706] transition-colors"
               :disabled="store.aiSuggestLoading"
               @click="handleRefreshSuggestions"
             >
@@ -266,7 +266,7 @@
           <!-- 对话 -->
           <template v-else-if="activeAiTab === 'chat'">
             <div class="flex flex-col h-full" style="min-height: 200px;">
-              <div class="flex-1 space-y-2.5 mb-3 overflow-y-auto" style="max-height: 300px;" ref="chatMsgsRef">
+              <div class="flex-1 space-y-2 mb-2 overflow-y-auto" style="max-height: 300px;" ref="chatMsgsRef">
                 <div v-for="(msg, i) in chatMessages" :key="i" class="text-xs" :class="msg.role === 'user' ? 'text-right' : ''">
                   <div class="inline-block max-w-[90%] p-2 rounded-lg"
                     :class="msg.role === 'user' ? 'bg-[#d97706] text-white rounded-br-sm' : 'bg-white text-[#6b6560] rounded-bl-sm border border-[#e8e3dc]'"
@@ -312,7 +312,7 @@
 
           <!-- 哨兵监测 -->
           <template v-else-if="activeAiTab === 'sentinel'">
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-[#6b6560]">本章哨兵告警</span>
                 <div class="flex items-center gap-2">
@@ -333,8 +333,8 @@
               </div>
 
               <!-- 加载状态 -->
-              <div v-if="chapterAlertsLoading" class="space-y-2">
-                <div v-for="n in 2" :key="n" class="p-3 rounded-lg border border-[#e8e3dc] animate-pulse">
+              <div v-if="chapterAlertsLoading" class="space-y-1.5">
+                <div v-for="n in 2" :key="n" class="p-2 rounded-lg border border-[#e8e3dc] animate-pulse">
                   <div class="h-3 bg-[#e8e3dc] rounded w-2/3 mb-2"></div>
                   <div class="h-2 bg-[#f3efe8] rounded w-full mb-1"></div>
                   <div class="h-2 bg-[#f3efe8] rounded w-3/4"></div>
@@ -342,8 +342,8 @@
               </div>
 
               <!-- 告警列表 -->
-              <div v-else-if="chapterAlerts.length > 0" class="space-y-2">
-                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-3 rounded-lg border border-red-200 text-xs bg-white">
+              <div v-else-if="chapterAlerts.length > 0" class="space-y-1.5">
+                <div v-for="alert in chapterAlerts" :key="alert.id" class="p-2 rounded-lg border border-red-200 text-xs bg-white">
                   <div class="flex items-start gap-2">
                     <span :class="['ni-cat', sentinelTypeClass(alert.type)]">{{ sentinelTypeLabel(alert.type) }}</span>
                     <div class="flex-1 min-w-0">
@@ -376,7 +376,7 @@
 
           <!-- 伏笔回收 -->
           <template v-else-if="activeAiTab === 'foreshadow'">
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-[#6b6560]">待回收伏笔</span>
                 <button
@@ -389,8 +389,8 @@
               </div>
 
               <!-- 加载状态 -->
-              <div v-if="pendingForeshadowingsLoading" class="space-y-2">
-                <div v-for="n in 2" :key="n" class="p-3 rounded-lg border border-[#e8e3dc] animate-pulse">
+              <div v-if="pendingForeshadowingsLoading" class="space-y-1.5">
+                <div v-for="n in 2" :key="n" class="p-2 rounded-lg border border-[#e8e3dc] animate-pulse">
                   <div class="h-3 bg-[#e8e3dc] rounded w-2/3 mb-2"></div>
                   <div class="h-2 bg-[#f3efe8] rounded w-full mb-1"></div>
                   <div class="h-2 bg-[#f3efe8] rounded w-3/4"></div>
@@ -398,8 +398,8 @@
               </div>
 
               <!-- 伏笔列表 -->
-              <div v-else-if="pendingForeshadowings.length > 0" class="space-y-2">
-                <div v-for="fs in pendingForeshadowings" :key="fs.id" class="p-3 rounded-lg border text-xs"
+              <div v-else-if="pendingForeshadowings.length > 0" class="space-y-1.5">
+                <div v-for="fs in pendingForeshadowings" :key="fs.id" class="p-2 rounded-lg border text-xs"
                   :class="fs.urgency === 'urgent' ? 'border-[#ef4444] bg-[#fef2f2]' : fs.urgency === 'warning' ? 'border-[#f59e0b] bg-[#fffbeb]' : 'border-[#e8e3dc] bg-white'">
                   <div class="flex items-start gap-2">
                     <span class="text-sm flex-shrink-0">{{ fs.urgency === 'urgent' ? '⚠️' : fs.urgency === 'warning' ? '📍' : '🔜' }}</span>
@@ -411,11 +411,27 @@
                       </div>
                     </div>
                   </div>
-                  <div class="mt-2 flex gap-2">
-                    <button
-                      class="px-2 py-1 text-[11px] rounded bg-[#fef3c7] text-[#92400e] hover:bg-[#fde68a] transition-colors font-medium"
-                      @click="handleIntegrateForeshadow(fs)"
-                    >✨ 融入生成</button>
+                  <div class="mt-1.5 flex gap-1.5">
+                    <!-- 融入生成下拉菜单 -->
+                    <div class="relative" ref="foreshadowDropRef">
+                      <button
+                        class="px-2 py-1 text-[11px] rounded bg-[#fef3c7] text-[#92400e] hover:bg-[#fde68a] transition-colors font-medium"
+                        @click="toggleForeshadowDropdown(fs)"
+                      >✨ 融入生成 ▾</button>
+                      <div
+                        v-if="foreshadowDropdownVisible === fs.id"
+                        class="absolute left-0 top-full mt-1 bg-white border border-[#e8e3dc] rounded-lg shadow-lg z-50 overflow-hidden min-w-[120px]"
+                      >
+                        <button
+                          class="w-full px-3 py-2 text-[11px] text-left hover:bg-[#fef3c7] transition-colors"
+                          @click="handleFullGenerate(fs)"
+                        >📝 全量生成</button>
+                        <button
+                          class="w-full px-3 py-2 text-[11px] text-left hover:bg-[#dcfce7] hover:text-[#16a34a] transition-colors"
+                          @click="handleAppendForeshadow(fs)"
+                        >➕ 追加补写</button>
+                      </div>
+                    </div>
                     <button
                       class="px-2 py-1 text-[11px] rounded bg-[#e8e3dc] text-[#6b6560] hover:bg-[#d4cec6] transition-colors font-medium"
                       @click="handleMarkResolved(fs)"
@@ -492,6 +508,56 @@
       @created="onChapterCreated"
     />
 
+    <!-- ═══ 伏笔追加位置选择弹窗 ═══ -->
+    <Teleport to="body">
+      <div v-if="showAppendPositionModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/20" @click.self="showAppendPositionModal = false">
+        <div class="bg-white rounded-xl p-5 shadow-lg max-w-sm w-full mx-4">
+          <div class="text-sm font-semibold text-[#1a1815] mb-3">追加伏笔补写</div>
+          <div class="text-xs text-[#6b6560] mb-1">伏笔：{{ appendForeshadowTarget?.name }}</div>
+          <p class="text-[11px] text-[#9c9690] mb-4 leading-relaxed">{{ appendForeshadowTarget?.description }}</p>
+          <div class="text-xs text-[#6b6560] mb-3">插入位置：</div>
+          <div class="space-y-2 mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="appendPosition" value="end" class="accent-[#d97706]" />
+              <span class="text-xs text-[#6b6560]">追加到章节末尾</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="appendPosition" value="cursor" class="accent-[#d97706]" />
+              <span class="text-xs text-[#6b6560]">插入到光标位置</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="appendPosition" value="auto" class="accent-[#d97706]" />
+              <span class="text-xs text-[#6b6560]">AI 智能插入</span>
+            </label>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="showAppendPositionModal = false">取消</button>
+            <button class="px-4 py-1.5 bg-[#d97706] text-white rounded-lg text-xs font-semibold hover:bg-[#b45309] transition-colors" :disabled="appendLoading" @click="confirmAppendForeshadow">
+              {{ appendLoading ? '生成中...' : '生成补写' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ═══ 伏笔追加结果预览弹窗 ═══ -->
+    <Teleport to="body">
+      <div v-if="showAppendResultModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/20" @click.self="showAppendResultModal = false">
+        <div class="bg-white rounded-xl p-5 shadow-lg max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
+          <div class="text-sm font-semibold text-[#1a1815] mb-2">伏笔补写结果预览</div>
+          <div class="text-xs text-[#6b6560] mb-3">请预览新增内容（红色边框标记），确认后生效</div>
+          <div class="flex-1 overflow-y-auto p-3 rounded-lg border border-[#fecaca] bg-[#fef2f2] text-xs leading-relaxed whitespace-pre-wrap mb-4">
+            {{ appendInsertedContent }}
+          </div>
+          <div class="flex justify-end gap-2">
+            <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="cancelAppendForeshadow">取消</button>
+            <button class="px-4 py-1.5 bg-[#e8e3dc] text-[#6b6560] rounded-lg text-xs font-semibold hover:bg-[#d4cec6] transition-colors" @click="modifyAppendForeshadow">修改</button>
+            <button class="px-4 py-1.5 bg-[#16a34a] text-white rounded-lg text-xs font-semibold hover:bg-[#15803d] transition-colors" @click="acceptAppendForeshadow">接受</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- AI 写作面板-->
     <AiWritePanel
       :visible="showAiPanel"
@@ -519,6 +585,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import { useSettingsStore } from '@/stores/settings'
 import { aiApi, sentinelApi, plotApi } from '@/api'
@@ -824,6 +891,18 @@ const chatMessages = ref([
 // ─── 伏笔回收 ───
 const pendingForeshadowings = ref([])
 const pendingForeshadowingsLoading = ref(false)
+const foreshadowDropdownVisible = ref(null)
+const foreshadowDropRef = ref(null)
+
+// 伏笔追加补写相关状态
+const showAppendPositionModal = ref(false)
+const showAppendResultModal = ref(false)
+const appendForeshadowTarget = ref(null)
+const appendPosition = ref('end')
+const appendLoading = ref(false)
+const appendInsertedContent = ref('')
+const appendFullContent = ref('')
+const appendInsertIndex = ref(0)
 
 async function fetchPendingForeshadowings() {
   const pid = store.currentProjectId
@@ -847,7 +926,12 @@ async function fetchPendingForeshadowings() {
   }
 }
 
-function handleIntegrateForeshadow(fs) {
+function toggleForeshadowDropdown(fs) {
+  foreshadowDropdownVisible.value = foreshadowDropdownVisible.value === fs.id ? null : fs.id
+}
+
+function handleFullGenerate(fs) {
+  foreshadowDropdownVisible.value = null
   const instruction = `【伏笔回收任务】请在本章中自然融入并回收伏笔「${fs.name}」：${fs.description || ''}`
   navigator.clipboard.writeText(instruction).then(() => {
     showToast('伏笔回收指令已复制到剪贴板，请在"协同创作"中粘贴使用', 'success')
@@ -855,6 +939,76 @@ function handleIntegrateForeshadow(fs) {
     showToast('伏笔回收指令已准备，请在"协同创作"中使用', 'success')
   })
   activeAiTab.value = 'cowrite'
+}
+
+function handleAppendForeshadow(fs) {
+  foreshadowDropdownVisible.value = null
+  appendForeshadowTarget.value = fs
+  appendPosition.value = 'end'
+  showAppendPositionModal.value = true
+}
+
+async function confirmAppendForeshadow() {
+  if (!appendForeshadowTarget.value || !store.currentChapterId) return
+  appendLoading.value = true
+  try {
+    const pid = store.currentProjectId
+    const chapterId = store.currentChapterId
+    const currentContent = store.editorContent || ''
+    const cursorPos = editorRef.value?.getSelection()?.start || currentContent.length
+
+    const res = await fetch(`/api/projects/${pid}/chapters/${chapterId}/append-foreshadow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        foreshadowingId: appendForeshadowTarget.value.id,
+        foreshadowingTitle: appendForeshadowTarget.value.name,
+        foreshadowingDescription: appendForeshadowTarget.value.description || '',
+        originalContent: currentContent,
+        insertPosition: appendPosition.value,
+        cursorPosition: appendPosition.value === 'cursor' ? cursorPos : null,
+        projectId: pid
+      })
+    })
+    const result = await res.json()
+    if (result.code === 200 || result.code === 0) {
+      appendInsertedContent.value = result.data.insertedContent || ''
+      appendFullContent.value = result.data.fullContent || ''
+      appendInsertIndex.value = result.data.insertPosition || currentContent.length
+      showAppendPositionModal.value = false
+      showAppendResultModal.value = true
+    } else {
+      showToast('生成失败：' + (result.message || '未知错误'), 'error')
+    }
+  } catch (e) {
+    console.error('伏笔追加失败：', e)
+    showToast('生成失败：' + (e.message || '网络错误'), 'error')
+  } finally {
+    appendLoading.value = false
+  }
+}
+
+function acceptAppendForeshadow() {
+  store.editorContent = appendFullContent.value
+  if (editorRef.value) {
+    editorRef.value.setValue(appendFullContent.value)
+    editorRef.value.setSelection(appendInsertIndex.value, appendInsertIndex.value + appendInsertedContent.value.length)
+  }
+  showAppendResultModal.value = false
+  showToast('伏笔已成功融入章节', 'success')
+  pendingForeshadowings.value = pendingForeshadowings.value.filter(f => f.id !== appendForeshadowTarget.value?.id)
+}
+
+function cancelAppendForeshadow() {
+  showAppendResultModal.value = false
+  appendInsertedContent.value = ''
+  appendFullContent.value = ''
+}
+
+function modifyAppendForeshadow() {
+  showAppendResultModal.value = false
+  appendPosition.value = 'auto'
+  showAppendPositionModal.value = true
 }
 
 async function handleMarkResolved(fs) {
@@ -1121,9 +1275,43 @@ function formatNumber(n) {
 // ─── 组件初始化 ───
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
-  if (!store.currentChapterId && store.chapters.length > 0) {
+
+  // 从路由参数获取 chapterId
+  const route = useRoute()
+  const routeChapterId = route.query.chapterId || route.params.chapterId
+
+  if (routeChapterId && store.chapters.length > 0) {
+    const ch = store.chapters.find(c => c.id === String(routeChapterId))
+    if (ch) {
+      store.selectChapter(ch)
+      nextTick(() => textareaRef.value?.focus())
+    }
+  }
+
+  // 如果章节已加载但未选中，自动选第一篇
+  if (store.chapters.length > 0 && !store.currentChapterId) {
     store.selectChapter(store.chapters[0])
   }
+})
+
+// ─── 等待章节加载完成后自动选中 ───
+watch(() => store.chapters.length, (count) => {
+  if (count === 0 || store.currentChapterId) return
+
+  // 优先使用路由参数指定的章节
+  const route = useRoute()
+  const routeChapterId = route.query.chapterId || route.params.chapterId
+  if (routeChapterId) {
+    const ch = store.chapters.find(c => c.id === String(routeChapterId))
+    if (ch) {
+      store.selectChapter(ch)
+      nextTick(() => textareaRef.value?.focus())
+      return
+    }
+  }
+
+  // 无路由参数时自动选中第一篇
+  store.selectChapter(store.chapters[0])
 })
 
 // ─── 组件销毁前自动保存 ───

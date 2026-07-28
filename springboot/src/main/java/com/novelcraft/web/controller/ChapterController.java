@@ -1,16 +1,19 @@
 package com.novelcraft.web.controller;
 
 import com.novelcraft.web.common.R;
+import com.novelcraft.web.dto.AppendForeshadowRequest;
 import com.novelcraft.web.entity.NovelChapter;
 import com.novelcraft.web.entity.NovelChapterVersion;
 import com.novelcraft.web.entity.NovelVolume;
 import com.novelcraft.web.service.ChapterService;
+import com.novelcraft.web.service.ForeshadowAppendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "章节管理")
 @RestController
@@ -19,6 +22,7 @@ import java.util.List;
 public class ChapterController {
 
     private final ChapterService chapterService;
+    private final ForeshadowAppendService foreshadowAppendService;
 
     // ── 分卷 ──
 
@@ -88,5 +92,17 @@ public class ChapterController {
     @GetMapping("/{chapterId}/versions")
     public R<List<NovelChapterVersion>> listVersions(@PathVariable Long projectId, @PathVariable Long chapterId) {
         return R.ok(chapterService.listVersions(chapterId));
+    }
+
+    // ── 伏笔追加补写 ──
+
+    @Operation(summary = "伏笔追加补写")
+    @PostMapping("/{chapterId}/append-foreshadow")
+    public R<Map<String, Object>> appendForeshadow(@PathVariable Long projectId,
+                                                    @PathVariable Long chapterId,
+                                                    @RequestBody AppendForeshadowRequest request) {
+        request.setProjectId(projectId);
+        Map<String, Object> result = foreshadowAppendService.appendForeshadowing(request);
+        return R.ok(result);
     }
 }
