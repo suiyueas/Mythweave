@@ -4,7 +4,7 @@ import com.novelcraft.web.common.R;
 import com.novelcraft.web.model.DashboardStats;
 import com.novelcraft.web.model.HeatmapData;
 import com.novelcraft.web.model.RecentActivity;
-import com.novelcraft.web.service.DashboardService;
+import com.novelcraft.web.service.DashboardCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,48 +21,53 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DashboardController {
 
-    private final DashboardService dashboardService;
+    private final DashboardCacheService dashboardCacheService;
 
-    @Operation(summary = "获取统计概览")
+    @Operation(summary = "获取统计概览（缓存5分钟）")
     @GetMapping("/stats")
     public R<DashboardStats> getStats(@PathVariable Long projectId) {
         try {
-            return R.ok(dashboardService.getStats(projectId));
+            DashboardStats stats = dashboardCacheService.getStats(projectId);
+            if (stats == null) stats = DashboardStats.empty();
+            return R.ok(stats);
         } catch (Exception e) {
             log.warn("Dashboard stats查询失败(projectId={}): {}", projectId, e.getMessage());
             return R.ok(DashboardStats.empty());
         }
     }
 
-    @Operation(summary = "获取写作热力图数据")
+    @Operation(summary = "获取写作热力图数据（缓存1小时）")
     @GetMapping("/heatmap")
     public R<List<HeatmapData>> getHeatmap(@PathVariable Long projectId) {
         try {
-            return R.ok(dashboardService.getHeatmap(projectId));
+            List<HeatmapData> data = dashboardCacheService.getHeatmap(projectId);
+            return R.ok(data != null ? data : Collections.emptyList());
         } catch (Exception e) {
             log.warn("Heatmap查询失败(projectId={}): {}", projectId, e.getMessage());
             return R.ok(Collections.emptyList());
         }
     }
 
-    @Operation(summary = "获取最近活动")
+    @Operation(summary = "获取最近活动（缓存2分钟）")
     @GetMapping("/activities")
     public R<List<RecentActivity>> getRecentActivities(
             @PathVariable Long projectId,
             @RequestParam(defaultValue = "10") int limit) {
         try {
-            return R.ok(dashboardService.getRecentActivities(projectId, limit));
+            List<RecentActivity> data = dashboardCacheService.getRecentActivities(projectId, limit);
+            return R.ok(data != null ? data : Collections.emptyList());
         } catch (Exception e) {
             log.warn("Activities查询失败(projectId={}): {}", projectId, e.getMessage());
             return R.ok(Collections.emptyList());
         }
     }
 
-    @Operation(summary = "获取本周写作趋势")
+    @Operation(summary = "获取本周写作趋势（缓存2分钟）")
     @GetMapping("/weekly-trend")
     public R<List<HeatmapData>> getWeeklyTrend(@PathVariable Long projectId) {
         try {
-            return R.ok(dashboardService.getWeeklyTrend(projectId));
+            List<HeatmapData> data = dashboardCacheService.getWeeklyTrend(projectId);
+            return R.ok(data != null ? data : Collections.emptyList());
         } catch (Exception e) {
             log.warn("Weekly trend查询失败(projectId={})", projectId, e);
             return R.ok(Collections.emptyList());

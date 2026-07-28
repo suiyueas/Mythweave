@@ -13,6 +13,7 @@ import com.novelcraft.web.mapper.NovelChapterVersionMapper;
 import com.novelcraft.web.mapper.NovelProjectMapper;
 import com.novelcraft.web.mapper.NovelVolumeMapper;
 import com.novelcraft.web.mapper.NovelWritingLogMapper;
+import com.novelcraft.web.service.DashboardCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,6 +34,7 @@ public class ChapterService {
     private final NovelProjectMapper projectMapper;
     private final NovelWritingLogMapper writingLogMapper;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final DashboardCacheService dashboardCacheService;
 
     private static final java.time.ZoneId ZONE_CN = java.time.ZoneId.of("Asia/Shanghai");
 
@@ -66,6 +68,7 @@ public class ChapterService {
         }
         chapterMapper.insert(chapter);
         updateProjectStats(chapter.getProjectId());
+        dashboardCacheService.invalidate(chapter.getProjectId());
         recordWritingLog(chapter.getProjectId(), chapter.getId(), chapter.getWordCount(), 0);
         return chapter;
     }
@@ -111,6 +114,7 @@ public class ChapterService {
         recordWritingLog(exist.getProjectId(), chapter.getId(), chapter.getWordCount(), exist.getWordCount());
         // 同步更新项目统计
         updateProjectStats(exist.getProjectId());
+        dashboardCacheService.invalidate(exist.getProjectId());
         return chapterMapper.selectByIdWithDeleted(chapter.getId());
     }
 
@@ -126,6 +130,7 @@ public class ChapterService {
         // 同步更新项目统计
         if (projectId != null) {
             updateProjectStats(projectId);
+            dashboardCacheService.invalidate(projectId);
         }
     }
 
