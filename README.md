@@ -73,10 +73,19 @@
 
 ```
 AI-novel/
-├── frontend/          # Vue 3 前端项目
-├── backend/          # Spring Boot 后端项目
-├── docs/             # 项目文档
-└── README.md
+├── springboot/          # Spring Boot 3.5 后端项目
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/    # Java 源代码
+│   │   │   └── resources/
+│   │   │       ├── mapper/      # MyBatis 映射文件
+│   │   │       ├── sql/         # 数据库 SQL 脚本
+│   │   │       └── application*.yml  # 应用配置
+│   │   └── test/       # 测试代码
+│   └── pom.xml         # Maven 依赖配置
+├── .env.example        # 环境变量模板
+├── .gitignore          # Git 忽略配置
+└── README.md           # 项目说明文档
 ```
 
 ## 🚀 快速开始
@@ -96,45 +105,34 @@ git clone https://github.com/yourusername/AI-novel.git
 cd AI-novel
 ```
 
-### 2. 配置后端
+### 2. 配置环境变量
 
 ```bash
-# 进入后端目录
-cd backend
-
 # 复制环境变量模板
 copy .env.example .env
 # 编辑 .env 填入你的配置
 
-# 创建数据库
-mysql -u root -p < src/main/resources/sql/novelcraft_complete.sql
+# 或直接编辑配置文件
+copy springboot/src/main/resources/application.yml springboot/src/main/resources/application-local.yml
 ```
 
-### 3. 启动后端
+### 3. 创建数据库
 
 ```bash
+mysql -u root -p < springboot/src/main/resources/sql/novelcraft_complete.sql
+```
+
+### 4. 启动后端
+
+```bash
+cd springboot
+
 # 使用 Maven 启动
 mvn spring-boot:run
 
 # 或打包后运行
 mvn package
 java -jar target/novelcraft-1.0.0-SNAPSHOT.jar
-```
-
-### 4. 配置前端
-
-```bash
-# 进入前端目录
-cd ../frontend
-
-# 安装依赖
-npm install
-
-# 开发模式
-npm run dev
-
-# 生产构建
-npm run build
 ```
 
 ## ⚙️ 环境变量说明

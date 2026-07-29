@@ -53,6 +53,11 @@ application-local.yml
 application-local.properties
 application-dev.yml
 application-dev.properties
+springboot/src/main/resources/application-local*.yml
+springboot/src/main/resources/application-local*.properties
+springboot/src/main/resources/application-dev*.yml
+springboot/src/main/resources/application-dev*.properties
+!**/application*.example.yml
 
 # ====================
 # Build artifacts
