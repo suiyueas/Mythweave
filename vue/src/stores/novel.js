@@ -1512,8 +1512,20 @@ export const useNovelStore = defineStore('novel', () => {
   }
 })
 
-// Auto-fetch projects on store creation
+function isTokenExpired(token) {
+  try {
+    const payload = token.split('.')[1]
+    const decoded = JSON.parse(atob(payload))
+    return decoded.exp * 1000 < Date.now()
+  } catch {
+    return true
+  }
+}
+
+// Auto-fetch projects on store creation (仅在有有效token时)
 setTimeout(() => {
+  const token = localStorage.getItem('token')
+  if (!token || isTokenExpired(token)) return
   const store = useNovelStore()
   if (store.projects.length === 0) store.fetchProjects()
 }, 0)

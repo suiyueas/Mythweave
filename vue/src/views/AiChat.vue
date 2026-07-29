@@ -69,6 +69,15 @@
               <span class="agent-badge" v-if="agent.badge">{{ agent.badge }}</span>
             </button>
           </div>
+          <button class="orchestrator-btn" @click="triggerOrchestrator" :disabled="isOrchestrating" :class="{ loading: isOrchestrating }">
+            <span v-if="isOrchestrating" class="orchestrator-spinner"></span>
+            <span v-else>🤖</span>
+            <span>{{ isOrchestrating ? '分析中...' : '综合分析' }}</span>
+          </button>
+          <button class="history-btn" @click="toggleAnalysisHistory" :class="{ active: showAnalysisHistory }">
+            <span>📋</span>
+            <span>历史</span>
+          </button>
         </div>
 
         <div class="messages-container" ref="messagesContainer">
@@ -119,9 +128,68 @@
           </div>
         </div>
 
+        <!-- 多Agent协作结果展示 -->
+        <div v-if="orchestratorResult" class="orchestrator-result">
+          <div class="orchestrator-header">
+            <h3>🤖 多Agent综合分析报告</h3>
+            <button class="orchestrator-close" @click="closeOrchestrator">×</button>
+          </div>
+          <div class="orchestrator-cost">
+            <span>总耗时: {{ orchestratorResult.totalCostMs }}ms</span>
+          </div>
+
+          <div class="agent-cards">
+            <div class="agent-card editor">
+              <div class="agent-card-header">✍️ 编辑视角</div>
+              <div class="agent-card-body">{{ orchestratorResult.editorResult?.content || '（无结果）' }}</div>
+            </div>
+            <div class="agent-card character">
+              <div class="agent-card-header">👤 人物视角</div>
+              <div class="agent-card-body">{{ orchestratorResult.characterResult?.content || '（无结果）' }}</div>
+            </div>
+            <div class="agent-card style">
+              <div class="agent-card-header">🎨 风格视角</div>
+              <div class="agent-card-body">{{ orchestratorResult.styleResult?.content || '（无结果）' }}</div>
+            </div>
+            <div class="agent-card reader">
+              <div class="agent-card-header">📖 读者视角</div>
+              <div class="agent-card-body">{{ orchestratorResult.readerResult?.content || '（无结果）' }}</div>
+            </div>
+          </div>
+
+          <div v-if="orchestratorResult.summary" class="orchestrator-summary">
+            <div class="summary-header">📌 综合建议</div>
+            <div class="summary-content">{{ orchestratorResult.summary }}</div>
+          </div>
+        </div>
+
+        <!-- 分析历史记录 -->
+        <div v-if="showAnalysisHistory" class="analysis-history-panel">
+          <div class="history-header">
+            <h3>📋 分析历史</h3>
+            <button class="close-btn" @click="showAnalysisHistory = false">×</button>
+          </div>
+          <div class="history-content">
+            <div v-if="analysisHistoryLoading" class="history-loading">加载中...</div>
+            <div v-else-if="analysisHistory.length === 0" class="history-empty">
+              暂无分析记录
+            </div>
+            <div v-else class="history-list">
+              <div v-for="item in analysisHistory" :key="item.id" class="history-item" @click="viewAnalysis(item)">
+                <div class="history-item-info">
+                  <span class="history-chapter">{{ item.chapterDisplay || '第' + item.chapterIndex + '章' }}</span>
+                  <span class="history-time">{{ formatAnalysisTime(item.createTime) }}</span>
+                </div>
+                <div class="history-item-summary">{{ item.summary || '（无综合建议）' }}</div>
+                <button class="history-delete" @click.stop="deleteAnalysis(item.id)" title="删除">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="input-area">
           <div class="input-wrapper">
-            <textarea v-model="inputText" class="input-textarea" placeholder="输入消息，与 AI 讨论写作..." rows="2" @keydown.ctrl.enter="sendMessage" @keydown.meta.enter="sendMessage" ref="inputTextarea"></textarea>
+            <textarea v-model="inputText" class="input-textarea" placeholder="输入消息，与 AI 讨论写作..." rows="2" @keydown.ctrl.enter.prevent="sendMessage" @keydown.meta.enter.prevent="sendMessage" ref="inputTextarea"></textarea>
             <div class="input-toolbar">
               <span class="input-char-count">{{ inputText.length }} / 2000</span>
               <div class="input-actions">
@@ -138,6 +206,7 @@
           <div class="input-hint">
             <span>Ctrl+Enter 发送</span>
             <span v-if="isRetrying" class="retry-hint">⏳ 重试中...</span>
+            <span class="ai-disclaimer">本回答由 AI 生成，内容仅供参考，请仔细甄别</span>
           </div>
         </div>
       </main>
@@ -169,12 +238,15 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { chatApi } from '@/api'
 import { useNovelStore } from '@/stores/novel'
 
 const MAX_CONTEXT_TURNS = 10
 
 const store = useNovelStore()
+const router = useRouter()
+const route = useRoute()
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
 
@@ -568,11 +640,136 @@ function formatMsgTime(t) { return t ? new Date(t).toLocaleTimeString('zh-CN', {
 function scrollToBottom() { nextTick(() => { if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight }) }
 function copyMessage(c) { navigator.clipboard.writeText(c) }
 
-// 快速指令：直接填入并发送
+// 多Agent协作状态
+const orchestratorResult = ref(null)
+const isOrchestrating = ref(false)
+const showAnalysisHistory = ref(false)
+const analysisHistory = ref([])
+const analysisHistoryLoading = ref(false)
+
+// 分析历史相关方法
+async function loadAnalysisHistory() {
+  const pid = store.currentProjectId
+  if (!pid) return
+  analysisHistoryLoading.value = true
+  try {
+    const data = await chatApi.getAnalysisHistory(pid)
+    analysisHistory.value = data || []
+  } catch (e) {
+    console.error('加载分析历史失败:', e)
+    analysisHistory.value = []
+  } finally {
+    analysisHistoryLoading.value = false
+  }
+}
+
+function viewAnalysis(item) {
+  orchestratorResult.value = {
+    editorResult: { content: item.editorResult },
+    characterResult: { content: item.characterResult },
+    styleResult: { content: item.styleResult },
+    readerResult: { content: item.readerResult },
+    summary: item.summary,
+    totalCostMs: item.totalCostMs
+  }
+  showAnalysisHistory.value = false
+}
+
+async function deleteAnalysis(id) {
+  if (!confirm('确定要删除这条分析记录吗？')) return
+  const pid = store.currentProjectId
+  if (!pid) return
+  try {
+    await chatApi.deleteAnalysis(pid, id)
+    analysisHistory.value = analysisHistory.value.filter(item => item.id !== id)
+  } catch (e) {
+    console.error('删除分析记录失败:', e)
+    alert('删除失败: ' + (e.message || '未知错误'))
+  }
+}
+
+function formatAnalysisTime(isoString) {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+async function toggleAnalysisHistory() {
+  showAnalysisHistory.value = !showAnalysisHistory.value
+  if (showAnalysisHistory.value) {
+    await loadAnalysisHistory()
+  }
+}
+
 function quickPrompt(prompt) {
   if (isStreaming.value) return
   inputText.value = prompt.text
   nextTick(() => sendMessage())
+}
+
+// ═══════════════════════════════════════════
+//  多Agent协作分析
+// ═══════════════════════════════════════════
+
+async function triggerOrchestrator() {
+  const pid = store.currentProjectId
+  if (!pid) {
+    alert('请先选择一个作品')
+    return
+  }
+
+  if (isOrchestrating.value) return
+
+  const currentChapter = chapters.value.length > 0 ? chapters.value[chapters.value.length - 1] : null
+  const chapterContent = currentChapter?.content || ''
+  const chapterTitle = currentChapter?.title || ''
+  const chapterIndex = currentChapter?.sortOrder || chapters.value.length
+
+  if (!chapterContent || chapterContent.length < 50) {
+    alert('章节内容太少，请先写一些内容（至少50字）再进行综合分析')
+    return
+  }
+
+  isOrchestrating.value = true
+  orchestratorResult.value = null
+
+  try {
+    const data = await chatApi.orchestrate(pid, {
+      chapterContent,
+      chapterTitle,
+      chapterIndex,
+      goldSamples: '',
+      readerType: '普通'
+    })
+
+    if (data) {
+      orchestratorResult.value = {
+        editorResult: { content: data.editorResult?.content },
+        characterResult: { content: data.characterResult?.content },
+        styleResult: { content: data.styleResult?.content },
+        readerResult: { content: data.readerResult?.content },
+        summary: data.summary,
+        totalCostMs: data.totalCostMs
+      }
+      messages.value.push({
+        role: 'system',
+        content: '🤖 多Agent综合分析完成，请查看下方报告',
+        agent: 'orchestrator',
+        createTime: new Date().toISOString(),
+        isStreaming: false
+      })
+      scrollToBottom()
+    }
+  } catch (e) {
+    console.error('多Agent协作分析失败:', e)
+    alert('分析失败: ' + (e.message || '未知错误'))
+  } finally {
+    isOrchestrating.value = false
+  }
+}
+
+function closeOrchestrator() {
+  orchestratorResult.value = null
 }
 
 // ═══════════════════════════════════════════
@@ -733,8 +930,9 @@ onMounted(async () => {
 .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
 .send-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.input-hint { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #b8b0a8; margin-top: 6px; }
+.input-hint { display: flex; justify-content: center; align-items: center; font-size: 11px; color: #b8b0a8; margin-top: 6px; flex-wrap: wrap; gap: 8px; }
 .retry-hint { color: #d97706; font-weight: 500; }
+.ai-disclaimer { color: #9ca3af; }
 /* 上下文弹窗 */
 .context-popup { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); animation: fadeIn 0.2s ease; }
 .context-popup-inner { width: 320px; max-height: 80vh; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow: hidden; animation: slideUp 0.3s ease; }
@@ -760,6 +958,54 @@ onMounted(async () => {
 /* 汉堡菜单按钮 */
 .btn-menu { background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: #6b6560; transition: color 0.2s; }
 .btn-menu:hover { color: #1a1a2e; }
-/* 响应式 */
+
+/* 多Agent协作按钮 */
+.orchestrator-btn { display: flex; align-items: center; gap: 4px; padding: 6px 14px; border: 1.5px solid #7c3aed; border-radius: 20px; background: #fff; font-size: 12px; font-weight: 600; color: #7c3aed; cursor: pointer; transition: all 0.2s; margin-left: auto; }
+.orchestrator-btn:hover { background: #7c3aed; color: #fff; }
+.orchestrator-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.orchestrator-btn.loading { background: #f5f3ef; color: #94a3b8; border-color: #e8e3dc; }
+.orchestrator-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #e8e3dc; border-top-color: #7c3aed; border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+/* 历史按钮 */
+.history-btn { display: flex; align-items: center; gap: 4px; padding: 6px 14px; border: 1.5px solid #10b981; border-radius: 20px; background: #fff; font-size: 12px; font-weight: 600; color: #10b981; cursor: pointer; transition: all 0.2s; }
+.history-btn:hover { background: #10b981; color: #fff; }
+.history-btn.active { background: #10b981; color: #fff; }
+
+/* 多Agent协作结果 */
+.orchestrator-result { padding: 16px; border-top: 1px solid #f0ece6; background: #faf8f5; max-height: 50vh; overflow-y: auto; }
+.orchestrator-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.orchestrator-header h3 { font-size: 16px; color: #1a1a2e; margin: 0; }
+.orchestrator-close { width: 28px; height: 28px; border: none; border-radius: 8px; background: #f5f3ef; color: #6b6560; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.orchestrator-close:hover { background: #e8e3dc; }
+.orchestrator-cost { font-size: 12px; color: #94a3b8; margin-bottom: 12px; }
+.agent-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+.agent-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.agent-card-header { padding: 10px 14px; font-size: 13px; font-weight: 600; color: #fff; }
+.agent-card.editor .agent-card-header { background: #d97706; }
+.agent-card.character .agent-card-header { background: #0891b2; }
+.agent-card.style .agent-card-header { background: #7c3aed; }
+.agent-card.reader .agent-card-header { background: #059669; }
+.agent-card-body { padding: 12px 14px; font-size: 13px; line-height: 1.6; color: #1a1a2e; max-height: 150px; overflow-y: auto; white-space: pre-wrap; }
+.orchestrator-summary { background: #fef3c7; border-radius: 12px; padding: 14px 16px; }
+.summary-header { font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 8px; }
+.summary-content { font-size: 14px; line-height: 1.6; color: #78350f; white-space: pre-wrap; }
+
+/* 分析历史面板 */
+.analysis-history-panel { padding: 16px; border-top: 1px solid #f0ece6; background: #faf8f5; max-height: 60vh; overflow-y: auto; }
+.analysis-history-panel .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.analysis-history-panel .history-header h3 { font-size: 16px; color: #1a1a2e; margin: 0; }
+.analysis-history-panel .close-btn { width: 28px; height: 28px; border: none; border-radius: 8px; background: #f5f3ef; color: #6b6560; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.analysis-history-panel .close-btn:hover { background: #e8e3dc; }
+.analysis-history-panel .history-loading, .analysis-history-panel .history-empty { text-align: center; padding: 24px; color: #94a3b8; font-size: 14px; }
+.analysis-history-panel .history-list { display: flex; flex-direction: column; gap: 8px; }
+.analysis-history-panel .history-item { position: relative; padding: 12px 14px; background: #fff; border-radius: 10px; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.analysis-history-panel .history-item:hover { background: #fef9e7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.analysis-history-panel .history-item-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.analysis-history-panel .history-chapter { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+.analysis-history-panel .history-time { font-size: 11px; color: #94a3b8; }
+.analysis-history-panel .history-item-summary { font-size: 12px; color: #6b6560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 40px); }
+.analysis-history-panel .history-delete { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: none; border-radius: 6px; background: transparent; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.analysis-history-panel .history-delete:hover { background: #fee2e2; color: #dc2626; }
+
 @media (max-width: 768px) { .ai-chat { padding: 8px; } .header-right { gap: 6px; } .btn-header { padding: 6px 10px; font-size: 11px; } }
 </style>

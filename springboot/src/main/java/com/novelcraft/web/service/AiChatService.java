@@ -66,18 +66,28 @@ public class AiChatService {
     }
 
     /**
-     * 流式对话
+     * 流式对话（增强版：应用完整作品上下文）
      */
     public void streamChat(Long projectId, String novelTitle, String genre,
                             String currentChapter, String context, String userMessage,
                             double temperature, int maxTokens, Consumer<String> onToken) throws IOException {
         log.info("开始构建Chat Prompt, novelTitle={}, genre={}", novelTitle, genre);
+
+        String worldSettings = buildWorldSettingsContext(projectId);
+        String outline = buildOutlineContext(projectId);
+        String characters = buildCharactersContext(projectId);
+        String foreshadowings = buildForeshadowingsContext(projectId);
+
         String prompt = PromptTemplates.CHAT
                 .replace("{novelTitle}", novelTitle != null ? novelTitle : "")
                 .replace("{genre}", genre != null ? genre : "")
+                .replace("{worldSettings}", worldSettings)
+                .replace("{outline}", outline)
+                .replace("{characters}", characters)
+                .replace("{foreshadowings}", foreshadowings)
                 .replace("{currentChapter}", currentChapter != null ? currentChapter : "")
                 .replace("{userMessage}", userMessage);
-        // context 为空或不含实质内容时，移除模板中的占位段
+
         String ctx = sanitizeContext(context);
         if (ctx.isEmpty()) {
             prompt = prompt.replace("\n\n【相关上下文】\n{context}\n\n", "\n\n");
@@ -89,6 +99,137 @@ public class AiChatService {
 
         int tokensUsed = deepSeekClient.chatStream("你是一位AI写作助手", prompt, temperature, maxTokens, onToken);
         log.info("DeepSeek调用完成, tokensUsed={}", tokensUsed);
+    }
+
+    /**
+     * 构建世界观上下文
+     */
+    private String buildWorldSettingsContext(Long projectId) {
+        try {
+            List<NovelWorldSetting> worlds = worldSettingMapper.selectByProjectId(projectId);
+            if (worlds == null || worlds.isEmpty()) {
+                return "（暂无世界观设定）";
+            }
+            StringBuilder sb = new StringBuilder();
+            int count = 0;
+            for (NovelWorldSetting w : worlds) {
+                if (count >= 3) break;
+                if (w.getName() != null) {
+                    sb.append("- ").append(w.getName());
+                    if (w.getCategory() != null) sb.append("（").append(w.getCategory()).append("）");
+                    sb.append("\n");
+                }
+                count++;
+            }
+            return sb.length() > 0 ? sb.toString().trim() : "（暂无世界观设定）";
+        } catch (Exception e) {
+            log.warn("加载世界观失败: {}", e.getMessage());
+            return "（暂无世界观设定）";
+        }
+    }
+
+    /**
+     * 构建大纲上下文
+     */
+    private String buildOutlineContext(Long projectId) {
+        try {
+            List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
+            if (outlines == null || outlines.isEmpty()) {
+                return "（暂无大纲）";
+            }
+            StringBuilder sb = new StringBuilder();
+            int count = 0;
+            for (NovelOutline o : outlines) {
+                if (count >= 3) break;
+                if (o.getTitle() != null) {
+                    sb.append("- ").append(o.getTitle());
+                    if (o.getContent() != null) {
+                        String content = o.getContent();
+                        if (content.length() > 100) content = content.substring(0, 100) + "...";
+                        sb.append("：").append(content);
+                    }
+                    sb.append("\n");
+                }
+                count++;
+            }
+            return sb.length() > 0 ? sb.toString().trim() : "（暂无大纲）";
+        } catch (Exception e) {
+            log.warn("加载大纲失败: {}", e.getMessage());
+            return "（暂无大纲）";
+        }
+    }
+
+    /**
+     * 构建人物上下文
+     */
+    private String buildCharactersContext(Long projectId) {
+        try {
+            List<NovelCharacter> characters = characterMapper.selectByProjectId(projectId);
+            if (characters == null || characters.isEmpty()) {
+                return "（暂无人物设定）";
+            }
+            StringBuilder sb = new StringBuilder();
+            int count = 0;
+            for (NovelCharacter c : characters) {
+                if (count >= 5) break;
+                if (c.getName() != null) {
+                    sb.append("- ").append(c.getName());
+                    if (c.getRole() != null) sb.append("（").append(c.getRole()).append("）");
+                    if (c.getPersonality() != null && !c.getPersonality().isEmpty()) {
+                        sb.append("：性格").append(c.getPersonality());
+                    }
+                    sb.append("\n");
+                }
+                count++;
+            }
+            return sb.length() > 0 ? sb.toString().trim() : "（暂无人物设定）";
+        } catch (Exception e) {
+            log.warn("加载人物失败: {}", e.getMessage());
+            return "（暂无人物设定）";
+        }
+    }
+
+    /**
+     * 构建伏笔上下文
+     */
+    private String buildForeshadowingsContext(Long projectId) {
+        try {
+            List<NovelForeshadowing> foreshadowings = foreshadowingMapper.selectByProjectId(projectId);
+            if (foreshadowings == null || foreshadowings.isEmpty()) {
+                return "（暂无伏笔）";
+            }
+            StringBuilder sb = new StringBuilder();
+            int count = 0;
+            for (NovelForeshadowing f : foreshadowings) {
+                if (count >= 5) break;
+                if (f.getName() != null) {
+                    sb.append("- ").append(f.getName());
+                    if (f.getStatus() != null) {
+                        sb.append("[").append(getForeshadowingStatus(f.getStatus())).append("]");
+                    }
+                    if (f.getDescription() != null && !f.getDescription().isEmpty()) {
+                        sb.append("：").append(f.getDescription());
+                    }
+                    sb.append("\n");
+                }
+                count++;
+            }
+            return sb.length() > 0 ? sb.toString().trim() : "（暂无伏笔）";
+        } catch (Exception e) {
+            log.warn("加载伏笔失败: {}", e.getMessage());
+            return "（暂无伏笔）";
+        }
+    }
+
+    private String getForeshadowingStatus(String status) {
+        if (status == null) return "未设置";
+        return switch (status) {
+            case "pending" -> "待埋设";
+            case "developing" -> "发展中";
+            case "resolved" -> "已回收";
+            case "abandoned" -> "已放弃";
+            default -> status;
+        };
     }
 
     /**

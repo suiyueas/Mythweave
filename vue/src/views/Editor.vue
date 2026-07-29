@@ -511,28 +511,28 @@
     <!-- ═══ 伏笔追加位置选择弹窗 ═══ -->
     <Teleport to="body">
       <div v-if="showAppendPositionModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/20" @click.self="showAppendPositionModal = false">
-        <div class="bg-white rounded-xl p-5 shadow-lg max-w-sm w-full mx-4">
-          <div class="text-sm font-semibold text-[#1a1815] mb-3">追加伏笔补写</div>
-          <div class="text-xs text-[#6b6560] mb-1">伏笔：{{ appendForeshadowTarget?.name }}</div>
-          <p class="text-[11px] text-[#9c9690] mb-4 leading-relaxed">{{ appendForeshadowTarget?.description }}</p>
-          <div class="text-xs text-[#6b6560] mb-3">插入位置：</div>
-          <div class="space-y-2 mb-4">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="appendPosition" value="end" class="accent-[#d97706]" />
-              <span class="text-xs text-[#6b6560]">追加到章节末尾</span>
+        <div class="bg-white rounded-xl p-6 shadow-lg max-w-md w-full mx-4">
+          <div class="text-base font-semibold text-[#1a1815] mb-4">追加伏笔补写</div>
+          <div class="text-sm text-[#6b6560] mb-2 font-medium">伏笔：{{ appendForeshadowTarget?.name }}</div>
+          <p class="text-xs text-[#9c9690] mb-5 leading-relaxed bg-[#f9f7f4] p-3 rounded-lg">{{ appendForeshadowTarget?.description }}</p>
+          <div class="text-sm text-[#6b6560] mb-3 font-medium">插入位置：</div>
+          <div class="space-y-3 mb-5">
+            <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-[#f9f7f4] transition-colors">
+              <input type="radio" v-model="appendPosition" value="end" class="accent-[#d97706] w-4 h-4" />
+              <span class="text-sm text-[#6b6560]">追加到章节末尾</span>
             </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="appendPosition" value="cursor" class="accent-[#d97706]" />
-              <span class="text-xs text-[#6b6560]">插入到光标位置</span>
+            <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-[#f9f7f4] transition-colors">
+              <input type="radio" v-model="appendPosition" value="cursor" class="accent-[#d97706] w-4 h-4" />
+              <span class="text-sm text-[#6b6560]">插入到光标位置</span>
             </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="appendPosition" value="auto" class="accent-[#d97706]" />
-              <span class="text-xs text-[#6b6560]">AI 智能插入</span>
+            <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-[#f9f7f4] transition-colors">
+              <input type="radio" v-model="appendPosition" value="auto" class="accent-[#d97706] w-4 h-4" />
+              <span class="text-sm text-[#6b6560]">AI 智能插入</span>
             </label>
           </div>
-          <div class="flex justify-end gap-2">
-            <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="showAppendPositionModal = false">取消</button>
-            <button class="px-4 py-1.5 bg-[#d97706] text-white rounded-lg text-xs font-semibold hover:bg-[#b45309] transition-colors" :disabled="appendLoading" @click="confirmAppendForeshadow">
+          <div class="flex justify-end gap-3">
+            <button class="px-5 py-2 border border-[#e8e3dc] rounded-lg text-sm text-[#6b6560] hover:border-[#d97706] transition-colors" @click="showAppendPositionModal = false">取消</button>
+            <button class="px-5 py-2 bg-[#d97706] text-white rounded-lg text-sm font-semibold hover:bg-[#b45309] transition-colors" :disabled="appendLoading" @click="confirmAppendForeshadow">
               {{ appendLoading ? '生成中...' : '生成补写' }}
             </button>
           </div>
@@ -543,16 +543,16 @@
     <!-- ═══ 伏笔追加结果预览弹窗 ═══ -->
     <Teleport to="body">
       <div v-if="showAppendResultModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/20" @click.self="showAppendResultModal = false">
-        <div class="bg-white rounded-xl p-5 shadow-lg max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
-          <div class="text-sm font-semibold text-[#1a1815] mb-2">伏笔补写结果预览</div>
-          <div class="text-xs text-[#6b6560] mb-3">请预览新增内容（红色边框标记），确认后生效</div>
-          <div class="flex-1 overflow-y-auto p-3 rounded-lg border border-[#fecaca] bg-[#fef2f2] text-xs leading-relaxed whitespace-pre-wrap mb-4">
+        <div class="bg-white rounded-xl p-6 shadow-lg max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col">
+          <div class="text-base font-semibold text-[#1a1815] mb-3">伏笔补写结果预览</div>
+          <div class="text-sm text-[#6b6560] mb-4">请预览新增内容（红色边框标记），确认后生效</div>
+          <div class="flex-1 overflow-y-auto p-4 rounded-lg border-2 border-[#fecaca] bg-[#fef2f2] text-sm leading-relaxed whitespace-pre-wrap mb-5">
             {{ appendInsertedContent }}
           </div>
-          <div class="flex justify-end gap-2">
-            <button class="px-4 py-1.5 border border-[#e8e3dc] rounded-lg text-xs text-[#6b6560] hover:border-[#d97706] transition-colors" @click="cancelAppendForeshadow">取消</button>
-            <button class="px-4 py-1.5 bg-[#e8e3dc] text-[#6b6560] rounded-lg text-xs font-semibold hover:bg-[#d4cec6] transition-colors" @click="modifyAppendForeshadow">修改</button>
-            <button class="px-4 py-1.5 bg-[#16a34a] text-white rounded-lg text-xs font-semibold hover:bg-[#15803d] transition-colors" @click="acceptAppendForeshadow">接受</button>
+          <div class="flex justify-end gap-3">
+            <button class="px-5 py-2 border border-[#e8e3dc] rounded-lg text-sm text-[#6b6560] hover:border-[#d97706] transition-colors" @click="cancelAppendForeshadow">取消</button>
+            <button class="px-5 py-2 bg-[#e8e3dc] text-[#6b6560] rounded-lg text-sm font-semibold hover:bg-[#d4cec6] transition-colors" @click="modifyAppendForeshadow">修改</button>
+            <button class="px-5 py-2 bg-[#16a34a] text-white rounded-lg text-sm font-semibold hover:bg-[#15803d] transition-colors" @click="acceptAppendForeshadow">接受</button>
           </div>
         </div>
       </div>
@@ -955,11 +955,15 @@ async function confirmAppendForeshadow() {
     const pid = store.currentProjectId
     const chapterId = store.currentChapterId
     const currentContent = store.editorContent || ''
-    const cursorPos = editorRef.value?.getSelection()?.start || currentContent.length
+    const cursorPos = textareaRef.value?.selectionStart || currentContent.length
+    const token = localStorage.getItem('token')
 
     const res = await fetch(`/api/projects/${pid}/chapters/${chapterId}/append-foreshadow`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
       body: JSON.stringify({
         foreshadowingId: appendForeshadowTarget.value.id,
         foreshadowingTitle: appendForeshadowTarget.value.name,
@@ -990,9 +994,10 @@ async function confirmAppendForeshadow() {
 
 function acceptAppendForeshadow() {
   store.editorContent = appendFullContent.value
-  if (editorRef.value) {
-    editorRef.value.setValue(appendFullContent.value)
-    editorRef.value.setSelection(appendInsertIndex.value, appendInsertIndex.value + appendInsertedContent.value.length)
+  if (textareaRef.value) {
+    textareaRef.value.value = appendFullContent.value
+    textareaRef.value.setSelectionRange(appendInsertIndex.value, appendInsertIndex.value + appendInsertedContent.value.length)
+    textareaRef.value.focus()
   }
   showAppendResultModal.value = false
   showToast('伏笔已成功融入章节', 'success')

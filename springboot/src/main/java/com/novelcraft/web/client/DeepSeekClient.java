@@ -71,21 +71,18 @@ public class DeepSeekClient {
                 throw new IOException("DeepSeek API 响应格式错误：无message");
             }
 
-            String content = message.path("content").asText();
-            String reasoningContent = message.path("reasoning_content").asText();
+            String content = message.path("content").asText(null);
+            String reasoningContent = message.path("reasoning_content").asText(null);
             String finishReason = choices.get(0).path("finish_reason").asText();
 
-            log.info("DeepSeek响应: finish_reason={}, content长度={}, reasoning_content长度={}",
-                    finishReason, content != null ? content.length() : 0, reasoningContent != null ? reasoningContent.length() : 0);
+            log.info("DeepSeek响应: finish_reason={}, content={}, reasoning_content长度={}",
+                    finishReason, content != null ? "\"" + content.substring(0, Math.min(50, content.length())) + "...\"" : "null", reasoningContent != null ? reasoningContent.length() : 0);
 
             if (content != null && !content.trim().isEmpty()) {
                 return content.trim();
             } else if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
-                log.warn("AI仅返回推理过程，无最终内容。finish_reason={}", finishReason);
-                if ("length".equals(finishReason)) {
-                    throw new IOException("AI输出被截断（max_tokens不足），当前max_tokens=" + maxTokens + "，请增加max_tokens或简化Prompt");
-                }
-                throw new IOException("AI仅返回推理过程，无最终内容。请检查模型配置或重试。");
+                log.warn("content为空，使用reasoning_content作为结果。finish_reason={}", finishReason);
+                return "[推理过程]\n" + reasoningContent.trim();
             } else {
                 log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
                 throw new IOException("AI 返回空内容");

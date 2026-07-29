@@ -46,6 +46,14 @@ export const chatApi = {
   // ─── 健康检查 ───
   checkHealth: (projectId) => get(`/api/projects/${projectId}/ai/health`).catch(() => null),
 
+  // ─── 多Agent协作分析 ───
+  orchestrate: (projectId, data) => post(`/api/projects/${projectId}/agent/orchestrate`, data),
+
+  // ─── 综合分析历史 ───
+  getAnalysisHistory: (projectId) => get(`/api/projects/${projectId}/analysis/history`),
+  getAnalysis: (projectId, analysisId) => get(`/api/projects/${projectId}/analysis/${analysisId}`),
+  deleteAnalysis: (projectId, analysisId) => del(`/api/projects/${projectId}/analysis/${analysisId}`),
+
   // ─── 流式对话（增强版：超时 + 重试） ───
   streamChat(projectId, params, onToken, onDone, onError) {
     const { userMessage, agent, sessionId, novelTitle, genre, currentChapter, context } = params
