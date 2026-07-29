@@ -1,4 +1,4 @@
-package com.novelcraft.web.repository;
+package com.novelcraft.web.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.novelcraft.web.entity.NovelAnalysis;
@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import java.util.List;
 
 @Mapper
-public interface AnalysisRepository extends BaseMapper<NovelAnalysis> {
+public interface AnalysisMapper extends BaseMapper<NovelAnalysis> {
 
     @Select("SELECT * FROM novel_analysis WHERE project_id = #{projectId} ORDER BY create_time DESC")
     List<NovelAnalysis> findByProjectIdOrderByCreateTimeDesc(@Param("projectId") Long projectId);
