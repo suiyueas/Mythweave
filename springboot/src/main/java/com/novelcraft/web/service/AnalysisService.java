@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -33,17 +32,17 @@ public class AnalysisService {
         analysis.setSummary(response.getSummary());
         analysis.setTotalCostMs(response.getTotalCostMs());
 
-        NovelAnalysis saved = analysisRepository.save(analysis);
-        log.info("保存综合分析记录, id={}, projectId={}, chapter={}", saved.getId(), projectId, chapterTitle);
-        return saved;
+        analysisRepository.insert(analysis);
+        log.info("保存综合分析记录, id={}, projectId={}, chapter={}", analysis.getId(), projectId, chapterTitle);
+        return analysis;
     }
 
     public List<NovelAnalysis> getAnalysisHistory(Long projectId) {
         return analysisRepository.findByProjectIdOrderByCreateTimeDesc(projectId);
     }
 
-    public Optional<NovelAnalysis> getAnalysisById(Long id) {
-        return analysisRepository.findById(id);
+    public NovelAnalysis getAnalysisById(Long id) {
+        return analysisRepository.selectById(id);
     }
 
     public List<NovelAnalysis> getChapterAnalysis(Long projectId, Long chapterId) {

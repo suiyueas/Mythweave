@@ -6,7 +6,7 @@ import com.novelcraft.web.dto.OrchestratorResponse;
 import com.novelcraft.web.entity.NovelAnalysis;
 import com.novelcraft.web.service.AgentOrchestratorService;
 import com.novelcraft.web.service.AnalysisService;
-import com.novelcraft.web.utils.R;
+import com.novelcraft.web.common.R;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -64,10 +64,11 @@ public class AnalysisController {
     @GetMapping("/{id}")
     public R<AnalysisDTO> getById(@PathVariable Long projectId, @PathVariable Long id) {
         log.info("🔍 获取分析详情, id={}", id);
-        return analysisService.getAnalysisById(id)
-                .map(this::convertToDTO)
-                .map(R::ok)
-                .orElse(R.fail("分析记录不存在"));
+        NovelAnalysis analysis = analysisService.getAnalysisById(id);
+        if (analysis == null) {
+            return R.fail("分析记录不存在");
+        }
+        return R.ok(convertToDTO(analysis));
     }
 
     @DeleteMapping("/{id}")

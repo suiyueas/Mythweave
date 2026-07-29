@@ -143,10 +143,10 @@ public class AiChatService {
                 if (count >= 3) break;
                 if (o.getTitle() != null) {
                     sb.append("- ").append(o.getTitle());
-                    if (o.getContent() != null) {
-                        String content = o.getContent();
-                        if (content.length() > 100) content = content.substring(0, 100) + "...";
-                        sb.append("：").append(content);
+                    if (o.getDescription() != null && !o.getDescription().isEmpty()) {
+                        String desc = o.getDescription();
+                        if (desc.length() > 50) desc = desc.substring(0, 50) + "...";
+                        sb.append("：").append(desc);
                     }
                     sb.append("\n");
                 }
