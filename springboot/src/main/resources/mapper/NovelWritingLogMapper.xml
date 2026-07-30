@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelWritingLogMapper">
+
+    <!-- ==================== 写作日志查询 ==================== -->
+
+    <!--
+        功能: 按日期范围查询写作日志
+        参数: projectId - 项目ID, start - 开始日期, end - 结束日期
+        返回: List<NovelWritingLog> 写作日志列表
+        说明: 用于热力图和写作统计，按日期排序
+    -->
+    <select id="selectByDateRange" resultType="com.novelcraft.web.entity.NovelWritingLog">
+        SELECT * FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date BETWEEN #{start} AND #{end} AND deleted = 0
+        ORDER BY date
+    </select>
+
+    <!--
+        功能: 按日期统计字数
+        参数: projectId - 项目ID, date - 日期
+        返回: Integer 当日总字数
+        说明: 使用COALESCE处理NULL情况，返回0表示无写作记录
+    -->
+    <select id="sumWordsByDate" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(word_count), 0)
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date = #{date} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 按日期区间统计字数
+        参数: projectId - 项目ID, start - 开始日期, end - 结束日期
+        返回: Integer 区间内总字数
+        说明: 用于写作统计报表
+    -->
+    <select id="sumWordsBetween" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(word_count), 0)
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date BETWEEN #{start} AND #{end} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 按日期统计写作时长
+        参数: projectId - 项目ID, date - 日期
+        返回: Integer 当日总时长（分钟）
+        说明: 用于写作效率分析
+    -->
+    <select id="sumDurationByDate" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(writing_duration), 0)
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date = #{date} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 获取最佳写作时段
+        参数: projectId - 项目ID, since - 起始日期
+        返回: String 最佳时段描述（如"09:00-10:00"）
+        说明: 按小时分组统计，取平均字数最高的小时段
+    -->
+    <select id="getBestHours" resultType="java.lang.String">
+        SELECT CONCAT(
+            DATE_FORMAT(MIN(create_time), '%H:00'),
+            '-',
+            DATE_FORMAT(DATE_ADD(MIN(create_time), INTERVAL 1 HOUR), '%H:00')
+        ) AS best_hours
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date >= #{since} AND deleted = 0
+        GROUP BY DATE(create_time), HOUR(create_time)
+        ORDER BY AVG(word_count) DESC
+        LIMIT 1
+    </select>
+
+    <!--
+        功能: 获取每日写作字数（热力图用）
+        参数: projectId - 项目ID, start - 开始日期, end - 结束日期
+        返回: List<HeatmapData> 每日字数统计
+        说明: 按日期聚合，用于前端热力图展示
+    -->
+    <select id="getDailyWords" resultType="com.novelcraft.web.model.HeatmapData">
+        SELECT date, COALESCE(SUM(word_count), 0) AS count
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date BETWEEN #{start} AND #{end} AND deleted = 0
+        GROUP BY date
+        ORDER BY date
+    </select>
+
+    <!--
+        功能: 查询最近的写作记录
+        参数: projectId - 项目ID, limit - 返回记录数
+        返回: List<NovelWritingLog> 写作日志列表
+        说明: 按更新时间倒序，用于最近写作活动展示
+    -->
+    <select id="selectRecentByProject" resultType="com.novelcraft.web.entity.NovelWritingLog">
+        SELECT * FROM novel_writing_log
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <!--
+        功能: 获取本周写作趋势
+        参数: projectId - 项目ID
+        返回: List<HeatmapData> 每日字数统计（最近7天）
+        说明: 从6天前到今天，用于仪表盘本周趋势展示
+    -->
+    <select id="getWeeklyTrend" resultType="com.novelcraft.web.model.HeatmapData">
+        SELECT date, COALESCE(SUM(word_count), 0) AS count
+        FROM novel_writing_log
+        WHERE project_id = #{projectId} AND date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND deleted = 0
+        GROUP BY date
+        ORDER BY date
+    </select>
+
+</mapper>

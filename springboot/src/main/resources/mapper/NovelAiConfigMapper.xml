@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelAiConfigMapper">
+
+    <!-- ==================== AI配置查询 ==================== -->
+
+    <!--
+        功能: 查询项目AI配置
+        参数: projectId - 项目ID
+        返回: NovelAiConfig AI配置对象
+        说明: 获取项目关联的AI模型配置(如DeepSeek API配置)
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelAiConfig">
+        SELECT * FROM novel_ai_config
+        WHERE project_id = #{projectId} AND deleted = 0
+        LIMIT 1
+    </select>
+
+</mapper>

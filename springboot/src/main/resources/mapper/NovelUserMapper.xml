@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelUserMapper">
+
+    <!-- ==================== 用户查询 ==================== -->
+
+    <!--
+        功能: 根据用户名查询用户
+        参数: username - 用户名
+        返回: NovelUser 用户对象
+        说明: 用于用户登录认证，需排除已删除用户
+    -->
+    <select id="selectByUsername" resultType="com.novelcraft.web.entity.NovelUser">
+        SELECT * FROM novel_user
+        WHERE username = #{username} AND deleted = 0
+    </select>
+
+</mapper>

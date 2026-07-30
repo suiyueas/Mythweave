@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelInspirationMapper">
+
+    <!-- ==================== 灵感记录查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有灵感记录
+        参数: projectId - 项目ID
+        返回: List<NovelInspiration> 灵感列表
+        说明: 按创建时间倒序，最新的灵感在前
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelInspiration">
+        SELECT * FROM novel_inspiration
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

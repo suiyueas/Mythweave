@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelPlotKnowledgeGraphMapper">
+
+    <!-- ==================== 知识图谱查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有知识图谱节点
+        参数: projectId - 项目ID
+        返回: List<NovelPlotKnowledgeGraph> 知识图谱节点列表
+        说明: 用于可视化展示故事元素之间的关系网络
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelPlotKnowledgeGraph">
+        SELECT * FROM novel_plot_knowledge_graph
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+</mapper>

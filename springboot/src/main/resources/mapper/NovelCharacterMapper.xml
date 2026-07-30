@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelCharacterMapper">
+
+    <!-- ==================== 人物查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有人物
+        参数: projectId - 项目ID
+        返回: List<NovelCharacter> 人物列表
+        说明: 只查询未删除(deleted=0)的人物，按创建时间倒序
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelCharacter">
+        SELECT * FROM novel_character
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+</mapper>

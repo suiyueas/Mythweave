@@ -2,7 +2,28 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.novelcraft.web.mapper.NovelOutlineMapper">
 
-    <!-- 批量更新排序（同幕拖拽） -->
+    <!-- ==================== 大纲节点查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有大纲节点
+        参数: projectId - 项目ID
+        返回: List<NovelOutline> 大纲节点列表
+        说明: 按sort_order排序，用于大纲树形结构展示
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelOutline">
+        SELECT * FROM novel_outline
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY sort_order
+    </select>
+
+    <!-- ==================== 大纲批量操作 ==================== -->
+
+    <!--
+        功能: 批量更新大纲节点排序（同幕拖拽）
+        参数: items - BatchSortItem列表，包含id, projectId, sortOrder, nodeNumber
+        返回: void（foreach多语句执行）
+        说明: 用于同一幕内拖拽调整顺序，只更新sort_order和node_number
+    -->
     <update id="updateBatchSort" parameterType="list">
         <foreach collection="items" item="item" separator=";">
             UPDATE novel_outline
@@ -15,7 +36,12 @@
         </foreach>
     </update>
 
-    <!-- 批量更新排序和幕归属（跨幕拖拽） -->
+    <!--
+        功能: 批量更新大纲节点排序和幕归属（跨幕拖拽）
+        参数: items - BatchSortActItem列表，包含id, projectId, sortOrder, act, nodeNumber
+        返回: void（foreach多语句执行）
+        说明: 用于跨幕拖拽调整顺序，同时更新sort_order、act和node_number
+    -->
     <update id="updateBatchSortAndAct" parameterType="list">
         <foreach collection="items" item="item" separator=";">
             UPDATE novel_outline
@@ -29,7 +55,12 @@
         </foreach>
     </update>
 
-    <!-- 批量更新状态 -->
+    <!--
+        功能: 批量更新大纲节点状态
+        参数: projectId - 项目ID, ids - 节点ID列表, status - 新状态
+        返回: void
+        说明: 用于批量修改节点状态（如标记为已完成）
+    -->
     <update id="updateBatchStatus">
         UPDATE novel_outline
         SET node_status = #{status},
@@ -42,7 +73,12 @@
           AND deleted = 0
     </update>
 
-    <!-- 批量删除 -->
+    <!--
+        功能: 批量删除大纲节点
+        参数: projectId - 项目ID, ids - 节点ID列表
+        返回: void
+        说明: 逻辑删除，将deleted设为1
+    -->
     <update id="deleteBatch">
         UPDATE novel_outline
         SET deleted = 1,

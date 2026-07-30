@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.AnalysisMapper">
+
+    <!-- ==================== AI分析记录查询 ==================== -->
+
+    <!--
+        功能: 查询项目的所有分析记录
+        参数: projectId - 项目ID
+        返回: List<NovelAnalysis> 分析记录列表
+        说明: 按创建时间倒序，用于分析历史页面展示
+    -->
+    <select id="findByProjectIdOrderByCreateTimeDesc" resultType="com.novelcraft.web.entity.NovelAnalysis">
+        SELECT * FROM novel_analysis
+        WHERE project_id = #{projectId}
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+        功能: 查询指定章节的所有分析记录
+        参数: projectId - 项目ID, chapterId - 章节ID
+        返回: List<NovelAnalysis> 分析记录列表
+        说明: 用于章节详情页的分析历史展示
+    -->
+    <select id="findByProjectIdAndChapterIdOrderByCreateTimeDesc" resultType="com.novelcraft.web.entity.NovelAnalysis">
+        SELECT * FROM novel_analysis
+        WHERE project_id = #{projectId} AND chapter_id = #{chapterId}
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+        功能: 删除项目的所有分析记录
+        参数: projectId - 项目ID
+        返回: void
+        说明: 用于清理项目时连带删除分析数据
+    -->
+    <delete id="deleteByProjectId">
+        DELETE FROM novel_analysis WHERE project_id = #{projectId}
+    </delete>
+
+</mapper>

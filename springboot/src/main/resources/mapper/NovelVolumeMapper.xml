@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelVolumeMapper">
+
+    <!-- ==================== 卷/章节卷查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有卷（卷是章节的分组）
+        参数: projectId - 项目ID
+        返回: List<NovelVolume> 卷列表
+        说明: 按sort_order排序，用于前端展示卷的顺序
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelVolume">
+        SELECT * FROM novel_volume
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY sort_order
+    </select>
+
+</mapper>

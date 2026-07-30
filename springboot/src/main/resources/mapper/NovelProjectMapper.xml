@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelProjectMapper">
+
+    <!-- ==================== 项目查询与删除 ==================== -->
+
+    <!--
+        功能: 物理删除项目（绕过逻辑删除）
+        参数: id - 项目ID
+        返回: int 影响行数
+        说明: 物理删除，不走@TableLogic，用于彻底清理数据
+    -->
+    <delete id="deletePhysically">
+        DELETE FROM novel_project WHERE id = #{id}
+    </delete>
+
+    <!--
+        功能: 查询用户的所有作品
+        参数: userId - 用户ID
+        返回: List<NovelProject> 项目列表
+        说明: 按创建时间倒序，展示用户的作品列表
+    -->
+    <select id="selectByUserId" resultType="com.novelcraft.web.entity.NovelProject">
+        SELECT * FROM novel_project
+        WHERE user_id = #{userId} AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+        功能: 查询最近有更新活动的项目ID
+        参数: days - 天数（如7表示近7天）
+        返回: List<Long> 项目ID列表
+        说明: 用于缓存预热，只返回有章节更新的项目
+    -->
+    <select id="selectActiveProjectIdsWithinDays" resultType="long">
+        SELECT DISTINCT cp.id FROM novel_project cp
+        INNER JOIN novel_chapter cc ON cp.id = cc.project_id
+        WHERE cc.update_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        AND cp.deleted = 0 AND cc.deleted = 0
+    </select>
+
+</mapper>

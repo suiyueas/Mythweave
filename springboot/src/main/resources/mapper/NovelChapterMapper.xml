@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelChapterMapper">
+
+    <!-- ==================== 章节基础查询 ==================== -->
+
+    <!--
+        功能: 查询项目的章节列表（包含content，避免N+1查询）
+        参数: projectId - 项目ID
+        返回: List<NovelChapter> 章节列表
+        说明: 按sort_order排序，返回完整章节内容用于前端展示
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY sort_order
+    </select>
+
+    <!--
+        功能: 查询指定卷的所有章节
+        参数: volumeId - 卷ID
+        返回: List<NovelChapter> 章节列表
+        说明: 用于卷详情页面，展示卷内所有章节
+    -->
+    <select id="selectByVolumeId" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE volume_id = #{volumeId} AND deleted = 0
+        ORDER BY sort_order
+    </select>
+
+    <!--
+        功能: 按ID查询章节（绕过逻辑删除）
+        参数: id - 章节ID
+        返回: NovelChapter 章节对象
+        说明: 显式指定deleted=0，绕过MyBatis-Plus全局逻辑删除策略
+    -->
+    <select id="selectByIdWithDeleted" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- ==================== 章节删除操作 ==================== -->
+
+    <!--
+        功能: 逻辑删除章节
+        参数: id - 章节ID
+        返回: int 影响行数
+        说明: 方法名不以delete开头，避免被MyBatis-Plus拦截器劫持
+    -->
+    <update id="markDeletedById">
+        UPDATE novel_chapter SET deleted = 1
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- ==================== 章节统计查询 ==================== -->
+
+    <!--
+        功能: 统计项目章节数量
+        参数: projectId - 项目ID
+        返回: Integer 章节总数
+        说明: 用于项目统计信息展示
+    -->
+    <select id="countByProject" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 查询最近更新的章节
+        参数: projectId - 项目ID, limit - 返回数量
+        返回: List<NovelChapter> 章节列表
+        说明: 按update_time倒序，用于最近更新展示
+    -->
+    <select id="selectRecentByProject" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <!--
+        功能: 统计项目总字数
+        参数: projectId - 项目ID
+        返回: Integer 总字数
+        说明: 使用COALESCE处理空项目的NULL情况
+    -->
+    <select id="sumWordCountByProject" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(word_count), 0)
+        FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 获取最大排序序号（章节计数用）
+        参数: projectId - 项目ID
+        返回: Integer 最大sort_order
+        说明: 用于计算章节总数和确定新章节的排序位置
+    -->
+    <select id="selectMaxSortOrder" resultType="java.lang.Integer">
+        SELECT MAX(sort_order)
+        FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 获取最大排序序号（别名）
+        参数: projectId - 项目ID
+        返回: Integer 最大sort_order
+        说明: Service层调用的别名方法，功能同selectMaxSortOrder
+    -->
+    <select id="getMaxSortOrder" resultType="java.lang.Integer">
+        SELECT MAX(sort_order)
+        FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 按排序号查询章节（章节衔接用）
+        参数: projectId - 项目ID, sortOrder - 排序序号
+        返回: NovelChapter 章节对象
+        说明: 用于获取上一章内容做衔接续写
+    -->
+    <select id="selectBySortOrder" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE project_id = #{projectId} AND sort_order = #{sortOrder} AND deleted = 0
+    </select>
+
+    <!-- ==================== 字数统计（按日期） ==================== -->
+
+    <!--
+        功能: 按日期统计项目字数（兜底方案）
+        参数: projectId - 项目ID, date - 日期
+        返回: Integer 当日总字数
+        说明: 当writing_log无数据时使用chapter表统计，同时匹配create_time和update_time
+    -->
+    <select id="sumWordCountByProjectAndDate" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(word_count), 0)
+        FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+        AND (DATE(create_time) = #{date} OR DATE(update_time) = #{date})
+    </select>
+
+    <!--
+        功能: 按日期区间统计项目字数（兜底方案）
+        参数: projectId - 项目ID, start - 开始日期, end - 结束日期
+        返回: Integer 区间内总字数
+        说明: 当writing_log无数据时使用chapter表统计
+    -->
+    <select id="sumWordCountByProjectAndDateRange" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(word_count), 0)
+        FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+        AND ((DATE(create_time) BETWEEN #{start} AND #{end}) OR (DATE(update_time) BETWEEN #{start} AND #{end}))
+    </select>
+
+    <!-- ==================== 哨兵检测相关 ==================== -->
+
+    <!--
+        功能: 查询所有已发布章节（用于智能哨兵检测）
+        参数: projectId - 项目ID
+        返回: List<NovelChapter> 章节列表
+        说明: 只查询status='COMPLETED'的章节，按sort_order排序
+    -->
+    <select id="selectPublishedChapters" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0 AND status = 'COMPLETED'
+        ORDER BY sort_order
+    </select>
+
+    <!--
+        功能: 查询提及指定人物的所有章节
+        参数: projectId - 项目ID, characterId - 人物ID
+        返回: List<NovelChapter> 章节列表
+        说明: 通过novel_chapter_character关联表查询，用于人物出场统计
+    -->
+    <select id="selectChaptersMentioningCharacter" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT c.* FROM novel_chapter c
+        JOIN novel_chapter_character cc ON c.id = cc.chapter_id
+        WHERE c.project_id = #{projectId} AND c.deleted = 0 AND cc.character_id = #{characterId}
+    </select>
+
+    <!--
+        功能: 查询当前章节附近的章节（增量补写用）
+        参数: projectId - 项目ID, currentOrder - 当前章节排序号, range - 范围
+        返回: List<NovelChapter> 章节列表
+        说明: 查询currentOrder±range范围内的章节，用于上下文理解和伏笔回收
+    -->
+    <select id="selectNearbyChaptersForIncremental" resultType="com.novelcraft.web.entity.NovelChapter">
+        SELECT * FROM novel_chapter
+        WHERE project_id = #{projectId} AND deleted = 0
+        AND sort_order BETWEEN #{currentOrder} - #{range} AND #{currentOrder} + #{range}
+        ORDER BY sort_order
+    </select>
+
+</mapper>

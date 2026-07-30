@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelPlotThreadMapper">
+
+    <!-- ==================== 情节线查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有情节线
+        参数: projectId - 项目ID
+        返回: List<NovelPlotThread> 情节线列表
+        说明: 用于情节线管理，展示故事的多条叙事线索
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelPlotThread">
+        SELECT * FROM novel_plot_thread
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+</mapper>

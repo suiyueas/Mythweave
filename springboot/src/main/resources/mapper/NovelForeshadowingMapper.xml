@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelForeshadowingMapper">
+
+    <!-- ==================== 伏笔查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有伏笔
+        参数: projectId - 项目ID
+        返回: List<NovelForeshadowing> 伏笔列表
+        说明: 获取全部伏笔记录，用于伏笔管理
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelForeshadowing">
+        SELECT * FROM novel_foreshadowing
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 查询未解决的伏笔
+        参数: projectId - 项目ID
+        返回: List<NovelForeshadowing> 待解决伏笔列表
+        说明: 状态不为'resolved'的伏笔，按关联章节排序
+    -->
+    <select id="selectPendingByProject" resultType="com.novelcraft.web.entity.NovelForeshadowing">
+        SELECT * FROM novel_foreshadowing
+        WHERE project_id = #{projectId} AND status != 'resolved' AND deleted = 0
+        ORDER BY chapter_id
+    </select>
+
+    <!--
+        功能: 查询紧急伏笔（已过期的伏笔）
+        参数: projectId - 项目ID, currentChapter - 当前章节序号
+        返回: List<NovelForeshadowing> 紧急伏笔列表
+        说明: 伏笔设定章节 <= 当前章节但仍未解决，需要立即回收
+    -->
+    <select id="selectUrgentByProject" resultType="com.novelcraft.web.entity.NovelForeshadowing">
+        SELECT * FROM novel_foreshadowing
+        WHERE project_id = #{projectId} AND status != 'resolved' AND deleted = 0
+        AND chapter_id &lt;= #{currentChapter}
+        ORDER BY chapter_id ASC
+    </select>
+
+    <!--
+        功能: 查询与指定章节相关的伏笔
+        参数: projectId - 项目ID, chapterId - 章节ID
+        返回: List<NovelForeshadowing> 相关伏笔列表
+        说明: 包括在该章节埋下的伏笔，以及在该章节回收的伏笔
+    -->
+    <select id="selectRelatedByChapterId" resultType="com.novelcraft.web.entity.NovelForeshadowing">
+        SELECT * FROM novel_foreshadowing
+        WHERE project_id = #{projectId} AND deleted = 0
+        AND (chapter_id = #{chapterId} OR resolved_chapter_id = #{chapterId})
+    </select>
+
+</mapper>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelAiSessionMapper">
+
+    <!-- ==================== AI会话查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有AI会话记录
+        参数: projectId - 项目ID
+        返回: List<NovelAiSession> 会话列表
+        说明: 按创建时间倒序，用于AI对话历史展示
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelAiSession">
+        SELECT * FROM novel_ai_session
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+        功能: 查询去重后的会话ID列表
+        参数: projectId - 项目ID
+        返回: List<NovelAiSession> 去重会话列表
+        说明: 按每个会话的第一条消息时间排序，用于左侧会话分组展示
+    -->
+    <select id="selectDistinctSessions" resultType="com.novelcraft.web.entity.NovelAiSession">
+        SELECT DISTINCT session_id, MIN(create_time) AS create_time
+        FROM novel_ai_session
+        WHERE project_id = #{projectId} AND session_id IS NOT NULL AND deleted = 0
+        GROUP BY session_id
+        ORDER BY MIN(create_time) DESC
+    </select>
+
+    <!--
+        功能: 查询指定会话的所有消息
+        参数: sessionId - 会话ID
+        返回: List<NovelAiSession> 会话消息列表
+        说明: 按创建时间升序，用于加载某个会话的完整对话历史
+    -->
+    <select id="selectBySessionId" resultType="com.novelcraft.web.entity.NovelAiSession">
+        SELECT * FROM novel_ai_session
+        WHERE session_id = #{sessionId} AND deleted = 0
+        ORDER BY create_time ASC
+    </select>
+
+</mapper>

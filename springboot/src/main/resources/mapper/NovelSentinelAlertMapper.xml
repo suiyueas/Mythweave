@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelSentinelAlertMapper">
+
+    <!-- ==================== 哨兵告警查询 ==================== -->
+
+    <!--
+        功能: 查询项目的所有告警记录
+        参数: projectId - 项目ID
+        返回: List<NovelSentinelAlert> 告警列表
+        说明: 按创建时间倒序，用于告警历史展示
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelSentinelAlert">
+        SELECT * FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+        功能: 统计项目告警总数
+        参数: projectId - 项目ID
+        返回: int 告警总数
+        说明: 用于仪表盘展示告警数量统计
+    -->
+    <select id="countByProject" resultType="int">
+        SELECT COUNT(*) FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 统计未解决告警数量
+        参数: projectId - 项目ID
+        返回: int 未解决告警数
+        说明: 用于待处理告警徽章显示
+    -->
+    <select id="countUnresolved" resultType="int">
+        SELECT COUNT(*) FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND resolved = 0 AND deleted = 0
+    </select>
+
+    <!--
+        功能: 按类型统计告警数量
+        参数: projectId - 项目ID, type - 告警类型
+        返回: int 告警数量
+        说明: 用于各类型告警的统计（如逻辑错误、连贯性问题等）
+    -->
+    <select id="countByType" resultType="int">
+        SELECT COUNT(*) FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND type = #{type} AND deleted = 0
+    </select>
+
+    <!--
+        功能: 按类型统计未解决告警数量
+        参数: projectId - 项目ID, type - 告警类型
+        返回: int 未解决告警数
+        说明: 用于各类型待处理告警的统计
+    -->
+    <select id="countUnresolvedByType" resultType="int">
+        SELECT COUNT(*) FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND type = #{type} AND resolved = 0 AND deleted = 0
+    </select>
+
+    <!--
+        功能: 查询未解决的告警列表
+        参数: projectId - 项目ID
+        返回: List<NovelSentinelAlert> 未解决告警列表
+        说明: 按严重程度和时间排序，高优先级告警在前
+    -->
+    <select id="selectUnresolved" resultType="com.novelcraft.web.entity.NovelSentinelAlert">
+        SELECT * FROM novel_sentinel_alert
+        WHERE project_id = #{projectId} AND resolved = 0 AND deleted = 0
+        ORDER BY severity DESC, create_time DESC
+    </select>
+
+</mapper>

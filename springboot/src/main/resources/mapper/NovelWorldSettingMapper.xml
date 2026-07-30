@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelWorldSettingMapper">
+
+    <!-- ==================== 世界观查询 ==================== -->
+
+    <!--
+        功能: 查询项目下所有世界观设定
+        参数: projectId - 项目ID
+        返回: List<NovelWorldSetting> 世界观列表
+        说明: 按level层级排序，用于展示世界观的层次结构
+    -->
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelWorldSetting">
+        SELECT * FROM novel_world_setting
+        WHERE project_id = #{projectId} AND deleted = 0
+        ORDER BY level
+    </select>
+
+</mapper>
