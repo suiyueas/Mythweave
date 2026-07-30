@@ -61,126 +61,152 @@ function streamGet(url, params, onToken, onDone, onError) {
     const qs = new URLSearchParams(Object.entries(params).filter(([_, v]) => v != null)).toString()
     url = `${url}?${qs}`
   }
-  let hasToken = false
-  const token = localStorage.getItem('token')
-  const headers = { 'Accept': 'text/event-stream' }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  return fetch(`${BASE_URL}${url}`, { headers })
-    .then(async (response) => {
-      // 检查 HTTP 状态码
-      if (!response.ok) {
-        let errMsg = `HTTP ${response.status}`
-        try {
-          const text = await response.text()
-          try {
-            const json = JSON.parse(text)
-            errMsg = json.message || json.error || text
-          } catch { errMsg = text || errMsg }
-        } catch { /* ignore */ }
-        throw new Error(errMsg)
-      }
-      if (!response.body) {
-        throw new Error('响应体为空')
-      }
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          if (!hasToken && onToken) {
-            onToken('⚠️ 服务器未返回有效响应，请检查后端 AI 配置（DeepSeek API Key）')
-          }
-          onDone && onDone()
-          break
-        }
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const raw = line.slice(5)
-            let data
-            try {
-              data = JSON.parse(raw)
-            } catch {
-              data = raw
-            }
-            if (data !== undefined && data !== null) {
-              hasToken = true
-              onToken(data)
-            }
-          }
-        }
-      }
-    })
-    .catch((e) => { onError && onError(e) })
+  return streamFetch(url, null, 'GET', onToken, onDone, onError)
 }
 
 function streamPost(url, body, onToken, onDone, onError) {
-  let hasToken = false
-  const token = localStorage.getItem('token')
-  const headers = { 'Accept': 'text/event-stream', 'Content-Type': 'application/json' }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
+  return streamFetch(url, body, 'POST', onToken, onDone, onError)
+}
+
+const HEARTBEAT_TIMEOUT_MS = 20000
+const MAX_RECONNECT_ATTEMPTS = 3
+const RECONNECT_DELAY_MS = 2000
+
+function streamFetch(url, body, method, onToken, onDone, onError) {
+  let reconnectAttempts = 0
+  let heartbeatTimer = null
+  let isClosed = false
+
+  const getHeaders = () => {
+    const token = localStorage.getItem('token')
+    const headers = { 'Accept': 'text/event-stream', 'Content-Type': 'application/json' }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    return headers
   }
-  return fetch(`${BASE_URL}${url}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body)
-  })
-    .then(async (response) => {
-      // 检查 HTTP 状态码
-      if (!response.ok) {
-        let errMsg = `HTTP ${response.status}`
-        try {
-          const text = await response.text()
+
+  const resetHeartbeatTimer = () => {
+    if (heartbeatTimer) {
+      clearTimeout(heartbeatTimer)
+    }
+    heartbeatTimer = setTimeout(() => {
+      if (!isClosed) {
+        console.warn('SSE heartbeat timeout, connection may be dead')
+        isClosed = true
+        if (heartbeatTimer) {
+          clearTimeout(heartbeatTimer)
+        }
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++
+          console.warn(`SSE reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
+          setTimeout(() => {
+            streamConnect()
+          }, RECONNECT_DELAY_MS)
+        } else {
+          onError && onError(new Error('SSE connection lost after max reconnect attempts'))
+        }
+      }
+    }, HEARTBEAT_TIMEOUT_MS)
+  }
+
+  const streamConnect = () => {
+    if (isClosed) return
+
+    let hasToken = false
+    const config = {
+      method,
+      headers: getHeaders()
+    }
+    if (body && method === 'POST') {
+      config.body = JSON.stringify(body)
+    }
+
+    fetch(`${BASE_URL}${url}`, config)
+      .then(async (response) => {
+        if (!response.ok) {
+          let errMsg = `HTTP ${response.status}`
           try {
-            const json = JSON.parse(text)
-            errMsg = json.message || json.error || text
-          } catch { errMsg = text || errMsg }
-        } catch { /* ignore */ }
-        throw new Error(errMsg)
-      }
-      if (!response.body) {
-        throw new Error('响应体为空')
-      }
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          if (!hasToken && onToken) {
-            onToken('⚠️ 服务器未返回有效响应，请检查后端 AI 配置（DeepSeek API Key）')
-          }
-          onDone && onDone()
-          break
-        }
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const raw = line.slice(5)
-            // 后端发送 JSON 编码的 token（"\n" 等特殊字符被转义）
-            let data
+            const text = await response.text()
             try {
-              data = JSON.parse(raw)
-            } catch {
-              data = raw  // 兼容非 JSON 格式
+              const json = JSON.parse(text)
+              errMsg = json.message || json.error || text
+            } catch { errMsg = text || errMsg }
+          } catch { /* ignore */ }
+          throw new Error(errMsg)
+        }
+        if (!response.body) {
+          throw new Error('响应体为空')
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        resetHeartbeatTimer()
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done || isClosed) {
+            if (!hasToken && !isClosed && onToken) {
+              onToken('⚠️ 服务器未返回有效响应，请检查后端 AI 配置（DeepSeek API Key）')
             }
-            if (data !== undefined && data !== null) {
-              hasToken = true
-              onToken(data)
+            if (!isClosed) {
+              onDone && onDone()
+            }
+            break
+          }
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            if (isClosed) break
+            if (line.startsWith('event:heartbeat') || line.startsWith('data:ping')) {
+              resetHeartbeatTimer()
+            } else if (line.startsWith('data:')) {
+              const raw = line.slice(5)
+              let data
+              try {
+                data = JSON.parse(raw)
+              } catch {
+                data = raw
+              }
+              if (data !== undefined && data !== null) {
+                hasToken = true
+                resetHeartbeatTimer()
+                onToken(data)
+              }
             }
           }
         }
+      })
+      .catch((e) => {
+        if (!isClosed) {
+          if (heartbeatTimer) {
+            clearTimeout(heartbeatTimer)
+          }
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++
+            console.warn(`SSE error, reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`, e.message)
+            setTimeout(() => {
+              streamConnect()
+            }, RECONNECT_DELAY_MS)
+          } else {
+            onError && onError(e)
+          }
+        }
+      })
+  }
+
+  streamConnect()
+
+  return {
+    close: () => {
+      isClosed = true
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer)
       }
-    })
-    .catch((e) => { onError && onError(e) })
+    }
+  }
 }
 
 export { get, post, put, del, streamGet, streamPost, request }

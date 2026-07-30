@@ -8,6 +8,7 @@ import com.novelcraft.web.dto.StreamWriteRequest;
 import com.novelcraft.web.entity.NovelAiSession;
 import com.novelcraft.web.mapper.NovelAiSessionMapper;
 import com.novelcraft.web.service.AiChatService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,11 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -33,6 +39,46 @@ public class AiChatController {
     private final NovelAiSessionMapper sessionMapper;
     private final ObjectMapper objectMapper;
 
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
+    private static final long SSE_TIMEOUT_SECONDS = 180;
+
+    private final ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(2);
+    private final Map<SseEmitter, Long> activeEmitters = new ConcurrentHashMap<>();
+
+    private void startHeartbeat(SseEmitter emitter) {
+        long emitterId = System.currentTimeMillis();
+        activeEmitters.put(emitter, emitterId);
+
+        ScheduledFuture<?> heartbeatTask = heartbeatScheduler.scheduleAtFixedRate(() -> {
+            if (activeEmitters.get(emitter) == null || activeEmitters.get(emitter) != emitterId) {
+                return;
+            }
+            try {
+                emitter.send(SseEmitter.event().name("heartbeat").data("ping"));
+            } catch (IOException e) {
+                log.debug("Heartbeat failed, removing emitter");
+                activeEmitters.remove(emitter);
+            }
+        }, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+
+        emitter.onCompletion(() -> {
+            activeEmitters.remove(emitter);
+            heartbeatTask.cancel(true);
+        });
+        emitter.onTimeout(() -> {
+            activeEmitters.remove(emitter);
+            heartbeatTask.cancel(true);
+        });
+        emitter.onError(e -> {
+            activeEmitters.remove(emitter);
+            heartbeatTask.cancel(true);
+        });
+    }
+
+    private void stopHeartbeat(SseEmitter emitter) {
+        activeEmitters.remove(emitter);
+    }
+
     /**
      * SSE流式续写
      */
@@ -40,7 +86,8 @@ public class AiChatController {
     @PostMapping(value = "/stream/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamWrite(@PathVariable Long projectId,
                                    @RequestBody StreamWriteRequest request) {
-        SseEmitter emitter = new SseEmitter(180_000L);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
+        startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
                 aiChatService.streamContinueWriting(projectId,
@@ -60,6 +107,8 @@ public class AiChatController {
             } catch (Exception e) {
                 log.error("AI续写异常", e);
                 emitter.completeWithError(e);
+            } finally {
+                stopHeartbeat(emitter);
             }
         });
         return emitter;
@@ -72,7 +121,8 @@ public class AiChatController {
     @PostMapping(value = "/stream/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(@PathVariable Long projectId,
                                   @RequestBody StreamChatRequest request) {
-        SseEmitter emitter = new SseEmitter(180_000L);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
+        startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
                 String userMessage = request.getUserMessage() != null ? request.getUserMessage() : "";
@@ -112,6 +162,8 @@ public class AiChatController {
                     emitter.send(SseEmitter.event().data("❌ AI服务异常：" + e.getMessage()).name("err"));
                 } catch (IOException ignored) {}
                 emitter.completeWithError(e);
+            } finally {
+                stopHeartbeat(emitter);
             }
         });
         return emitter;
