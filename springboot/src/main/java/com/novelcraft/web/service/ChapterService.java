@@ -126,7 +126,11 @@ public class ChapterService {
         recordWritingLog(exist.getProjectId(), chapter.getId(), chapter.getWordCount(), exist.getWordCount());
         // 同步更新项目统计
         updateProjectStats(exist.getProjectId());
-        dashboardCacheService.invalidate(exist.getProjectId());
+        try {
+            dashboardCacheService.invalidate(exist.getProjectId());
+        } catch (Exception e) {
+            log.warn("更新章节后缓存失效失败: {}", e.getMessage());
+        }
         // 内容变化时触发章节检查
         if (contentChanged) {
             triggerChapterCheck(chapterMapper.selectByIdWithDeleted(chapter.getId()));
@@ -139,13 +143,11 @@ public class ChapterService {
     }
 
     private boolean isContentChanged(String newContent, String existContent) {
+        // null 表示前端未传 content（不更新）；空字符串表示用户清空内容（视为真实变化）
         if (newContent == null && existContent == null) return false;
-        // ⚠️ 保护：前端可能因覆盖索引优化返回空 content，禁止用空字符串覆盖已有内容
-        if (newContent != null && newContent.isEmpty() && existContent != null && !existContent.isEmpty()) {
-            return false;
-        }
-        if (newContent == null || existContent == null) return true;
-        return !newContent.equals(existContent);
+        String a = newContent != null ? newContent : "";
+        String b = existContent != null ? existContent : "";
+        return !a.equals(b);
     }
 
     @Transactional
@@ -155,7 +157,11 @@ public class ChapterService {
         Long projectId = chapter != null ? chapter.getProjectId() : null;
         int affected = chapterMapper.markDeletedById(id);
         if (affected == 0) {
-            throw new BusinessException(404, "章节不存在");
+            // 幂等：章节已处于删除状态（deleted=1）视为删除成功，仅真正不存在的才报 404
+            if (chapter == null) {
+                throw new BusinessException(404, "章节不存在");
+            }
+            log.info("章节 {} 已被删除过，幂等返回", id);
         }
         // 联动伏笔：回收章节被删除 → 伏笔回收未完成，回退为待回收；
         // 并自愈历史错误数据（resolved_chapter_id 误存 project_id 的孤儿标记）
@@ -170,10 +176,14 @@ public class ChapterService {
                 log.warn("删除章节后伏笔联动处理失败: {}", e.getMessage());
             }
         }
-        // 同步更新项目统计
+        // 同步更新项目统计（各步骤独立容错，避免异常导致删除事务回滚）
         if (projectId != null) {
             updateProjectStats(projectId);
-            dashboardCacheService.invalidate(projectId);
+            try {
+                dashboardCacheService.invalidate(projectId);
+            } catch (Exception e) {
+                log.warn("删除章节后缓存失效失败: {}", e.getMessage());
+            }
         }
     }
 
@@ -256,8 +266,29 @@ public class ChapterService {
         return chapters.size();
     }
 
+    /** 版本列表最大返回条数（防止版本无限增长拖慢查询） */
+    private static final int VERSION_LIST_LIMIT = 100;
+
+    /**
+     * 查询章节版本摘要列表（不含 content 大字段，按 id 倒序，走索引避免 filesort）
+     */
     public List<NovelChapterVersion> listVersions(Long chapterId) {
-        return versionMapper.selectByChapterId(chapterId);
+        return versionMapper.selectSummaryByChapterId(chapterId, VERSION_LIST_LIMIT);
+    }
+
+    /**
+     * 查询单个版本详情（含 content，用于预览/恢复）
+     * 校验版本归属章节，防止越权访问其他章节的版本
+     */
+    public NovelChapterVersion getVersionDetail(Long chapterId, Long versionId) {
+        NovelChapterVersion version = versionMapper.selectDetailById(versionId);
+        if (version == null) {
+            throw new BusinessException(404, "版本不存在");
+        }
+        if (!chapterId.equals(version.getChapterId())) {
+            throw new BusinessException(403, "版本不属于该章节");
+        }
+        return version;
     }
 
     /**

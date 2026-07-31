@@ -94,6 +94,13 @@ public class ChapterController {
         return R.ok(chapterService.listVersions(chapterId));
     }
 
+    @Operation(summary = "获取章节版本详情（含正文，用于预览/恢复）")
+    @GetMapping("/{chapterId}/versions/{versionId}")
+    public R<NovelChapterVersion> getVersionDetail(@PathVariable Long projectId, @PathVariable Long chapterId,
+                                                    @PathVariable Long versionId) {
+        return R.ok(chapterService.getVersionDetail(chapterId, versionId));
+    }
+
     // ── 伏笔追加补写 ──
 
     @Operation(summary = "伏笔追加补写")

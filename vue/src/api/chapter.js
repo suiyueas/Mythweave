@@ -12,5 +12,7 @@ export const chapterApi = {
   },
   deleteChapter: (projectId, chapterId) => del(`/api/projects/${projectId}/chapters/${chapterId}`),
   reorderChapters: (projectId, orderedIds) => put(`/api/projects/${projectId}/chapters/reorder`, { orderedIds }),
-  listVersions: (projectId, chapterId) => get(`/api/projects/${projectId}/chapters/${chapterId}/versions`)
+  listVersions: (projectId, chapterId) => get(`/api/projects/${projectId}/chapters/${chapterId}/versions`),
+  /** 获取单个版本详情（含正文，用于预览/恢复） */
+  getVersionDetail: (projectId, chapterId, versionId) => get(`/api/projects/${projectId}/chapters/${chapterId}/versions/${versionId}`)
 }

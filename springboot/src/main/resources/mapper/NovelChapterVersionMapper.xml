@@ -16,4 +16,30 @@
         ORDER BY create_time DESC
     </select>
 
+    <!--
+        功能: 查询章节版本摘要列表（列表页用，不加载 content 大字段）
+        参数: chapterId - 章节ID, limit - 返回条数上限
+        返回: List<NovelChapterVersion> 版本摘要列表（content 为 null）
+        说明: 按 id 倒序（id 自增即创建顺序），可利用 idx_version_chapter 索引倒序扫描，避免 filesort；
+              列表仅返回元信息，正文按需走 selectDetailById
+    -->
+    <select id="selectSummaryByChapterId" resultType="com.novelcraft.web.entity.NovelChapterVersion">
+        SELECT id, chapter_id, word_count, version, change_note, create_time, update_time
+        FROM novel_chapter_version
+        WHERE chapter_id = #{chapterId} AND deleted = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!--
+        功能: 查询单个版本详情（预览/恢复用，含 content 大字段）
+        参数: id - 版本ID
+        返回: NovelChapterVersion 完整版本数据
+    -->
+    <select id="selectDetailById" resultType="com.novelcraft.web.entity.NovelChapterVersion">
+        SELECT * FROM novel_chapter_version
+        WHERE id = #{id} AND deleted = 0
+        LIMIT 1
+    </select>
+
 </mapper>
