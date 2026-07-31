@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.transaction.annotation.Transactional;
+
 /**
  * AI 先导式小说创作系统 — 工作流编排服务
  * 6阶段：世界观 → 人物 → 大纲 → 情节引擎 → 灵感素材 → 持续写作
@@ -132,6 +134,7 @@ public class NovelSetupService {
     // ════════════════════════════════════
 
     /** 步骤1：生成世界观 */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> generateWorld(Long projectId, Map<String, Object> params) throws IOException {
         // 清除旧数据
         worldSettingMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<NovelWorldSetting>()
@@ -374,6 +377,28 @@ public class NovelSetupService {
         }
     }
 
+    /**
+     * 回退保存：当 AI 响应 JSON 解析失败时，为每个类别都保存原始文本
+     */
+    private void saveWorldSettingsFallback(Long projectId, String json) {
+        String content = json != null ? json : "";
+        insertSetting(projectId, "时代背景", "时代背景", content, 1);
+        insertSetting(projectId, "地理版图", "地理版图", content, 1);
+        insertSetting(projectId, "历史年表", "历史年表", content, 1);
+        insertSetting(projectId, "力量体系", "力量体系", content, 1);
+        insertSetting(projectId, "核心规则", "核心规则", content, 1);
+    }
+
+    private void insertSetting(Long projectId, String name, String category, String content, Integer level) {
+        NovelWorldSetting s = new NovelWorldSetting();
+        s.setProjectId(projectId);
+        s.setName(name);
+        s.setCategory(category);
+        s.setContent(content);
+        s.setLevel(level);
+        worldSettingMapper.insert(s);
+    }
+
     // ════════════════════════════════════
     // 分步生成 — 预览数据解析
     // ════════════════════════════════════
@@ -386,17 +411,22 @@ public class NovelSetupService {
                 JsonNode root = objectMapper.readTree(cleaned);
                 preview.put("era", root.path("era").asText(""));
                 preview.put("geography", root.path("geography").asText(""));
+                preview.put("history", root.path("history").asText(""));
                 preview.put("powerSystem", root.path("powerSystem").asText(""));
                 JsonNode factions = root.path("factions");
                 int factionCount = factions.isArray() ? factions.size() : 0;
                 preview.put("factionCount", factionCount);
-                List<String> factionNames = new ArrayList<>();
+                List<Map<String, String>> factionList = new ArrayList<>();
                 if (factions.isArray()) {
                     for (JsonNode f : factions) {
-                        factionNames.add(f.path("name").asText(""));
+                        Map<String, String> faction = new LinkedHashMap<>();
+                        faction.put("name", f.path("name").asText(""));
+                        faction.put("description", f.path("description").asText(""));
+                        faction.put("goal", f.path("goal").asText(""));
+                        factionList.add(faction);
                     }
                 }
-                preview.put("factionNames", factionNames);
+                preview.put("factionList", factionList);
                 preview.put("uniqueRules", root.path("uniqueRules").asText(""));
             }
         } catch (Exception e) {
@@ -549,65 +579,90 @@ public class NovelSetupService {
     // ════════════════════════════════════
     // 数据持久化
     // ════════════════════════════════════
+
+    /** AI 世界观字段 → 中文显示名映射表（未映射的字段直接使用原字段名） */
+    private static final Map<String, String> WORLD_FIELD_MAP = Map.ofEntries(
+        Map.entry("era", "时代背景"),
+        Map.entry("geography", "地理版图"),
+        Map.entry("history", "历史年表"),
+        Map.entry("powerSystem", "力量体系"),
+        Map.entry("magicSystem", "力量体系"),
+        Map.entry("factions", "政治势力"),
+        Map.entry("politics", "政治势力"),
+        Map.entry("uniqueRules", "核心规则"),
+        Map.entry("culture", "文化社会"),
+        Map.entry("technology", "科技文明"),
+        Map.entry("races", "种族设定"),
+        Map.entry("gods", "信仰神明"),
+        Map.entry("ecology", "生态环境")
+    );
+
+    /**
+     * 保存世界观：遍历 AI 返回的 JSON 顶层字段，为每个字段创建独立的 world_setting 记录
+     * - 文本字段：content 直接存储纯文本
+     * - 数组/对象字段：content 存储序列化后的 JSON 字符串
+     * - category 使用映射后的中文名（未映射的字段使用原字段名）
+     * 任何新字段（如 ecology、magicSystem）都会被自动识别，无需修改代码
+     */
     private void saveWorldSettings(Long projectId, String json) {
+        log.info("========== 开始保存世界观 ==========");
+        log.info("projectId: {}", projectId);
         try {
             String cleaned = AIResponseCleaner.extractJson(json);
             if (cleaned == null) {
-                log.warn("世界观 JSON 提取失败，回退到原始文本存储。原始内容（前200字）: {}", json != null ? json.substring(0, Math.min(200, json.length())) : "null");
+                log.warn("世界观 JSON 提取失败，回退到原始文本存储。");
                 throw new RuntimeException("无法从AI响应中提取世界观JSON");
             }
-            log.info("世界观 JSON 提取成功（前100字）: {}", cleaned.substring(0, Math.min(100, cleaned.length())));
+            log.info("世界观 JSON 提取成功，前200字: {}", cleaned.substring(0, Math.min(200, cleaned.length())));
             JsonNode root = objectMapper.readTree(cleaned);
-            // 地理
-            NovelWorldSetting geo = new NovelWorldSetting();
-            geo.setProjectId(projectId);
-            geo.setName("地理版图");
-            geo.setCategory("geography");
-            geo.setContent(root.path("geography").asText(""));
-            geo.setLevel(1);
-            worldSettingMapper.insert(geo);
 
-            // 历史
-            NovelWorldSetting hist = new NovelWorldSetting();
-            hist.setProjectId(projectId);
-            hist.setName("历史年表");
-            hist.setCategory("history");
-            hist.setContent(root.path("history").asText(""));
-            hist.setLevel(1);
-            worldSettingMapper.insert(hist);
+            // 1. 删除该项目的旧记录（幂等，重新生成时保证不残留）
+            worldSettingMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<NovelWorldSetting>()
+                    .eq("project_id", projectId));
 
-            // 力量体系
-            NovelWorldSetting power = new NovelWorldSetting();
-            power.setProjectId(projectId);
-            power.setName("力量体系");
-            power.setCategory("magic");
-            power.setContent(root.path("powerSystem").asText(""));
-            power.setLevel(1);
-            worldSettingMapper.insert(power);
+            // 2. 遍历顶层字段，每个字段生成一条独立记录
+            List<NovelWorldSetting> settings = new ArrayList<>();
+            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                String key = field.getKey();
+                JsonNode value = field.getValue();
+                if (value == null || value.isNull()) continue;
 
-            // 势力
-            JsonNode factions = root.path("factions");
-            if (factions.isArray()) {
-                for (JsonNode f : factions) {
-                    NovelWorldSetting fac = new NovelWorldSetting();
-                    fac.setProjectId(projectId);
-                    fac.setName(f.path("name").asText(""));
-                    fac.setCategory("culture");
-                    fac.setContent(f.path("description").asText("") + "\n目标：" + f.path("goal").asText(""));
-                    fac.setLevel(2);
-                    worldSettingMapper.insert(fac);
+                String displayName = WORLD_FIELD_MAP.getOrDefault(key, key);
+                // 文本字段直接存原文，数组/对象字段序列化为 JSON 字符串
+                String content = value.isTextual() ? value.asText() : objectMapper.writeValueAsString(value);
+
+                NovelWorldSetting ws = new NovelWorldSetting();
+                ws.setProjectId(projectId);
+                ws.setName(displayName);
+                ws.setCategory(displayName);
+                ws.setContent(content);
+                ws.setLevel(1);
+                settings.add(ws);
+            }
+
+            // 3. 逐个插入（每个独立 try-catch，一个失败不影响其他）
+            int ok = 0;
+            for (NovelWorldSetting s : settings) {
+                try {
+                    worldSettingMapper.insert(s);
+                    ok++;
+                    log.info("✅ 已插入模块: {} (category={})", s.getName(), s.getCategory());
+                } catch (Exception e) {
+                    log.error("❌ 插入模块失败: {} - {}", s.getName(), e.getMessage());
                 }
             }
+            log.info("========== 世界观保存完成，成功 {}/{} 个模块 ==========", ok, settings.size());
         } catch (Exception e) {
-            log.warn("保存世界观失败，JSON前100字: {}", json != null ? json.substring(0, Math.min(100, json.length())) : "null", e);
-            // Fallback: 保存整段文本
-            NovelWorldSetting fallback = new NovelWorldSetting();
-            fallback.setProjectId(projectId);
-            fallback.setName("AI 生成世界观");
-            fallback.setCategory("geography");
-            fallback.setContent(json);
-            fallback.setLevel(1);
-            worldSettingMapper.insert(fallback);
+            log.error("保存世界观失败！异常类型: {}, 消息: {}", e.getClass().getName(), e.getMessage());
+            // Fallback: 独立执行，不抛异常
+            try {
+                saveWorldSettingsFallback(projectId, json);
+                log.info("✅ Fallback 保存完成");
+            } catch (Exception fe) {
+                log.error("❌ Fallback 也失败了: {}", fe.getMessage());
+            }
         }
     }
 

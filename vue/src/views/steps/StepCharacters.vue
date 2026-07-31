@@ -103,8 +103,10 @@ const status = ref(props.generatedData ? 'completed' : 'pending')
 const loading = ref(false)
 const direction = ref('')
 const errorMsg = ref('')
+const localCharacters = ref([])
 
 const characterList = computed(() => {
+  if (localCharacters.value.length) return localCharacters.value
   if (props.generatedData?.parsed?.characters) return props.generatedData.parsed.characters
   return []
 })
@@ -128,6 +130,7 @@ async function generate() {
       direction: direction.value
     })
     const data = res?.data || res
+    if (data?.parsed?.characters) localCharacters.value = data.parsed.characters
     emit('generated', data)
     status.value = 'completed'
   } catch (e) {
@@ -219,12 +222,15 @@ function skip() {
   cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
 }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(99, 102, 241, 0.3); }
+.btn-primary:active { transform: translateY(0); box-shadow: 0 2px 10px rgba(99, 102, 241, 0.2); }
+.btn-primary:focus { outline: none; }
 .btn-secondary {
   padding: 10px 20px; background: #f5f2ed; border: 1px solid #e8e3dc;
   border-radius: 10px; font-size: 14px; font-weight: 600; color: #6b6560;
   cursor: pointer; transition: all 0.2s;
 }
 .btn-secondary:hover { background: #e8e3dc; }
+.btn-secondary:active { background: #ddd8d0; }
 .error-msg { text-align: center; color: #be123c; font-size: 14px; margin-bottom: 8px; }
 
 @keyframes spin { to{transform:rotate(360deg)} }

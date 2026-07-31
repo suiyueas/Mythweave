@@ -53,22 +53,40 @@
         <span class="badge success">✅ 已生成</span>
       </div>
 
-      <div v-if="preview" class="result-preview">
-        <div class="preview-item" v-if="preview.era">
-          <span class="preview-label">时代背景</span>
-          <span class="preview-value">{{ preview.era }}</span>
-        </div>
-        <div class="preview-item" v-if="preview.powerSystem">
-          <span class="preview-label">力量体系</span>
-          <span class="preview-value">{{ preview.powerSystem }}</span>
-        </div>
-        <div class="preview-item" v-if="preview.factionCount">
-          <span class="preview-label">势力数量</span>
-          <span class="preview-value">{{ preview.factionCount }} 个势力</span>
-        </div>
-        <div class="preview-item" v-if="preview.uniqueRules">
-          <span class="preview-label">核心矛盾</span>
-          <span class="preview-value">{{ preview.uniqueRules }}</span>
+      <!-- 动态渲染：每个 world_setting 记录渲染为一个模块 -->
+      <div v-if="modules.length" class="world-preview">
+        <div
+          v-for="mod in modules"
+          :key="mod.id || mod.name || mod.category"
+          class="preview-section"
+          :class="{ highlight: (mod.category || mod.name) === '核心规则' }"
+        >
+          <div class="section-header">
+            <span class="section-icon">{{ moduleIcon(mod) }}</span>
+            <span class="section-title">{{ mod.name || mod.category }}</span>
+            <span v-if="moduleCount(mod)" class="section-count">{{ moduleCount(mod) }}</span>
+          </div>
+          <div class="section-content">
+            <!-- JSON 数组内容 → 列表 -->
+            <template v-if="isArrayContent(mod.content)">
+              <div v-for="(sub, idx) in parseContent(mod.content)" :key="idx" class="sub-item">
+                <template v-if="sub && typeof sub === 'object'">
+                  <div class="sub-title" v-if="sub.name || sub.title">{{ sub.name || sub.title }}</div>
+                  <div class="sub-desc" v-if="sub.description || sub.content">{{ sub.description || sub.content }}</div>
+                  <div class="sub-goal" v-if="sub.goal">目标：{{ sub.goal }}</div>
+                </template>
+                <div class="sub-desc" v-else>{{ sub }}</div>
+              </div>
+            </template>
+            <!-- JSON 对象内容 → 键值对 -->
+            <template v-else-if="isObjectContent(mod.content)">
+              <div v-for="(val, key) in parseContent(mod.content)" :key="key" class="kv-item">
+                <strong>{{ key }}：</strong><span>{{ val }}</span>
+              </div>
+            </template>
+            <!-- 纯文本内容 → 直接显示 -->
+            <div v-else>{{ mod.content }}</div>
+          </div>
         </div>
       </div>
 
@@ -108,22 +126,108 @@ import { setupApi } from '@/api/setup'
 const props = defineProps({
   projectId: { type: [Number, String], required: true },
   params: { type: Object, required: true },
-  generatedData: { type: Object, default: null }
+  generatedData: { type: Object, default: null },
+  // 动态模块：从数据库加载的 world_setting 记录数组
+  worldSettings: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['generated', 'skipped', 'next'])
 
 // ─── 状态 ───
-const status = ref(props.generatedData ? 'completed' : 'pending')
+const status = ref(props.generatedData || props.worldSettings?.length ? 'completed' : 'pending')
 const loading = ref(false)
 const direction = ref('')
 const errorMsg = ref('')
+const localPreview = ref(null)
 
-// ─── 预览数据 ───
-const preview = computed(() => {
-  if (props.generatedData?.parsed) return props.generatedData.parsed
-  return null
+// ─── 字段名 → 中文显示名（用于把生成接口返回的 parsed 对象转成模块） ───
+const WORLD_FIELD_NAMES = {
+  era: '时代背景',
+  geography: '地理版图',
+  history: '历史年表',
+  powerSystem: '力量体系',
+  magicSystem: '力量体系',
+  factions: '政治势力',
+  factionList: '政治势力',
+  politics: '政治势力',
+  uniqueRules: '核心规则',
+  culture: '文化社会',
+  technology: '科技文明',
+  races: '种族设定',
+  gods: '信仰神明',
+  ecology: '生态环境'
+}
+
+// ─── 模块图标映射 ───
+const MODULE_ICONS = {
+  '时代背景': '⏳',
+  '地理版图': '🗺️',
+  '历史年表': '📜',
+  '力量体系': '⚡',
+  '政治势力': '🏰',
+  '核心规则': '🔥',
+  '文化社会': '🏛️',
+  '科技文明': '🔧',
+  '种族设定': '🧬',
+  '信仰神明': '🙏',
+  '生态环境': '🌿'
+}
+
+// ─── 把 parsed 对象（era/geography/...）转为模块数组 [{ name, category, content }] ───
+function parsedToModules(obj) {
+  if (!obj || typeof obj !== 'object') return []
+  return Object.entries(obj)
+    .filter(([k, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0) && k !== 'factionCount')
+    .map(([k, v]) => {
+      const displayName = WORLD_FIELD_NAMES[k] || k
+      return {
+        id: k,
+        name: displayName,
+        category: displayName,
+        content: typeof v === 'string' ? v : JSON.stringify(v)
+      }
+    })
+}
+
+// ─── 动态模块列表（优先级：本地生成 > generatedData > DB worldSettings） ───
+const modules = computed(() => {
+  if (localPreview.value && typeof localPreview.value === 'object') {
+    return parsedToModules(localPreview.value)
+  }
+  if (props.generatedData?.parsed) {
+    return parsedToModules(props.generatedData.parsed)
+  }
+  if (props.worldSettings && props.worldSettings.length) {
+    return props.worldSettings
+  }
+  return []
 })
+
+// ─── 内容解析：支持 JSON 数组/对象/纯文本三种形态 ───
+function parseContent(content) {
+  if (typeof content !== 'string') return content
+  try { return JSON.parse(content) } catch { return content }
+}
+
+function isArrayContent(content) {
+  return Array.isArray(parseContent(content))
+}
+
+function isObjectContent(content) {
+  const p = parseContent(content)
+  return p && typeof p === 'object' && !Array.isArray(p)
+}
+
+// 数组内容时显示数量徽标（如 "3 项"）
+function moduleCount(mod) {
+  const p = parseContent(mod.content)
+  if (Array.isArray(p) && p.length) return `${p.length} 项`
+  return ''
+}
+
+function moduleIcon(mod) {
+  return MODULE_ICONS[mod.category || mod.name] || '📌'
+}
 
 // ─── 生成 ───
 async function generate() {
@@ -132,14 +236,14 @@ async function generate() {
   errorMsg.value = ''
 
   try {
-    const res = await setupApi.generateWorld(props.projectId, {
+    const data = await setupApi.generateWorld(props.projectId, {
       title: props.params.title,
       genre: props.params.genre,
       inspiration: props.params.inspiration,
       style: props.params.style,
       direction: direction.value
     })
-    const data = res?.data || res
+    if (data?.parsed) localPreview.value = data.parsed
     emit('generated', data)
     status.value = 'completed'
   } catch (e) {
@@ -158,8 +262,6 @@ async function regenerate() {
 </script>
 
 <style scoped>
-.step-world { }
-
 .step-header h2 {
   font-size: 20px;
   font-weight: 700;
@@ -321,34 +423,102 @@ async function regenerate() {
   border: 1px solid #e8e3dc;
 }
 
-.result-preview {
+/* ─── 世界观预览 ─── */
+.world-preview {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 20px;
+}
+
+.preview-section {
   padding: 16px;
   background: #f8fafc;
   border-radius: 12px;
   border: 1px solid #f0ece6;
 }
 
-.preview-item {
+.preview-section.highlight {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.section-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
-.preview-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
+.section-icon {
+  font-size: 16px;
 }
 
-.preview-value {
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.section-count {
+  font-size: 12px;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-left: auto;
+}
+
+.section-content {
   font-size: 14px;
   color: #334155;
+  line-height: 1.7;
+}
+
+/* ─── 动态子项（数组内容列表） ─── */
+.sub-item {
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e8e3dc;
+  margin-bottom: 8px;
+}
+.sub-item:last-child {
+  margin-bottom: 0;
+}
+
+.sub-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.sub-desc {
+  font-size: 13px;
+  color: #6b6560;
   line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.sub-goal {
+  font-size: 12px;
+  color: #6366f1;
+  font-style: italic;
+}
+
+/* ─── 对象内容键值对 ─── */
+.kv-item {
+  font-size: 13px;
+  color: #6b6560;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.kv-item:last-child {
+  margin-bottom: 0;
+}
+.kv-item strong {
+  color: #334155;
 }
 
 /* ─── 按钮组 ─── */
@@ -375,6 +545,13 @@ async function regenerate() {
   transform: translateY(-1px);
   box-shadow: 0 4px 18px rgba(99, 102, 241, 0.3);
 }
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
+}
+.btn-primary:focus {
+  outline: none;
+}
 
 .btn-secondary {
   padding: 10px 20px;
@@ -389,6 +566,9 @@ async function regenerate() {
 }
 .btn-secondary:hover {
   background: #e8e3dc;
+}
+.btn-secondary:active {
+  background: #ddd8d0;
 }
 
 /* ─── failed ─── */

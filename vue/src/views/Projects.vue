@@ -199,87 +199,97 @@
           <button @click="closeModal" class="text-[28px] leading-none text-[#94a3b8] hover:text-[#475569] transition-colors px-1">✕</button>
         </div>
 
-        <form @submit.prevent="handleSubmit">
-          <!-- 作品名称 + AI起名 -->
-          <div class="mb-5">
-            <label class="block text-sm font-semibold text-[#334155] mb-1.5">作品名称 <span class="font-normal text-[#94a3b8] text-xs ml-1.5">*</span></label>
-            <div class="flex gap-2.5 items-center">
-              <input v-model="form.title" class="flex-1 px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] focus:bg-white outline-none transition-all" placeholder="输入作品名称..." required>
-              <button type="button" class="ai-btn" @click="aiGenerate('naming')"><span>✨</span> AI 起名</button>
+        <form @submit.prevent="handleSubmit" class="create-form">
+          <!-- 作品名称 -->
+          <div class="form-row">
+            <label class="form-label">作品名称 <span class="required">*</span></label>
+            <div class="input-group">
+              <input v-model="form.title" class="form-input" placeholder="输入作品名称..." required>
+              <button type="button" class="btn-ai" :disabled="aiLoading === 'naming'" @click="aiGenerate('naming')">
+                <span v-if="aiLoading === 'naming'" class="spinner"></span>
+                <span v-else-if="aiGenerated === 'naming'" class="check">✓</span>
+                <span v-else>✨</span>
+                <span class="btn-text">{{ aiGenerated === 'naming' ? '已生成' : 'AI 起名' }}</span>
+              </button>
             </div>
           </div>
 
-          <!-- 类型 + 子类型 -->
-          <div class="grid grid-cols-2 gap-4 mb-5">
-            <div>
-              <label class="block text-sm font-semibold text-[#334155] mb-1.5">作品类型</label>
-              <select v-model="form.genre" class="w-full px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] outline-none transition-all">
+          <!-- 作品类型 -->
+          <div class="form-row">
+            <label class="form-label">作品类型</label>
+            <div class="input-group">
+              <select v-model="form.genre" class="form-select">
                 <option value="">选择类型</option>
                 <option v-for="t in templates" :key="t.value" :value="t.value">{{ t.icon }} {{ t.label }}</option>
               </select>
             </div>
-            <div class="flex gap-2.5 items-end">
-              <div class="flex-1">
-                <label class="block text-sm font-semibold text-[#334155] mb-1.5">子类型</label>
-                <input v-model="form.subGenre" class="w-full px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:bg-white outline-none transition-all" placeholder="如：东方仙侠...">
+          </div>
+
+          <!-- 作品简介 -->
+          <div class="form-row">
+            <label class="form-label">作品简介</label>
+            <div class="input-group">
+              <textarea v-model="form.description" class="form-textarea" rows="3" placeholder="简要描述作品的故事背景和核心看点..."></textarea>
+              <button type="button" class="btn-ai btn-ai-right" :disabled="aiLoading === 'polish'" @click="aiGenerate('polish')">
+                <span v-if="aiLoading === 'polish'" class="spinner"></span>
+                <span v-else-if="aiGenerated === 'polish'" class="check">✓</span>
+                <span v-else>✨</span>
+                <span class="btn-text">{{ aiGenerated === 'polish' ? '已润色' : 'AI 润色' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 核心设定 + AI生成设定 -->
+          <div class="form-row">
+            <label class="form-label">核心设定 <span class="optional">（选填）</span></label>
+            <div class="input-group">
+              <textarea v-model="form.coreSetting" class="form-textarea" rows="4" placeholder="描述世界观、力量体系、核心冲突等..."></textarea>
+              <button type="button" class="btn-ai btn-ai-right" :disabled="aiLoading === 'setting'" @click="aiGenerate('setting')">
+                <span v-if="aiLoading === 'setting'" class="spinner"></span>
+                <span v-else-if="aiGenerated === 'setting'" class="check">✓</span>
+                <span v-else>✨</span>
+                <span class="btn-text">{{ aiGenerated === 'setting' ? '已生成' : '生成设定' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 生成的大纲预览 + AI生成大纲 -->
+          <div class="form-row">
+            <label class="form-label">生成的大纲预览</label>
+            <div class="input-group">
+              <div class="outline-preview" :class="{ 'has-content': outlineResult }">
+                <div v-if="outlineResult" class="outline-content">{{ outlineResult }}</div>
+                <div v-else class="outline-placeholder">
+                  <span class="placeholder-icon">📋</span>
+                  <span>点击「AI 生成大纲」后，大纲内容将显示在这里</span>
+                </div>
               </div>
-              <button type="button" class="ai-btn-sm" @click="aiGenerate('setting')">✨ 生成设定</button>
-            </div>
-          </div>
-
-          <!-- 作品简介 + AI润色 -->
-          <div class="mb-5">
-            <label class="block text-sm font-semibold text-[#334155] mb-1.5">作品简介</label>
-            <div class="flex gap-2.5 items-start">
-              <textarea v-model="form.description" rows="3" class="flex-1 px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] focus:bg-white outline-none transition-all resize-y" placeholder="简要描述作品的故事背景和核心看点..."></textarea>
-              <button type="button" class="ai-btn mt-0.5" @click="aiGenerate('polish')"><span>✨</span> AI 润色</button>
-            </div>
-          </div>
-
-          <!-- 详细设定 + AI大纲 -->
-          <div class="mb-5">
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="text-sm font-semibold text-[#334155]">核心设定 <span class="font-normal text-[#94a3b8] text-xs ml-1.5">（选填）</span></label>
-              <button type="button" class="ai-btn-sm" @click="aiGenerate('outline')">✨ AI 生成大纲</button>
-            </div>
-            <textarea v-model="form.coreSetting" rows="4" class="w-full px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] focus:bg-white outline-none transition-all resize-y" placeholder="描述世界观、力量体系、核心冲突等..."></textarea>
-          </div>
-
-          <!-- AI 横向快捷操作 -->
-          <div class="flex flex-wrap gap-2.5 mb-5">
-            <button type="button" class="ai-action-btn" v-for="act in quickAiActions" :key="act.key" @click="aiGenerate(act.key)">{{ act.icon }} {{ act.label }}</button>
-          </div>
-
-          <!-- AI 预览区域 -->
-          <div v-if="aiPreview" class="bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-5 mb-5 transition-all">
-            <div class="flex justify-between items-center mb-2.5 text-xs text-[#94a3b8] font-medium">
-              <span>✨ AI 生成结果</span>
-              <span>{{ aiPreviewType }}</span>
-            </div>
-            <div class="text-sm text-[#0f0f1a] leading-relaxed whitespace-pre-wrap">{{ aiPreview }}</div>
-            <div class="flex gap-2.5 mt-3 pt-3 border-t border-[#e2e8f0]">
-              <button type="button" class="px-4 py-1.5 bg-[#6366f1] text-white rounded-lg text-xs font-medium hover:bg-[#4f46e5] transition-colors" @click="acceptAiPreview">✅ 应用</button>
-              <button type="button" class="px-4 py-1.5 bg-[#f1f5f9] text-[#475569] rounded-lg text-xs font-medium hover:bg-[#e2e8f0] transition-colors" @click="aiGenerate(aiPreviewKey)">🔄 重新生成</button>
-              <button type="button" class="px-4 py-1.5 text-[#818cf8] border border-[#e2e8f0] rounded-lg text-xs font-medium hover:bg-[#f8fafc] transition-colors" @click="aiPreview = ''">关闭</button>
+              <button type="button" class="btn-ai btn-ai-right" :disabled="aiLoading === 'outline'" @click="aiGenerate('outline')">
+                <span v-if="aiLoading === 'outline'" class="spinner"></span>
+                <span v-else-if="aiGenerated === 'outline'" class="check">✓</span>
+                <span v-else>✨</span>
+                <span class="btn-text">{{ aiGenerated === 'outline' ? '已生成' : 'AI 生成大纲' }}</span>
+              </button>
             </div>
           </div>
 
           <!-- 目标字数 + 标签 -->
-          <div class="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label class="block text-sm font-semibold text-[#334155] mb-1.5">目标字数</label>
-              <input v-model.number="form.targetWordCount" type="number" class="w-full px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:bg-white outline-none transition-all" placeholder="如：200000">
+          <div class="form-row form-row-grid">
+            <div class="form-cell">
+              <label class="form-label">目标字数</label>
+              <input v-model.number="form.targetWordCount" type="number" class="form-input" placeholder="如：200000">
             </div>
-            <div>
-              <label class="block text-sm font-semibold text-[#334155] mb-1.5">标签（逗号分隔）</label>
-              <input v-model="form.tags" class="w-full px-3.5 py-2.5 border border-[#e2e8f0] rounded-[10px] text-sm bg-[#fafbfc] focus:border-[#818cf8] focus:bg-white outline-none transition-all" placeholder="如：热血,成长,战斗">
+            <div class="form-cell">
+              <label class="form-label">标签（逗号分隔）</label>
+              <input v-model="form.tags" class="form-input" placeholder="如：热血,成长,战斗">
             </div>
           </div>
 
           <!-- 底部按钮 -->
-          <div class="flex justify-end gap-3 pt-5 border-t border-[#f1f5f9]">
-            <button type="button" @click="closeModal" class="px-6 py-2.5 text-sm font-medium text-[#94a3b8] hover:bg-[#f1f5f9] rounded-[10px] transition-colors">取消</button>
-            <button type="submit" class="px-8 py-2.5 bg-[#0f0f1a] text-white rounded-[10px] text-sm font-semibold hover:bg-[#1e1e2f] transition-colors disabled:opacity-50" :disabled="saving || !form.title">
+          <div class="form-actions">
+            <button type="button" class="btn-cancel" @click="closeModal">取消</button>
+            <button type="submit" class="btn-submit" :disabled="saving || !form.title">
+              <span v-if="saving" class="spinner"></span>
               {{ saving ? '保存中...' : editingId ? '保存修改' : '确认创建' }}
             </button>
           </div>
@@ -437,7 +447,7 @@ function editProject(project) {
   showModal.value = true
 }
 
-function closeModal() { showModal.value = false; editingId.value = null; aiPreview.value = '' }
+function closeModal() { showModal.value = false; editingId.value = null; aiLoading.value = '' }
 
 async function handleSubmit() {
   if (!form.title.trim() || saving.value) return
@@ -505,45 +515,35 @@ function toggleSort() { /* 排序切换 */ }
 function toggleView() { viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid' }
 
 // ─── AI 生成功能 ───
-const aiPreview = ref('')
-const aiPreviewType = ref('')
-const aiPreviewKey = ref('')
-
-const quickAiActions = [
-  { key: 'naming', icon: '📛', label: 'AI 起名' },
-  { key: 'polish', icon: '✨', label: 'AI 润色' },
-  { key: 'setting', icon: '🌍', label: 'AI 生成设定' },
-  { key: 'outline', icon: '📋', label: 'AI 生成大纲' }
-]
-
-const aiTemplates = {
-  naming: `你是一位资深小说编辑。请根据以下信息生成10个吸引人的作品名。\n\n【作品类型】：${form.genre || '未指定'}\n【简介】：${form.description || '未填写'}\n【核心设定】：${form.coreSetting || '未填写'}\n\n要求：每个名字≤7字，包含传统/网文/文艺/悬念/创新风格，附带简短解读。`,
-  polish: `你是一位小说营销编辑。请润色以下简介，提供3个版本（悬念优先/情绪优先/设定优先），每版50-120字。\n\n【原始简介】：${form.description || '未填写'}\n【作品类型】：${form.genre || '未指定'}`,
-  setting: `你是一位世界架构师。请根据以下信息生成完整世界观：背景/力量体系/势力/冲突/主角定位/故事基调。\n\n【作品名】：${form.title || '未命名'}\n【类型】：${form.genre || '未指定'}\n【简介】：${form.description || '未填写'}`,
-  outline: `你是一位小说大纲规划师。请按"起承转合"四幕结构生成完整大纲。\n\n【作品名】：${form.title || '未命名'}\n【类型】：${form.genre || '未指定'}\n【设定】：${form.coreSetting || form.description || '未填写'}\n\n输出：第一幕(起)、第二幕(承)、第三幕(转)、第四幕(合)，每幕包含：场景/盟友/挑战/成长。`
-}
-
-const aiDemoResults = {
-  naming: `1. 《星辰剑诀》—— 传统风格：古典仙侠韵味，突出剑道传承主线\n2. 《苍穹之下》—— 文艺风格：意境深远，暗示主角的渺小与伟大\n3. 《万古第一神》—— 网文风格：霸气直接，符合玄幻读者期待\n4. 《帝国崩塌时》—— 悬念风格：制造时间紧迫感\n5. 《剑道独尊》—— 传统风格：简洁有力，突出唯一性\n6. 《虚空彼岸》—— 创新风格：科幻与玄幻融合\n7. 《永夜君王》—— 网文风格：暗黑史诗感\n8. 《她自深渊来》—— 文艺风格：第一人称代入感强\n9. 《谁的帝国？》—— 悬念风格：问题式标题引发好奇\n10. 《星辉纪元》—— 创新风格：宏大叙事感`,
-  polish: `版本A（悬念优先）：\n当帝国的最后一位剑圣在刑场上睁开眼睛，所有人都以为他死了——三年。这是一个关于复仇的故事，也是一个关于选择的谜题。\n\n版本B（情绪优先）：\n他曾是帝国最耀眼的星辰，如今是阴沟里最卑微的乞丐。但当他再次握紧那把剑时，整个大陆都将为之颤抖。\n\n版本C（设定优先）：\n在一个以剑为尊的世界，星辰剑诀是万古第一神功。少年楚云帆偶然获得传承，从此踏上了一条与整个修真界为敌的道路。`,
-  setting: `一、世界背景\n时代：灵气复苏后三千年，修真文明鼎盛\n地理：九州大陆，中央为人类帝国，四方为异族领地\n社会：以宗门为核心的修真等级社会\n\n二、核心力量体系\n来源：天地灵气 + 星辰之力\n等级：练气→筑基→金丹→元婴→化神→合体→大乘\n禁忌：星辰剑诀（传说修至大成可斩星辰）\n\n三、主要势力\nA-星辰剑宗：守护剑诀传承，中立势力\nB-帝国皇室：掌控资源分配，维护统治\nC-暗影组织：收集剑诀碎片，目的不明\n\n四、核心冲突\n表层：剑诀争夺战\n深层：修真文明与星辰本源存亡\n\n五、主角定位\n起点：寒门少年，身世成谜\n优势：天生星辰体质\n路径：从被追杀到守护者\n\n六、基调：热血成长 + 史诗权谋`,
-  outline: `第一幕：起（1-30%）\n开篇：少年楚云帆在山中偶得星辰剑诀残卷\n日常：在剑宗外门修炼，受人欺凌\n催化：帝国暗卫来袭，师父以命相护\n决定：踏上寻找完整剑诀之路\n\n第二幕：承（31-60%）\n适应：从外门弟子到独行剑客的转变\n盟友：结识女剑客柳如烟、神秘老者\n挑战：第一次正面对抗帝国暗卫小队\n成长：初步掌握星辰剑意，实力跃升\n\n第三幕：转（61-85%）\n挫折：柳如烟身世揭露，两人产生裂痕\n真相：剑诀关系世界存亡，主角是"钥匙"\n动摇：面对真相，是否值得牺牲一切\n振作：接受命运，决心守护所爱\n\n第四幕：合（86-100%）\n决战：帝国皇宫之巅，星辰对决\n战场：星空为幕，剑气纵横三万里\n结局：建立新秩序，守护者而非统治者\n收束：星辰永恒，守护不息`
-}
+const aiLoading = ref('')
+const aiGenerated = ref('')
+const outlineResult = ref('')
 
 function aiGenerate(key) {
-  aiPreviewKey.value = key
   const types = { naming: 'AI 起名', polish: 'AI 润色', setting: 'AI 生成设定', outline: 'AI 生成大纲' }
-  aiPreviewType.value = types[key] || 'AI 生成'
-  aiPreview.value = '⏳ AI 正在生成中...'
-  setTimeout(() => { aiPreview.value = aiDemoResults[key] || '生成完成，请查看结果。' }, 800)
-}
-
-function acceptAiPreview() {
-  const key = aiPreviewKey.value
-  if (key === 'naming') form.title = aiPreview.value.split('\n')[0].replace(/^\d+\.\s*《([^》]+)》.*/, '$1')
-  else if (key === 'polish') form.description = aiPreview.value.replace(/版本[ABC].*?\n/g, '').trim().split('\n')[0]
-  else if (key === 'setting') form.coreSetting = aiPreview.value
-  aiPreview.value = ''
+  aiLoading.value = key
+  aiGenerated.value = ''
+  setTimeout(() => {
+    let result = ''
+    if (key === 'naming') {
+      const names = ['星辰剑诀', '苍穹之下', '万古第一神', '帝国崩塌时', '剑道独尊', '虚空彼岸', '永夜君王']
+      result = names[Math.floor(Math.random() * names.length)]
+      form.title = result
+    } else if (key === 'polish') {
+      result = '当帝国的最后一位剑圣在刑场上睁开眼睛，所有人都以为他死了——三年。'
+      form.description = result
+    } else if (key === 'setting') {
+      result = `一、世界背景\n时代：灵气复苏后三千年\n地理：九州大陆，中央为人类帝国\n\n二、核心力量体系\n等级：练气→筑基→金丹→元婴→化神`
+      form.coreSetting = result
+    } else if (key === 'outline') {
+      result = `第一幕（起）：少年楚云帆在山中偶得星辰剑诀残卷，踏上修行之路。\n\n第二幕（承）：结识女剑客柳如烟、神秘老者，经历第一次正面对抗。\n\n第三幕（转）：真相揭露，剑诀关系世界存亡，接受命运守护所爱。\n\n第四幕（合）：帝国皇宫之巅决战，建立新秩序。`
+      form.coreSetting = result
+      outlineResult.value = result
+    }
+    aiLoading.value = ''
+    if (result) aiGenerated.value = key
+    setTimeout(() => { aiGenerated.value = '' }, 1500)
+  }, 600)
 }
 </script>
 
@@ -949,43 +949,276 @@ function acceptAiPreview() {
   background: #2a2a4e;
 }
 
-/* ══════════ AI 按钮 ══════════ */
-.ai-btn {
+/* ══════════ 新建作品表单样式 ══════════ */
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-label .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.form-label .optional {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fafbfc;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: #818cf8;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #cbd5e1;
+}
+
+.form-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ─── AI 按钮（统一尺寸）─── */
+.btn-ai {
+  padding: 10px 18px;
   background: linear-gradient(135deg, #818cf8, #6366f1);
-  color: #fff; border: none;
-  padding: 7px 16px; border-radius: 10px;
-  font-size: 13px; font-weight: 600;
-  cursor: pointer; white-space: nowrap;
-  display: flex; align-items: center; gap: 4px;
-  transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(99,102,241,0.2);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
   flex-shrink: 0;
+  height: 42px;
 }
 
-.ai-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,0.3); }
-
-.ai-btn-sm {
-  background: #f1f5f9; color: #334155; border: none;
-  padding: 5px 12px; border-radius: 8px;
-  font-size: 12px; font-weight: 500;
-  cursor: pointer; white-space: nowrap;
-  transition: background 0.2s; flex-shrink: 0;
+.btn-ai:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
 }
 
-.ai-btn-sm:hover { background: #e2e8f0; }
-
-.ai-action-btn {
-  background: #f1f5f9; color: #334155; border: none;
-  padding: 6px 15px; border-radius: 10px;
-  font-size: 13px; font-weight: 500;
-  cursor: pointer; white-space: nowrap;
-  transition: background 0.2s;
+.btn-ai:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.ai-action-btn:hover { background: #e2e8f0; }
+.btn-ai.btn-ai-right {
+  margin-top: 2px;
+  align-self: flex-start;
+}
 
-@keyframes modalIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.btn-ai .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.btn-ai .check {
+  font-size: 14px;
+}
+
+.btn-ai .btn-text {
+  font-size: 14px;
+}
+
+/* ─── 大纲展示区域 ─── */
+.outline-preview {
+  flex: 1;
+  border: 1.5px dashed #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 120px;
+  background: #fafbfc;
+  transition: all 0.3s;
+}
+
+.outline-preview.has-content {
+  border-style: solid;
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
+.outline-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+  min-height: 80px;
+}
+
+.placeholder-icon {
+  font-size: 28px;
+  opacity: 0.5;
+}
+
+.outline-content {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── 底部操作按钮 ─── */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.btn-cancel {
+  padding: 12px 24px;
+  background: transparent;
+  color: #64748b;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.btn-submit {
+  padding: 12px 32px;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: #2a2a4e;
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-submit .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ─── 响应式 ─── */
+@media (max-width: 600px) {
+  .form-row-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .input-group {
+    flex-direction: column;
+  }
+
+  .btn-ai {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-ai.btn-ai-right {
+    align-self: stretch;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn-cancel,
+  .btn-submit {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

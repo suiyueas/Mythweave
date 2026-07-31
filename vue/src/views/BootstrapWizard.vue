@@ -103,6 +103,7 @@
         :project-id="projectId"
         :params="params"
         :generated-data="generatedData.world"
+        :world-settings="worldSettingsList"
         @generated="onStepGenerated('world', $event)"
         @skipped="onStepSkipped('world')"
         @next="nextStep"
@@ -295,6 +296,9 @@ const generatedData = reactive({
   inspirations: null
 })
 
+// 从数据库加载的 world_setting 记录数组（动态模块，直接传给 StepWorld 渲染）
+const worldSettingsList = ref([])
+
 const stepStatus = reactive({
   world: 'pending',
   characters: 'pending',
@@ -413,28 +417,32 @@ onMounted(async () => {
   }
 
   try {
-    const res = await setupApi.getSetup(projectId.value)
-    const existing = res?.data || res
-    if (existing) {
+    const setup = await setupApi.getSetup(projectId.value)
+    if (setup) {
       // 检查各模块是否已有数据
-      const hasWorld = existing.worldSettings && existing.worldSettings.length > 0
-      const hasCharacters = existing.characters && existing.characters.length > 0
-      const hasOutline = existing.outlines && existing.outlines.length > 0
-      const hasPlot = existing.plotThreads && existing.plotThreads.length > 0
-      const hasInspirations = existing.inspirations && existing.inspirations.length > 0
-
+      const hasWorld = !!(setup.worldSettings && setup.worldSettings.length > 0)
+      const hasCharacters = !!(setup.characters && setup.characters.length > 0)
+      const hasOutline = !!(setup.outlines && setup.outlines.length > 0)
+      const hasPlot = !!(setup.plotThreads && setup.plotThreads.length > 0)
+      const hasInspirations = !!(setup.inspirations && setup.inspirations.length > 0)
+  
       if (hasWorld) stepStatus.world = 'completed'
       if (hasCharacters) stepStatus.characters = 'completed'
       if (hasOutline) stepStatus.outline = 'completed'
       if (hasPlot) stepStatus.plot = 'completed'
       if (hasInspirations) stepStatus.inspirations = 'completed'
-
-      // 加载项目信息到表单
-      if (existing.project) {
-        params.title = existing.project.title || ''
-        params.genre = existing.project.genre || ''
+  
+      // 将数据库中的 world_setting 记录数组直接传给 StepWorld 动态渲染
+      if (hasWorld) {
+        worldSettingsList.value = setup.worldSettings
       }
-
+  
+      // 加载项目信息到表单
+      if (setup.project) {
+        params.title = setup.project.title || ''
+        params.genre = setup.project.genre || ''
+      }
+  
       // 跳转到第一个未完成步骤
       const keys = ['world', 'characters', 'outline', 'plot', 'inspirations']
       const firstPendingIdx = keys.findIndex(k => stepStatus[k] === 'pending')
@@ -453,6 +461,8 @@ onMounted(async () => {
     currentStepIndex.value = -1
   }
 })
+
+
 </script>
 
 <style scoped>
@@ -661,6 +671,8 @@ onMounted(async () => {
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
 }
 .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); }
+.btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3); }
+.btn-primary:focus { outline: none; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ─── 错误提示 ─── */
