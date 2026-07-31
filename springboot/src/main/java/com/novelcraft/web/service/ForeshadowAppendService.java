@@ -67,10 +67,10 @@ public class ForeshadowAppendService {
 
         try {
             insertedContent = deepSeekClient.chat(
-                    "你是一位专业小说作家，擅长在情节中自然地融入伏笔。",
+                    "你是一位专业小说作家，擅长在情节中自然地融入伏笔。直接输出补写段落，不要任何推理过程、思考或解释。",
                     appendPrompt,
                     0.7,
-                    500
+                    1024
             );
 
             insertedContent = insertedContent.trim();

@@ -20,6 +20,8 @@ public class PromptTemplates {
             - 自然衔接已有内容的结尾
             - 每次续写200-500字
             - 不要添加章节标题或分隔符
+            
+            直接输出续写内容，不要添加任何解释或说明：
             """;
 
     // ── AI对话（增强版：完整上下文） ──
@@ -56,23 +58,6 @@ public class PromptTemplates {
             - 尊重作者的创作风格和意图
             """;
 
-    // ── 章节生成 ──
-    public static final String GENERATE_CHAPTER = """
-            你是一位专业的小说作家。请根据大纲和上下文，撰写小说《{novelTitle}》的第{chapterTitle}章。
-            
-            【大纲】
-            {outline}
-            
-            【前文上下文】
-            {context}
-            
-            【写作要求】
-            - 字数：{targetWords}字左右
-            - 风格：{style}
-            - 保持与前文的连贯性
-            - 合理分配段落，注意叙事节奏
-            """;
-
     // ── AI润色 ──
     public static final String POLISH = """
             你是一位专业的文字编辑。请对以下段落进行润色，使其更加{styleType}。
@@ -84,33 +69,8 @@ public class PromptTemplates {
             - 保持原意不变
             - 仅优化表达方式
             - 不要添加新内容
-            """;
-
-    // ── 标题生成 ──
-    public static final String GENERATE_TITLE = """
-            你是一位专业小说作家，请为小说新章节生成标题。
             
-            【当前章节】：第 {chapterIndex} 章
-            【作品风格】：{genre}
-            【标题基调】：{tone}
-            
-            【已有章节标题序列】：
-            {existingTitles}
-            
-            【已有标题风格分析】：
-            {styleAnalysis}
-            
-            【本章剧情方向】：
-            {direction}
-            
-            【生成约束】：
-            - 保持与已有标题统一的修辞风格和韵律节奏
-            - 与上一章标题形成叙事递进或转折呼应
-            - 避免重复使用已有标题中的核心意象词
-            - 暗示本章核心事件或情感基调
-            - 为下一章预留叙事空间
-            
-            【输出规范】：只输出标题本身（5-8个汉字），不要引号、标点或任何解释。
+            直接输出润色后的文本，不要任何解释或说明：
             """;
 
     // ── 章节内容生成（自然小说格式） ──
@@ -173,6 +133,8 @@ public class PromptTemplates {
             - 合理扩展对话和内心独白
             - 扩写后内容不少于原内容的1.5倍
             - 保持情节连贯性
+            
+            直接输出扩写后的完整文本，不要任何解释或说明：
             """;
 
     // ── Agent: 编辑 ──
@@ -388,37 +350,6 @@ public class PromptTemplates {
             【分类要求】：对白灵感≥4条、场景描写≥3条、人物细节≥4条、典故隐喻≥4条。每条标注可使用章节。
             
             【重要】只输出纯JSON，不要任何解释、前缀或后缀。直接以 {{ 开头。
-            """;
-
-    // ── 阶段6：设定感知的章节续写 ──
-    public static final String SETUP_CONTINUE = """
-            你是一位优秀的小说作家，擅长用流畅自然的语言续写小说章节。
-            
-            【作品信息】名称：{title}　类型：{genre}　风格：{style}
-            
-            【世界设定】{world}
-            
-            【人物列表】{characters}
-            
-            【大纲上下文】第{chapterIndex}章「{chapterTitle}」
-            本章摘要：{chapterSummary}
-            上一章摘要：{previousSummary}
-            
-            【情节状态】主线进度：{mainProgress}%　激活支线：{activeSubThreads}　待回收伏笔：{pendingForeshadowing}
-            
-            【写作要求】目标字数：{targetWords}字　推进内容：{direction}
-            出场人物：{charactersInThisChapter}
-            
-            【格式要求】：
-            1. 自然分段，段落间用空行分隔
-            2. 所有对话必须用「」括起来，独立成行
-            3. 场景转换时用「---」分隔
-            4. 使用感官描写（视觉/听觉/触觉/嗅觉）
-            5. 每段不超过200字，长短交替，形成节奏感
-            6. 【重要】不要添加任何结构标签（如"开篇场景"、"发展"、"高潮"、"结尾"等），直接输出正文
-            7. 【重要】不要输出章节标题，直接开始写正文内容
-            
-            直接输出正文：
             """;
 
     // ── 伏笔追加补写 ──

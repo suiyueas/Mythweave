@@ -533,7 +533,8 @@ public class NovelSetupService {
     // 辅助方法
     // ════════════════════════════════════
     private String callAI(String prompt, double temp, int maxTokens) throws IOException {
-        String raw = deepSeekClient.chat("你是一位专业的小说创作助手", prompt, temp, maxTokens);
+        // 推理型模型会先消耗推理 token 导致 JSON 截断，system prompt 明确禁止推理输出
+        String raw = deepSeekClient.chat("你是一位专业的小说创作助手。严格按要求输出，不要输出任何推理过程、思考或解释。", prompt, temp, maxTokens);
         log.debug("AI 原始响应（前200字）: {}", raw != null ? raw.substring(0, Math.min(200, raw.length())) : "null");
         return raw;
     }

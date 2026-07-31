@@ -14,7 +14,8 @@ import java.util.concurrent.*;
 public abstract class BaseAgent implements WritingAgent {
 
     private static final int MAX_RETRIES = 2;
-    private static final long TIMEOUT_SECONDS = 30;
+    // 推理型模型在正式输出前可能消耗 20-60 秒推理，30 秒超时必然失败；放宽到 120 秒
+    private static final long TIMEOUT_SECONDS = 120;
 
     protected final DeepSeekClient deepSeekClient;
     private final ExecutorService executor = Executors.newCachedThreadPool();

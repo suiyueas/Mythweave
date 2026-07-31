@@ -42,7 +42,7 @@ public class AiChatService {
         String prompt = PromptTemplates.CONTINUE_WRITING
                 .replace("{context}", context != null ? context : "")
                 .replace("{existingText}", existingText);
-        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家", prompt, temperature, maxTokens, onToken);
+        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始续写正文，不要输出任何推理过程、思考或解释。", prompt, temperature, maxTokens, onToken);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -616,7 +616,10 @@ public class AiChatService {
         String prompt = foreshadowingContext.isEmpty() ? basePrompt
                 : basePrompt + "\n\n" + foreshadowingContext + "\n请在遵循上述要求的同时，自然地融入伏笔回收。";
 
-        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家", prompt, 0.8, 4096, onToken);
+        // maxTokens 8192：推理型模型会先消耗推理 token，4096 常导致 finish_reason=length 截断（正文不足千字）
+        // system prompt 明确禁止推理输出，减少推理 token 消耗
+        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。",
+                prompt, 0.8, 8192, onToken);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -641,7 +644,7 @@ public class AiChatService {
             prompt += "\n\n【额外要求】目标长度：" + targetLength + "。";
         }
 
-        String reply = deepSeekClient.chat("你是一位专业的文字编辑", prompt, 0.5, 4096);
+        String reply = deepSeekClient.chat("你是一位专业的文字编辑。直接输出润色结果，不要任何解释或说明。", prompt, 0.5, 4096);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -683,27 +686,32 @@ public class AiChatService {
             prompt.append(prevEnding).append("\n\n");
         }
 
-        // 1. 世界观
+        // 1. 世界观（限制条数，防止 prompt 超长）
         List<NovelWorldSetting> worlds = worldSettingMapper.selectByProjectId(projectId);
         if (worlds != null && !worlds.isEmpty()) {
             prompt.append("【世界观设定】\n");
+            int worldCount = 0;
             for (NovelWorldSetting w : worlds) {
+                if (worldCount >= 10) break;
                 String cat = w.getCategory() != null ? w.getCategory() : "";
                 String name = w.getName() != null ? w.getName() : "";
                 String content = w.getContent() != null ? w.getContent() : "";
                 if (!content.isEmpty()) {
                     prompt.append(cat).append(" - ").append(name).append("：")
                           .append(content.length() > 200 ? content.substring(0, 200) + "..." : content).append("\n");
+                    worldCount++;
                 }
             }
             prompt.append("\n");
         }
 
-        // 2. 人物
+        // 2. 人物（限制条数，防止 prompt 超长）
         List<NovelCharacter> chars = characterMapper.selectByProjectId(projectId);
         if (chars != null && !chars.isEmpty()) {
             prompt.append("【人物设定】\n");
+            int charCount = 0;
             for (NovelCharacter c : chars) {
+                if (charCount >= 10) break;
                 prompt.append("- ").append(c.getName() != null ? c.getName() : "")
                       .append("（").append(c.getRole() != null ? c.getRole() : "未知")
                       .append("）：").append(c.getPersonality() != null ? c.getPersonality() : "");
@@ -712,18 +720,29 @@ public class AiChatService {
                     prompt.append(" 背景：").append(desc);
                 }
                 prompt.append("\n");
+                charCount++;
             }
             prompt.append("\n");
         }
 
-        // 3. 大纲
+        // 3. 大纲（限制条数，优先取与当前章相邻的节点）
         List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
         if (outlines != null && !outlines.isEmpty()) {
-            prompt.append("【大纲结构】\n");
-            for (NovelOutline o : outlines) {
+            List<NovelOutline> chapterNodes = outlines.stream()
+                    .filter(o -> !"volume".equals(o.getType()))
+                    .sorted((a, b) -> Integer.compare(
+                            a.getSortOrder() != null ? a.getSortOrder() : 0,
+                            b.getSortOrder() != null ? b.getSortOrder() : 0))
+                    .toList();
+            int from = Math.max(0, Math.min(chapterIndex - 2, Math.max(0, chapterNodes.size() - 10)));
+            int to = Math.min(chapterNodes.size(), from + 10);
+            prompt.append("【大纲结构（第").append(from + 1).append("~第").append(to).append("个节点）】\n");
+            for (int i = from; i < to; i++) {
+                NovelOutline o = chapterNodes.get(i);
                 prompt.append("- ").append(o.getTitle() != null ? o.getTitle() : "");
                 if (o.getDescription() != null && !o.getDescription().isEmpty()) {
-                    prompt.append("：").append(o.getDescription());
+                    String desc = o.getDescription().length() > 120 ? o.getDescription().substring(0, 120) + "..." : o.getDescription();
+                    prompt.append("：").append(desc);
                 }
                 prompt.append("\n");
             }
@@ -829,7 +848,7 @@ public class AiChatService {
         prompt.append("7. 【重要】不要添加任何结构标签（如\"开篇场景\"、\"发展\"、\"高潮\"、\"结尾\"等），直接输出正文\n");
         prompt.append("8. 无需输出标题，直接开始写正文内容\n");
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家", prompt.toString(), 0.7, 8192);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。", prompt.toString(), 0.7, 8192);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -860,7 +879,7 @@ public class AiChatService {
             }
         }
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家", prompt, 0.7, 8192);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接输出扩写后的完整文本，不要任何推理过程、思考或解释。", prompt, 0.7, 8192);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();

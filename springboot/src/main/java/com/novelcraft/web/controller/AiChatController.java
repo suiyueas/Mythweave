@@ -94,7 +94,7 @@ public class AiChatController {
                         request.getContext() != null ? request.getContext() : "",
                         request.getExistingText() != null ? request.getExistingText() : "",
                         request.getTemperature() != null ? request.getTemperature() : 0.7,
-                        request.getMaxTokens() != null ? request.getMaxTokens() : 4096,
+                        request.getMaxTokens() != null ? request.getMaxTokens() : 8192,
                         token -> {
                             try {
                                 String jsonToken = objectMapper.writeValueAsString(token);
@@ -210,7 +210,10 @@ public class AiChatController {
     @PostMapping(value = "/stream/content", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamContent(@PathVariable Long projectId,
                                      @RequestBody ContentGenerateRequest request) {
-        SseEmitter emitter = new SseEmitter(300_000L);
+        // 心跳保活：推理型模型在正式输出正文前可能长时间无 content，
+        // 前端 20s 无数据会误判断连并自动重连，导致生成中断
+        SseEmitter emitter = new SseEmitter(600_000L);
+        startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
                 aiChatService.streamGenerateContent(projectId, request.getChapterIndex(), request.getTitle(),
@@ -227,6 +230,8 @@ public class AiChatController {
             } catch (Exception e) {
                 log.error("AI内容生成异常", e);
                 emitter.completeWithError(e);
+            } finally {
+                stopHeartbeat(emitter);
             }
         });
         return emitter;
@@ -301,6 +306,7 @@ public class AiChatController {
     public SseEmitter streamGenerateChapter(@PathVariable Long projectId,
                                              @RequestBody Map<String, Object> params) {
         SseEmitter emitter = new SseEmitter(600_000L);
+        startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
                 String title = params.get("title") != null ? params.get("title").toString() : "未命名章节";
@@ -331,6 +337,8 @@ public class AiChatController {
                     emitter.send(SseEmitter.event().data("❌ AI服务异常：" + e.getMessage()));
                 } catch (IOException ignored) {}
                 emitter.completeWithError(e);
+            } finally {
+                stopHeartbeat(emitter);
             }
         });
         return emitter;
