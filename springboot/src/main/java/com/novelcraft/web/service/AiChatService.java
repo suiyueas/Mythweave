@@ -97,7 +97,7 @@ public class AiChatService {
         log.info("Chat prompt构建完成, 长度={}, 前200字={}", prompt.length(),
                 prompt.substring(0, Math.min(200, prompt.length())));
 
-        int tokensUsed = deepSeekClient.chatStream("你是一位AI写作助手", prompt, temperature, maxTokens, onToken);
+        int tokensUsed = deepSeekClient.chatStream("你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。", prompt, temperature, maxTokens, onToken);
         log.info("DeepSeek调用完成, tokensUsed={}", tokensUsed);
     }
 
@@ -234,9 +234,22 @@ public class AiChatService {
 
     /**
      * 非流式对话
+     * 推理模型会先消耗大量推理 token 导致回答被截断（finish_reason=length），
+     * 因此：1) system prompt 明确抑制推理输出（治本）；2) maxTokens 提至 8192（保底）；
+     * 3) 失败后轻量重试一次
      */
     public String chat(Long projectId, String userMessage) throws IOException {
-        String reply = deepSeekClient.chat("你是一位AI写作助手", userMessage, 0.7, 4096);
+        String reply;
+        try {
+            reply = deepSeekClient.chat(
+                    "你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。",
+                    userMessage, 0.7, 8192);
+        } catch (IOException e) {
+            log.warn("AI对话首次调用失败（推理耗尽/无正文），轻量重试: {}", e.getMessage());
+            reply = deepSeekClient.chat(
+                    "你是AI写作助手。立即直接回答用户的问题，禁止任何推理、分析、思考过程或解释。",
+                    userMessage, 0.6, 8192);
+        }
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();

@@ -94,8 +94,9 @@ public class DeepSeekClient {
             }
             // content 为空：推理过程（reasoning_content）不可作为业务结果，
             // 明确抛错以触发上层降级/重试，避免把推理文字当作正文使用
+            // 日志用 WARN：多数调用方有降级/重试机制，属可恢复场景，业务层失败时另有 ERROR 日志
             if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
-                log.error("AI 仅返回推理内容（无有效正文），finish_reason={}，已丢弃推理内容", finishReason);
+                log.warn("AI 仅返回推理内容（无有效正文），finish_reason={}，已丢弃推理内容", finishReason);
                 throw new IOException("AI 仅返回推理内容，无有效正文 (finish_reason=" + finishReason + ")");
             }
             log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);

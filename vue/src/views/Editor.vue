@@ -976,6 +976,10 @@ function handleAppendForeshadow(fs) {
 async function confirmAppendForeshadow() {
   if (!appendForeshadowTarget.value || !store.currentChapterId) return
   appendLoading.value = true
+  // AI 推理型模型生成补写内容可能耗时较长（数十几秒到两分钟），
+  // 加 150 秒超时保护：超时后明确提示，避免静默丢失后端响应
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 150000)
   try {
     const pid = store.currentProjectId
     const chapterId = store.currentChapterId
@@ -989,6 +993,7 @@ async function confirmAppendForeshadow() {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
+      signal: controller.signal,
       body: JSON.stringify({
         foreshadowingId: appendForeshadowTarget.value.id,
         foreshadowingTitle: appendForeshadowTarget.value.name,
@@ -1014,8 +1019,14 @@ async function confirmAppendForeshadow() {
     }
   } catch (e) {
     console.error('伏笔追加失败：', e)
-    showToast('生成失败：' + (e.message || '网络错误'), 'error')
+    if (e.name === 'AbortError') {
+      // 超时：后端可能仍在生成（推理模型耗时较长），明确告知而非静默丢失
+      showToast('AI 生成较慢已超时（后端可能仍在处理），请稍后刷新编辑器查看结果后重试', 'warning')
+    } else {
+      showToast('生成失败：' + (e.message || '网络错误'), 'error')
+    }
   } finally {
+    clearTimeout(timeoutId)
     appendLoading.value = false
   }
 }

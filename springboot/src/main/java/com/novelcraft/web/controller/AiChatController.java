@@ -143,7 +143,7 @@ public class AiChatController {
                         request.getContext() != null ? request.getContext() : "",
                         userMessage,
                         request.getTemperature() != null ? request.getTemperature() : 0.7,
-                        request.getMaxTokens() != null ? request.getMaxTokens() : 4096,
+                        request.getMaxTokens() != null ? request.getMaxTokens() : 8192,
                         token -> {
                             try {
                                 fullReply.append(token);
