@@ -14,7 +14,8 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
   const error = ref(null)
   const currentProjectId = ref(null)
 
-  const categories = ref([
+  // 预设分类（用户手动新建设定时使用，存储值用英文）
+  const presetCategories = ref([
     { id: 'geography', name: '地理版图', icon: '🌍', description: '山川河流、城市疆域', color: '#2A9D8F' },
     { id: 'history', name: '历史年表', icon: '📜', description: '重大事件、传奇时代', color: '#E9C46A' },
     { id: 'culture', name: '文化社会', icon: '🏛️', description: '民俗风情、社会结构', color: '#4A9EFF' },
@@ -24,6 +25,44 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     { id: 'religion', name: '信仰神明', icon: '🕊️', description: '宗教派系、神祇传说', color: '#F4A261' },
     { id: 'politics', name: '政治势力', icon: '⚖️', description: '王国派系、势力纷争', color: '#3D5A80' }
   ])
+
+  // 动态分类元信息（AI 生成的常见中文分类 → 图标/颜色）
+  const DYNAMIC_CATEGORY_META = {
+    '时代背景': { icon: '⏳', color: '#8B5CF6' },
+    '地理版图': { icon: '🗺️', color: '#2A9D8F' },
+    '历史年表': { icon: '📜', color: '#E9C46A' },
+    '力量体系': { icon: '⚡', color: '#9B59B6' },
+    '政治势力': { icon: '🏰', color: '#3D5A80' },
+    '核心规则': { icon: '🔥', color: '#E76F51' },
+    '文化社会': { icon: '🏛️', color: '#4A9EFF' },
+    '科技文明': { icon: '🔧', color: '#5D6D7E' },
+    '种族设定': { icon: '🧬', color: '#E76F51' },
+    '信仰神明': { icon: '🙏', color: '#F4A261' },
+    '生态环境': { icon: '🌿', color: '#14B8A6' }
+  }
+
+  // 动态分类：预设分类 + 数据中实际出现的其他分类（AI 生成的中文分类自动生成卡片）
+  // 注意：若数据分类命中预设分类的 name（如数据 category='地理版图' 对应预设 id='geography'），
+  // 不重复创建卡片，由预设卡片通过 name 别名匹配数据
+  const categories = computed(() => {
+    const merged = [...presetCategories.value]
+    const knownIds = new Set(merged.map(c => c.id))
+    const knownNames = new Set(merged.map(c => c.name))
+    for (const s of settings.value) {
+      const cat = s.category
+      if (!cat || knownIds.has(cat) || knownNames.has(cat)) continue
+      knownIds.add(cat)
+      const meta = DYNAMIC_CATEGORY_META[cat] || {}
+      merged.push({
+        id: cat,
+        name: cat,
+        icon: meta.icon || '📌',
+        description: 'AI 生成模块',
+        color: meta.color || '#6366F1'
+      })
+    }
+    return merged
+  })
 
   const settings = ref([])
   const selectedCategoryId = ref(null)
@@ -44,7 +83,11 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     let result = settings.value
 
     if (selectedCategoryId.value) {
-      result = result.filter(s => s.category === selectedCategoryId.value)
+      // 兼容中英文分类：选中预设分类时，用 id 或 name 别名匹配数据
+      const cat = categories.value.find(c => c.id === selectedCategoryId.value)
+      result = result.filter(s =>
+        s.category === selectedCategoryId.value || (cat && s.category === cat.name)
+      )
     }
 
     if (searchQuery.value) {
@@ -76,8 +119,9 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
   const settingsByCategory = computed(() => {
     const grouped = {}
     for (const cat of categories.value) {
+      // 兼容中英文分类：匹配 id 或 name 别名（如 id='geography' 也能匹配 category='地理版图'）
       grouped[cat.id] = settings.value
-        .filter(s => s.category === cat.id)
+        .filter(s => s.category === cat.id || s.category === cat.name)
         .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
     }
     return grouped
@@ -86,7 +130,8 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
   const categoryStats = computed(() => {
     const stats = {}
     for (const cat of categories.value) {
-      const catSettings = settings.value.filter(s => s.category === cat.id)
+      // 兼容中英文分类：匹配 id 或 name 别名
+      const catSettings = settings.value.filter(s => s.category === cat.id || s.category === cat.name)
       stats[cat.id] = {
         total: catSettings.length,
         completed: catSettings.filter(s => s.status === 'completed').length,

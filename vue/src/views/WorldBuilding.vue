@@ -410,6 +410,9 @@ const getCategoryName = (categoryId) => {
 }
 
 const getCategoryColor = (categoryId) => {
+  // 优先从动态分类列表获取颜色（支持 AI 生成的中文分类）
+  const cat = store.categories.find(c => c.id === categoryId)
+  if (cat && cat.color) return cat.color
   const colors = {
     geography: '#3b82f6',
     history: '#f59e0b',
