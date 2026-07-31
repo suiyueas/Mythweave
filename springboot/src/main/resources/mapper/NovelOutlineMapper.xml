@@ -38,15 +38,16 @@
 
     <!--
         功能: 批量更新大纲节点排序和幕归属（跨幕拖拽）
-        参数: items - BatchSortActItem列表，包含id, projectId, sortOrder, act, nodeNumber
+        参数: items - BatchSortActItem列表，包含id, projectId, parentId, sortOrder, act, nodeNumber
         返回: void（foreach多语句执行）
-        说明: 用于跨幕拖拽调整顺序，同时更新sort_order、act和node_number
+        说明: 用于跨幕拖拽调整顺序，同时更新sort_order、act、parent_id和node_number
     -->
     <update id="updateBatchSortAndAct" parameterType="list">
         <foreach collection="items" item="item" separator=";">
             UPDATE novel_outline
             SET sort_order = #{item.sortOrder},
                 act = #{item.act},
+                parent_id = #{item.parentId},
                 node_number = #{item.nodeNumber},
                 update_time = NOW()
             WHERE id = #{item.id}

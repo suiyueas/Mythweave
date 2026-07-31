@@ -473,7 +473,10 @@ public class NovelSetupService {
                 int totalChapters = 0;
                 if (acts.isArray()) {
                     for (JsonNode act : acts) {
-                        JsonNode chapters = act.path("chapters");
+                        JsonNode chapters = act.path("nodes");
+                        if (!chapters.isArray() || chapters.isEmpty()) {
+                            chapters = act.path("chapters");
+                        }
                         if (chapters.isArray()) {
                             totalChapters += chapters.size();
                         }
@@ -702,38 +705,90 @@ public class NovelSetupService {
                 log.warn("大纲 JSON 提取失败。原始（前200字）: {}", json != null ? json.substring(0, Math.min(200, json.length())) : "null");
                 throw new RuntimeException("无法提取大纲JSON");
             }
+
+            // 幂等：先清除旧大纲，避免重复生成时叠加
+            outlineMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<NovelOutline>()
+                    .eq("project_id", projectId));
+
             JsonNode root = objectMapper.readTree(cleaned);
             JsonNode acts = root.path("acts");
-            int sort = 0;
-            if (acts.isArray()) {
-                for (JsonNode act : acts) {
-                    // 保存幕标题
-                    NovelOutline actNode = new NovelOutline();
-                    actNode.setProjectId(projectId);
-                    actNode.setTitle(act.path("name").asText("第X幕"));
-                    actNode.setDescription(act.path("theme").asText("") + "\n冲突：" + act.path("conflict").asText(""));
-                    actNode.setType("volume");
-                    actNode.setSortOrder(sort++);
-                    outlineMapper.insert(actNode);
-                    Long parentId = actNode.getId();
+            if (!acts.isArray() || acts.isEmpty()) {
+                log.warn("大纲 JSON 中无 acts 数组，跳过保存");
+                return;
+            }
 
-                    // 保存章节
-                    JsonNode chapters = act.path("chapters");
-                    if (chapters.isArray()) {
-                        for (JsonNode ch : chapters) {
-                            NovelOutline node = new NovelOutline();
-                            node.setProjectId(projectId);
-                            node.setParentId(parentId);
-                            node.setTitle(ch.path("title").asText(""));
-                            node.setDescription(ch.path("summary").asText("")
-                                + "\n关键事件：" + ch.path("keyEvent").asText(""));
-                            node.setType("chapter");
-                            node.setSortOrder(sort++);
-                            outlineMapper.insert(node);
+            // 第一遍：先插入所有幕（卷）节点，记录 act -> 幕ID 映射，保证章节能挂到正确幕下
+            Map<String, Long> actIdMap = new LinkedHashMap<>();
+            for (int i = 0; i < acts.size(); i++) {
+                JsonNode act = acts.get(i);
+                String actKey = act.path("act").asText("");
+                if (actKey.isEmpty() || actKey.isBlank()) {
+                    actKey = "act_" + (i + 1);
+                }
+                if (actKey.length() > 19) {
+                    actKey = actKey.substring(0, 19);
+                }
+
+                NovelOutline actNode = new NovelOutline();
+                actNode.setProjectId(projectId);
+                actNode.setParentId(null);
+                actNode.setAct(actKey);
+                actNode.setTitle(act.path("name").asText(act.path("title").asText("第" + (i + 1) + "幕")));
+                String theme = act.path("theme").asText("");
+                String conflict = act.path("conflict").asText("");
+                actNode.setDescription(theme.isEmpty() && conflict.isEmpty() ? null
+                        : theme + (conflict.isEmpty() ? "" : "\n冲突：" + conflict));
+                actNode.setType("volume");
+                actNode.setNodeStatus("draft");
+                actNode.setNodeNumber(0);
+                actNode.setSortOrder(act.path("sortOrder").asInt(i + 1));
+                outlineMapper.insert(actNode);
+                actIdMap.put(actKey, actNode.getId());
+            }
+
+            // 第二遍：插入章节节点，关联到对应幕（兼容 nodes / chapters 两种字段）
+            for (int i = 0; i < acts.size(); i++) {
+                JsonNode act = acts.get(i);
+                String actKey = act.path("act").asText("");
+                if (actKey.isEmpty() || actKey.isBlank()) {
+                    actKey = "act_" + (i + 1);
+                }
+                Long parentId = actIdMap.get(actKey);
+                if (parentId == null) {
+                    parentId = actIdMap.values().iterator().next();
+                }
+
+                JsonNode chapters = act.path("nodes");
+                if (!chapters.isArray() || chapters.isEmpty()) {
+                    chapters = act.path("chapters");
+                }
+                if (chapters.isArray()) {
+                    for (int j = 0; j < chapters.size(); j++) {
+                        JsonNode ch = chapters.get(j);
+                        NovelOutline node = new NovelOutline();
+                        node.setProjectId(projectId);
+                        node.setParentId(parentId);
+                        node.setAct(actKey);
+                        node.setTitle(ch.path("title").asText("未命名节点"));
+                        String summary = ch.path("summary").asText(ch.path("description").asText(""));
+                        String keyEvent = ch.path("keyEvent").asText("");
+                        node.setDescription(summary.isEmpty() && keyEvent.isEmpty() ? null
+                                : summary + (keyEvent.isEmpty() ? "" : "\n关键事件：" + keyEvent));
+                        node.setType("chapter");
+                        node.setNodeStatus(ch.path("status").asText("draft"));
+                        node.setSortOrder(ch.path("sortOrder").asInt(j + 1));
+                        node.setNodeNumber(j + 1);
+                        if (ch.has("estimatedWords") && ch.path("estimatedWords").canConvertToInt()) {
+                            node.setEstimatedWords(ch.path("estimatedWords").asInt());
                         }
+                        if (ch.has("isKeyEvent")) {
+                            node.setIsKeyEvent(ch.path("isKeyEvent").asBoolean(false));
+                        }
+                        outlineMapper.insert(node);
                     }
                 }
             }
+            log.info("📋 大纲保存完成 projectId={}, 幕数={}", projectId, actIdMap.size());
         } catch (Exception e) {
             log.warn("保存大纲失败，JSON前100字: {}", json != null ? json.substring(0, Math.min(100, json.length())) : "null", e);
         }

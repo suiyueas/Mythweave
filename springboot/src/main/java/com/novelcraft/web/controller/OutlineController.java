@@ -5,6 +5,7 @@ import com.novelcraft.web.entity.*;
 import com.novelcraft.web.mapper.*;
 import com.novelcraft.web.model.BatchSortActItem;
 import com.novelcraft.web.model.BatchSortItem;
+import com.novelcraft.web.model.OutlineActDto;
 import com.novelcraft.web.service.OutlineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +28,19 @@ public class OutlineController {
     @GetMapping
     public R<List<NovelOutline>> list(@PathVariable Long projectId) {
         return R.ok(mapper.selectByProjectId(projectId));
+    }
+
+    @Operation(summary = "批量保存幕与节点（AI 生成的大纲整体保存，支持任意数量的幕）")
+    @PostMapping("/acts")
+    public R<Map<String, Object>> saveActs(@PathVariable Long projectId, @RequestBody List<OutlineActDto> acts) {
+        if (acts == null || acts.isEmpty()) {
+            return R.fail("acts 不能为空");
+        }
+        int savedNodes = outlineService.saveOutlineActs(projectId, acts);
+        return R.ok(Map.of(
+            "actCount", acts.size(),
+            "savedNodes", savedNodes
+        ));
     }
 
     @Operation(summary = "创建大纲节点")

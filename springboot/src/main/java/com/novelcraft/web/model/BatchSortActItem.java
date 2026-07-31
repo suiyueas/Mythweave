@@ -9,6 +9,7 @@ import lombok.Data;
 public class BatchSortActItem {
     private Long id;
     private Long projectId;
+    private Long parentId;
     private String act;
     private Integer sortOrder;
     private Integer nodeNumber;

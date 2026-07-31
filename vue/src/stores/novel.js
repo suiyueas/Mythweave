@@ -436,6 +436,20 @@ export const useNovelStore = defineStore('novel', () => {
     await refreshOutlines(projectId)
   }
 
+  /** 批量保存幕与节点（AI 生成的大纲整体保存，支持任意数量的幕） */
+  async function saveOutlineActs(projectId, acts) {
+    const res = await outlineApi.saveActs(projectId, acts)
+    await refreshOutlines(projectId)
+    return res
+  }
+
+  /** 修复幕区分布（旧数据重建幕节点与归属） */
+  async function fixOutlineDistribution(projectId) {
+    const res = await outlineApi.fixActDistribution(projectId)
+    await refreshOutlines(projectId)
+    return res
+  }
+
   /** 批量更新状态 */
   async function batchStatusOutlines(projectId, ids, status) {
     await outlineApi.batchStatus(projectId, ids, status)
@@ -1506,6 +1520,7 @@ export const useNovelStore = defineStore('novel', () => {
     // 大纲操作
     createOutline, updateOutline, deleteOutline,
     batchSortOutlines, batchSortActOutlines, batchStatusOutlines, batchDeleteOutlines,
+    saveOutlineActs, fixOutlineDistribution,
     // 模块刷新方法（核心）
     refreshWorld, refreshCharacters, refreshOutlines, refreshPlot, refreshInspirations,
     refreshChapters, refreshAll

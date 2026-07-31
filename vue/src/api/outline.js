@@ -12,5 +12,9 @@ export const outlineApi = {
   /** 批量更新状态 */
   batchStatus: (projectId, ids, status) => put(`/api/projects/${projectId}/outline/batch-status`, { ids, status }),
   /** 批量删除 */
-  batchDelete: (projectId, ids) => request(`/api/projects/${projectId}/outline/batch`, { method: 'DELETE', body: { ids } })
+  batchDelete: (projectId, ids) => request(`/api/projects/${projectId}/outline/batch`, { method: 'DELETE', body: { ids } }),
+  /** 批量保存幕与节点（AI 生成的大纲整体保存，支持任意数量的幕） */
+  saveActs: (projectId, acts) => post(`/api/projects/${projectId}/outline/acts`, acts),
+  /** 修复幕区分布（旧数据重建幕节点与归属） */
+  fixActDistribution: (projectId) => post(`/api/projects/${projectId}/outline/fix-act-distribution`)
 }

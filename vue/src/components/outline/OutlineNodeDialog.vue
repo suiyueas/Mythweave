@@ -156,12 +156,26 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'saved'])
 
-// ─── 常量 ───
-const actOptions = [
-  { key: 'first_act', icon: '📖', label: '第一幕：建置' },
-  { key: 'second_act', icon: '⚔️', label: '第二幕：对抗' },
-  { key: 'third_act', icon: '🏆', label: '第三幕：解决' }
-]
+// ─── 动态幕选项 ───
+// 优先从卷（volume）节点提取（支持任意数量的幕）；无卷节点时兜底三幕
+const actOptions = computed(() => {
+  const volumes = (store.outlines || [])
+    .filter(n => n.type === 'volume')
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+  if (volumes.length > 0) {
+    return volumes.map(v => ({
+      key: v.act || 'act_' + v.id,
+      volumeId: v.id,
+      icon: '📚',
+      label: v.title || '未命名幕'
+    }))
+  }
+  return [
+    { key: 'first_act', volumeId: null, icon: '📖', label: '第一幕：建置' },
+    { key: 'second_act', volumeId: null, icon: '⚔️', label: '第二幕：对抗' },
+    { key: 'third_act', volumeId: null, icon: '🏆', label: '第三幕：解决' }
+  ]
+})
 
 // ─── 状态 ───
 const visible = computed(() => props.modelValue)
@@ -188,14 +202,16 @@ const canSave = computed(() => {
 
 // ─── 智能推荐所属幕 ───
 function suggestAct() {
-  if (props.defaultAct) return props.defaultAct
+  if (props.defaultAct && actOptions.value.some(a => a.key === props.defaultAct)) {
+    return props.defaultAct
+  }
   const outlines = store.outlines || []
-  const counts = actOptions.map(a => ({
+  const counts = actOptions.value.map(a => ({
     key: a.key,
-    count: outlines.filter(o => (o.act || 'first_act') === a.key).length
+    count: outlines.filter(o => o.act === a.key).length
   }))
   counts.sort((a, b) => a.count - b.count)
-  return counts[0]?.key || 'first_act'
+  return counts[0]?.key || actOptions.value[0]?.key || 'first_act'
 }
 
 // ─── 表单 ───
@@ -286,12 +302,15 @@ async function handleSave() {
 
   saving.value = true
   try {
+    // 根据所选幕找到对应的幕（卷）节点ID，用于设置 parent_id
+    const actOpt = actOptions.value.find(a => a.key === form.value.act)
     const data = {
       title: form.value.title.trim(),
       description: form.value.description.trim(),
       estimatedWords: form.value.estimatedWords || null,
       type: form.value.type || null,
       act: form.value.act,
+      parentId: form.value.type === 'volume' ? null : (actOpt?.volumeId ?? null),
       nodeStatus: form.value.nodeStatus,
       chapterId: form.value.chapterId || null,
       isKeyEvent: form.value.isKeyEvent || false

@@ -3,7 +3,7 @@
     <!-- 顶部栏 -->
     <div class="outline-header">
       <div class="header-left">
-        <span class="header-title">📐 三幕式结构</span>
+        <span class="header-title">📐 {{ actGroups.length }} 幕结构</span>
         <span class="header-divider">|</span>
         <span class="header-stats">{{ sortedNodes.length }} 节点 · {{ totalWords }} 字</span>
       </div>
@@ -44,11 +44,12 @@
           <div class="empty-hint">点击右下角 "+ 新建节点" 开始创建故事结构</div>
         </div>
 
-        <!-- 幕分组 -->
-        <div v-for="act in acts" :key="act.key" class="act-group" @dragover.prevent="onDragOver($event, act.key)" @drop.prevent="onDrop($event, act.key)">
+        <!-- 幕分组（动态，支持任意数量的幕） -->
+        <div v-for="act in actGroups" :key="act.key" class="act-group" @dragover.prevent="onDragOver($event, act.key)" @drop.prevent="onDrop($event, act)">
           <!-- 幕标题 -->
-          <div class="act-header" :style="{ borderLeftColor: act.color }">
+          <div class="act-header" :style="{ borderLeftColor: act.color }" @click="toggleAct(act.key)">
             <div class="act-header-left">
+              <span class="act-toggle">{{ collapsedActs.has(act.key) ? '▶' : '▼' }}</span>
               <span class="act-icon">{{ act.icon }}</span>
               <span class="act-title">{{ act.label }}</span>
               <span class="act-progress" :class="{ full: actNodes(act.key).length > 0 }">
@@ -56,72 +57,74 @@
               </span>
             </div>
             <div class="act-header-right">
-              <button class="btn-act-add" @click.stop="handleAddNode(act.key)" title="在此幕下添加节点">
+              <button class="btn-act-add" @click.stop="handleAddNode(act)" title="在此幕下添加节点">
                 + 在此幕添加
               </button>
             </div>
           </div>
 
           <!-- 幕内节点列表 -->
-          <div v-if="actNodes(act.key).length === 0" class="act-empty">
-            暂无节点，点击上方按钮添加
-          </div>
-          <div
-            v-for="(node, index) in actNodes(act.key)"
-            :key="node.id"
-            class="node-card"
-            :class="{
-              'is-dragging': dragState.nodeId === node.id,
-              'is-key-event': node.isKeyEvent,
-              'is-selected': selectedNodes.has(node.id),
-              'highlight-flash': highlightId === node.id
-            }"
-            draggable="true"
-            @dragstart="onDragStart($event, node, act.key, index)"
-            @dragend="onDragEnd"
-            @click.stop="toggleSelect(node.id)"
-          >
-            <!-- 拖拽手柄 -->
-            <div class="drag-handle" title="拖拽排序">⋮⋮</div>
+          <div v-show="!collapsedActs.has(act.key)">
+            <div v-if="actNodes(act.key).length === 0" class="act-empty">
+              暂无节点，点击上方按钮添加
+            </div>
+            <div
+              v-for="(node, index) in actNodes(act.key)"
+              :key="node.id"
+              class="node-card"
+              :class="{
+                'is-dragging': dragState.nodeId === node.id,
+                'is-key-event': node.isKeyEvent,
+                'is-selected': selectedNodes.has(node.id),
+                'highlight-flash': highlightId === node.id
+              }"
+              draggable="true"
+              @dragstart="onDragStart($event, node, act.key, index)"
+              @dragend="onDragEnd"
+              @click.stop="toggleSelect(node.id)"
+            >
+              <!-- 拖拽手柄 -->
+              <div class="drag-handle" title="拖拽排序">⋮⋮</div>
 
-            <!-- 序号 -->
-            <span class="node-number">{{ index + 1 }}</span>
+              <!-- 序号 -->
+              <span class="node-number">{{ index + 1 }}</span>
 
-            <!-- 类型图标 -->
-            <span class="node-type-icon">{{ typeIcon(node.type) }}</span>
+              <!-- 类型图标 -->
+              <span class="node-type-icon">{{ typeIcon(node.type) }}</span>
 
-            <!-- 节点内容 -->
-            <div class="node-content">
-              <div class="node-title-row">
-                <span class="node-title">{{ node.title || '未命名节点' }}</span>
-                <span v-if="node.isKeyEvent" class="key-event-badge" title="核心情节点">⭐</span>
+              <!-- 节点内容 -->
+              <div class="node-content">
+                <div class="node-title-row">
+                  <span class="node-title">{{ node.title || '未命名节点' }}</span>
+                  <span v-if="node.isKeyEvent" class="key-event-badge" title="核心情节点">⭐</span>
+                </div>
+                <div v-if="node.description" class="node-desc">{{ truncateText(node.description, 60) }}</div>
               </div>
-              <div v-if="node.description" class="node-desc">{{ truncateText(node.description, 60) }}</div>
+
+              <!-- 字数 -->
+              <span v-if="node.estimatedWords" class="node-words">{{ node.estimatedWords }}字</span>
+
+              <!-- 状态标签 -->
+              <span class="status-badge" :class="'status-' + (node.nodeStatus || 'draft')">
+                {{ statusLabel(node.nodeStatus || 'draft') }}
+              </span>
+
+              <!-- 关联章节 -->
+              <span v-if="node.chapterId && getChapterLabel(node.chapterId)" class="chapter-link" :title="'关联章节：' + getChapterLabel(node.chapterId)">
+                📎{{ getChapterLabel(node.chapterId).replace('第', '').replace('章', '章') }}
+              </span>
+
+              <!-- 操作按钮 -->
+              <div class="node-actions">
+                <button class="btn-icon" title="编辑" @click.stop="handleEditNode(node)">✏️</button>
+                <button class="btn-icon btn-icon-danger" title="删除" @click.stop="handleDeleteNode(node)">🗑️</button>
+              </div>
             </div>
 
-            <!-- 字数 -->
-            <span v-if="node.estimatedWords" class="node-words">{{ node.estimatedWords }}字</span>
-
-            <!-- 状态标签 -->
-            <span class="status-badge" :class="'status-' + (node.nodeStatus || 'draft')">
-              {{ statusLabel(node.nodeStatus || 'draft') }}
-            </span>
-
-            <!-- 关联章节 -->
-            <span v-if="node.chapterId && getChapterLabel(node.chapterId)" class="chapter-link" :title="'关联章节：' + getChapterLabel(node.chapterId)">
-              📎{{ getChapterLabel(node.chapterId).replace('第', '').replace('章', '章') }}
-            </span>
-
-            <!-- 操作按钮 -->
-            <div class="node-actions">
-              <button class="btn-icon" title="编辑" @click.stop="handleEditNode(node)">✏️</button>
-              <button class="btn-icon btn-icon-danger" title="删除" @click.stop="handleDeleteNode(node)">🗑️</button>
+            <!-- 拖拽放置提示 -->
+            <div v-if="dragState.active && dragOverAct === act.key" class="drop-indicator">
+              放置到此幕
             </div>
-          </div>
-
-          <!-- 拖拽放置提示 -->
-          <div v-if="dragState.active && dragOverAct === act.key" class="drop-indicator">
-            放置到此幕
           </div>
         </div>
       </div>
@@ -188,11 +191,24 @@ const props = defineProps({
 })
 
 // ─── 常量 ───
-const acts = [
-  { key: 'first_act', label: '第一幕：建置', icon: '📖', color: '#3b82f6' },
-  { key: 'second_act', label: '第二幕：对抗', icon: '⚔️', color: '#f59e0b' },
-  { key: 'third_act', label: '第三幕：解决', icon: '🏆', color: '#ef4444' }
+// 兜底幕选项：仅当作品完全没有幕分组信息时使用
+const DEFAULT_ACTS = [
+  { key: 'first_act', act: 'first_act', label: '第一幕：建置', icon: '📖' },
+  { key: 'second_act', act: 'second_act', label: '第二幕：对抗', icon: '⚔️' },
+  { key: 'third_act', act: 'third_act', label: '第三幕：解决', icon: '🏆' }
 ]
+
+const ACT_COLORS = ['#3b82f6', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
+
+// 无幕（卷）节点时，按 act 值显示标题
+function actLabel(actKey) {
+  const map = {
+    first_act: '第一幕：建置',
+    second_act: '第二幕：对抗',
+    third_act: '第三幕：解决'
+  }
+  return map[actKey] || (actKey ? actKey.replace(/_/g, ' ') : '未命名幕')
+}
 
 const structureScores = [
   { label: '叙事节奏', score: 92 },
@@ -212,6 +228,7 @@ const selectedNodes = ref(new Set())
 const batchStatusValue = ref('draft')
 const dragState = ref({ active: false, nodeId: null, sourceAct: null, sourceIndex: -1 })
 const dragOverAct = ref(null)
+const collapsedActs = ref(new Set())
 
 // ─── 计算属性 ───
 const allOutlines = computed(() => {
@@ -233,6 +250,46 @@ const allOutlines = computed(() => {
   })
 })
 
+// 幕分组：优先从卷（volume）节点动态提取，支持任意数量的幕；
+// 无卷节点时按 act 值动态分组；完全没有分组信息时兜底三幕
+const actGroups = computed(() => {
+  const list = store.outlines || []
+  const volumes = list
+    .filter(n => n.type === 'volume')
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+
+  if (volumes.length > 0) {
+    return volumes.map((v, i) => ({
+      key: String(v.id),                 // 分组标识：幕节点ID（唯一）
+      act: v.act || `act_${i + 1}`,      // 数据库 act 标识
+      volumeId: v.id,
+      label: v.title || '未命名幕',
+      icon: '📚',
+      color: ACT_COLORS[i % ACT_COLORS.length]
+    }))
+  }
+
+  // 无卷节点：按 act 值动态分组（兼容手动创建/旧数据）
+  const groupMap = new Map()
+  for (const n of list) {
+    const k = n.act || 'first_act'
+    if (!groupMap.has(k)) {
+      groupMap.set(k, {
+        key: k,
+        act: k,
+        volumeId: null,
+        label: actLabel(k),
+        icon: '📖',
+        color: ACT_COLORS[groupMap.size % ACT_COLORS.length]
+      })
+    }
+  }
+  if (groupMap.size > 0) {
+    return [...groupMap.values()]
+  }
+  return DEFAULT_ACTS.map((a, i) => ({ ...a, volumeId: null, color: ACT_COLORS[i % ACT_COLORS.length] }))
+})
+
 const filteredOutlines = computed(() => {
   let list = [...allOutlines.value]
   // 状态筛选
@@ -251,7 +308,10 @@ const filteredOutlines = computed(() => {
 })
 
 const sortedNodes = computed(() => {
-  return [...allOutlines.value].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+  // 仅统计章节节点，幕（卷）节点不计入节点数与字数
+  return [...allOutlines.value]
+    .filter(n => n.type !== 'volume')
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
 })
 
 const totalWords = computed(() =>
@@ -264,22 +324,56 @@ const chapterDensity = computed(() =>
 
 const suggestedAct = computed(() => {
   // 智能推荐：找出节点数最少的幕
-  const counts = acts.map(a => ({
-    key: a.key,
-    count: actNodes(a.key).length
+  const counts = actGroups.value.map(g => ({
+    key: g.act,
+    count: actNodes(g.key).length
   }))
   counts.sort((a, b) => a.count - b.count)
   return counts[0]?.key || 'first_act'
 })
 
 // ─── 方法 ───
+// 获取某幕下的全部节点（未过滤）
+function actNodesAll(actKey) {
+  const group = actGroups.value.find(g => g.key === actKey)
+  if (!group) return []
+  if (group.volumeId != null) {
+    return allOutlines.value
+      .filter(n => n.parentId === group.volumeId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+  }
+  return allOutlines.value
+    .filter(n => (n.act || 'first_act') === group.act)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+}
+
+// 获取某幕下的节点（应用搜索/状态筛选）
 function actNodes(actKey) {
-  return filteredOutlines.value.filter(n => n.act === actKey)
+  const group = actGroups.value.find(g => g.key === actKey)
+  if (!group) return []
+  if (group.volumeId != null) {
+    return filteredOutlines.value
+      .filter(n => n.parentId === group.volumeId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+  }
+  return filteredOutlines.value
+    .filter(n => (n.act || 'first_act') === group.act)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
 }
 
 function completedCount(actKey) {
-  const nodes = allOutlines.value.filter(n => n.act === actKey && n.nodeStatus === 'completed')
-  return nodes.length
+  return actNodesAll(actKey).filter(n => n.nodeStatus === 'completed').length
+}
+
+// ─── 幕折叠 ───
+function toggleAct(actKey) {
+  const s = new Set(collapsedActs.value)
+  if (s.has(actKey)) {
+    s.delete(actKey)
+  } else {
+    s.add(actKey)
+  }
+  collapsedActs.value = s
 }
 
 function typeIcon(type) {
@@ -354,70 +448,40 @@ function onDrop(event, targetAct) {
     return
   }
 
-  // 获取目标幕的所有节点（未筛选）
-  const targetNodes = [...allOutlines.value]
-    .filter(n => (n.act || 'first_act') === targetAct)
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+  const isSameAct = sourceAct === targetAct.key
 
-  const isSameAct = sourceAct === targetAct
-
-  // 构建新的排序
-  const allItems = [...allOutlines.value]
+  // 目标幕现有节点（全量，未筛选；排除被拖节点），按幕内 sortOrder 排序
+  const targetNodes = allOutlines.value
+    .filter(n => {
+      if (targetAct.volumeId != null) return n.parentId === targetAct.volumeId
+      return (n.act || 'first_act') === targetAct.act
+    })
     .filter(n => n.id !== nodeId)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
 
-  // 重算排序
-  let sortCounter = 0
-  const batchItems = []
-
-  for (const item of allItems) {
-    sortCounter++
-    const act = item.act || 'first_act'
-    batchItems.push({
-      id: item.id,
-      projectId: Number(props.projectId),
-      sortOrder: sortCounter,
-      act: act,
-      nodeNumber: 0 // 暂不计算幕内序号
-    })
-  }
-
-  // 把拖拽的节点加到最后（目标幕）
-  sortCounter++
-  batchItems.push({
+  // 幕内重新编号，被拖节点置于目标幕末尾
+  const items = targetNodes.map((n, i) => ({
+    id: n.id,
+    projectId: Number(props.projectId),
+    sortOrder: i + 1,
+    nodeNumber: i + 1
+  }))
+  items.push({
     id: nodeId,
     projectId: Number(props.projectId),
-    sortOrder: sortCounter,
-    act: targetAct,
-    nodeNumber: 0
+    sortOrder: targetNodes.length + 1,
+    nodeNumber: targetNodes.length + 1
   })
 
-  // 如果跨幕，使用 batchSortAct
+  // 跨幕：同步更新 act 与 parent_id（挂到目标幕节点下）
   if (!isSameAct) {
-    const sortActItems = batchItems.map(b => ({
-      id: b.id,
-      projectId: b.projectId,
-      act: targetAct === (allOutlines.value.find(n => n.id === b.id)?.act || 'first_act') ? (allOutlines.value.find(n => n.id === b.id)?.act || 'first_act') : targetAct,
-      sortOrder: b.sortOrder,
-      nodeNumber: 0
-    }))
-    // 修正 act 字段
-    for (const item of sortActItems) {
-      const existing = allOutlines.value.find(n => n.id === item.id)
-      if (String(item.id) === String(nodeId)) {
-        item.act = targetAct
-      } else {
-        item.act = existing?.act || 'first_act'
-      }
-    }
-    store.batchSortActOutlines(props.projectId, sortActItems)
-  } else {
-    store.batchSortOutlines(props.projectId, batchItems.map(b => ({
-      id: b.id,
-      projectId: b.projectId,
-      sortOrder: b.sortOrder,
-      nodeNumber: 0
+    store.batchSortActOutlines(props.projectId, items.map(it => ({
+      ...it,
+      act: targetAct.act,
+      parentId: targetAct.volumeId != null ? Number(targetAct.volumeId) : null
     })))
+  } else {
+    store.batchSortOutlines(props.projectId, items)
   }
 
   resetDrag()
@@ -433,8 +497,8 @@ function resetDrag() {
 }
 
 // ─── 节点操作 ───
-function handleAddNode(actKey) {
-  dialogDefaultAct.value = actKey || suggestedAct.value
+function handleAddNode(act) {
+  dialogDefaultAct.value = (act && act.act) || suggestedAct.value
   editingNode.value = null
   dialogVisible.value = true
 }
@@ -692,6 +756,15 @@ async function handleBatchDelete() {
   border-left: 4px solid #3b82f6;
   background: #faf8f5;
   border-bottom: 1px solid #f0ece6;
+  cursor: pointer;
+  user-select: none;
+}
+
+.act-toggle {
+  font-size: 10px;
+  color: #9c9690;
+  width: 14px;
+  flex-shrink: 0;
 }
 
 .act-header-left {

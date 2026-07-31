@@ -305,22 +305,28 @@ public class PromptTemplates {
             【风格基调】：{style}
             【目标章节数】：{targetChapters}
             
-            【输出要求】：请按三幕式结构，输出完整章节序列。JSON格式：
+            【输出要求】：请按幕式结构输出完整章节序列。幕的数量可根据故事体量与结构需要自由决定（三幕、四幕、五幕均可），但必须与目标章节数匹配。JSON格式：
             {
               "template": "three-act",
               "acts": [
                 {
+                  "act": "first_act",
                   "name": "第一幕：建置",
                   "theme": "幕主题（一句话）",
                   "conflict": "幕核心冲突",
-                  "chapters": [
-                    {"index": 1, "title": "章节标题（5-8字）", "summary": "摘要（50字）", "keyEvent": "关键事件", "characters": ["出场人物名"]}
+                  "sortOrder": 1,
+                  "nodes": [
+                    {"title": "章节标题（5-8字）", "summary": "摘要（50字）", "keyEvent": "关键事件", "sortOrder": 1, "status": "draft", "estimatedWords": 3000, "characters": ["出场人物名"]}
                   ]
                 }
               ]
             }
             
-            【约束】：章节标题5-8字与风格一致；章节间因果递进；关键人物合理出场；伏笔前1/3埋、后1/3收。
+            【约束】：
+            1. 每个幕对象的 act 字段必须是全局唯一的标识（如 first_act、second_act、third_act，多幕可用 custom_1、custom_2）；
+            2. 每个幕的 nodes 数组内 sortOrder 从 1 开始连续递增；
+            3. 章节标题5-8字与风格一致；章节间因果递进；关键人物合理出场；伏笔前1/3埋、后1/3收；
+            4. 各幕章节数应大致均衡，保证幕间节奏合理。
             
             【重要】只输出纯JSON，不要任何解释、前缀或后缀。直接以 {{ 开头。
             """;
