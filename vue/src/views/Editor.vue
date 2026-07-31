@@ -546,6 +546,13 @@
         <div class="bg-white rounded-xl p-6 shadow-lg max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col">
           <div class="text-base font-semibold text-[#1a1815] mb-3">伏笔补写结果预览</div>
           <div class="text-sm text-[#6b6560] mb-4">请预览新增内容（红色边框标记），确认后生效</div>
+          <!-- 定位方式与降级提示 -->
+          <div v-if="appendIsFallback" class="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 leading-relaxed">
+            ⚠️ AI 未能精确定位插入位置{{ appendFallbackReason ? '（' + appendFallbackReason + '）' : '' }}，内容已插入章节末尾，请预览后手动调整。
+          </div>
+          <div v-else-if="appendLocateMode && appendLocateMode !== 'manual'" class="mb-3 text-xs text-[#9c9690]">
+            插入定位：{{ locateModeLabel(appendLocateMode) }}
+          </div>
           <div class="flex-1 overflow-y-auto p-4 rounded-lg border-2 border-[#fecaca] bg-[#fef2f2] text-sm leading-relaxed whitespace-pre-wrap mb-5">
             {{ appendInsertedContent }}
           </div>
@@ -903,6 +910,21 @@ const appendLoading = ref(false)
 const appendInsertedContent = ref('')
 const appendFullContent = ref('')
 const appendInsertIndex = ref(0)
+const appendLocateMode = ref('')
+const appendIsFallback = ref(false)
+const appendFallbackReason = ref('')
+
+// 定位方式展示文案
+function locateModeLabel(mode) {
+  const map = {
+    ai_json: 'AI 锚点精确定位',
+    ai_anchor: 'AI 锚点提取',
+    semantic: '语义相似度匹配',
+    fallback_end: '章节末尾（降级）',
+    manual: '手动指定'
+  }
+  return map[mode] || mode
+}
 
 async function fetchPendingForeshadowings() {
   const pid = store.currentProjectId
@@ -945,6 +967,9 @@ function handleAppendForeshadow(fs) {
   foreshadowDropdownVisible.value = null
   appendForeshadowTarget.value = fs
   appendPosition.value = 'end'
+  appendLocateMode.value = ''
+  appendIsFallback.value = false
+  appendFallbackReason.value = ''
   showAppendPositionModal.value = true
 }
 
@@ -979,6 +1004,9 @@ async function confirmAppendForeshadow() {
       appendInsertedContent.value = result.data.insertedContent || ''
       appendFullContent.value = result.data.fullContent || ''
       appendInsertIndex.value = result.data.insertPosition || currentContent.length
+      appendLocateMode.value = result.data.locateMode || ''
+      appendIsFallback.value = !!result.data.isFallback
+      appendFallbackReason.value = result.data.fallbackReason || ''
       showAppendPositionModal.value = false
       showAppendResultModal.value = true
     } else {

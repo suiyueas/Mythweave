@@ -25,10 +25,28 @@ public class PlotController {
     @PutMapping("/threads/{id}") public R<NovelPlotThread> updateThread(@PathVariable Long id, @RequestBody NovelPlotThread t) { t.setId(id); threadMapper.updateById(t); return R.ok(threadMapper.selectById(id)); }
     @DeleteMapping("/threads/{id}") public R<Void> deleteThread(@PathVariable Long id) { threadMapper.deleteById(id); return R.ok(); }
 
-    @GetMapping("/foreshadowing") public R<List<NovelForeshadowing>> listForeshadowing(@PathVariable Long projectId) { return R.ok(foreshadowingMapper.selectByProjectId(projectId)); }
-    @GetMapping("/foreshadowing/urgent") public R<List<NovelForeshadowing>> listUrgentForeshadowing(@PathVariable Long projectId, @RequestParam(defaultValue = "999") Integer currentChapter) { return R.ok(foreshadowingMapper.selectUrgentByProject(projectId, currentChapter)); }
+    @GetMapping("/foreshadowing") public R<List<NovelForeshadowing>> listForeshadowing(@PathVariable Long projectId) {
+        healOrphanForeshadowing(projectId);
+        return R.ok(foreshadowingMapper.selectByProjectId(projectId));
+    }
+    @GetMapping("/foreshadowing/urgent") public R<List<NovelForeshadowing>> listUrgentForeshadowing(@PathVariable Long projectId, @RequestParam(defaultValue = "999") Integer currentChapter) {
+        healOrphanForeshadowing(projectId);
+        return R.ok(foreshadowingMapper.selectUrgentByProject(projectId, currentChapter));
+    }
     @PostMapping("/foreshadowing") public R<NovelForeshadowing> createForeshadowing(@PathVariable Long projectId, @RequestBody NovelForeshadowing f) { f.setProjectId(projectId); foreshadowingMapper.insert(f); return R.ok(f); }
     @PutMapping("/foreshadowing/{id}") public R<NovelForeshadowing> updateForeshadowing(@PathVariable Long id, @RequestBody NovelForeshadowing f) { f.setId(id); foreshadowingMapper.updateById(f); return R.ok(foreshadowingMapper.selectById(id)); }
+
+    /** 自愈孤儿回收标记：回收章节不存在（含历史误存 project_id 的数据）的伏笔回退为待回收 */
+    private void healOrphanForeshadowing(Long projectId) {
+        try {
+            int healed = foreshadowingMapper.healOrphanResolved(projectId);
+            if (healed > 0) {
+                log.info("伏笔自愈: projectId={}, 回退{}条孤儿回收标记", projectId, healed);
+            }
+        } catch (Exception e) {
+            log.warn("伏笔自愈失败: {}", e.getMessage());
+        }
+    }
 
     @GetMapping("/kg") public R<List<NovelPlotKnowledgeGraph>> listKG(@PathVariable Long projectId) {
         try {

@@ -52,4 +52,38 @@
         AND (chapter_id = #{chapterId} OR resolved_chapter_id = #{chapterId})
     </select>
 
+    <!--
+        功能: 回退回收章节被删除的伏笔（resolved → pending）
+        参数: projectId - 项目ID, chapterId - 被删除的章节ID
+        返回: int 受影响行数
+        说明: 章节被删除后其回收内容已不存在，伏笔应回退为待回收状态
+    -->
+    <update id="revertResolvedByChapter">
+        UPDATE novel_foreshadowing
+        SET status = 'pending',
+            resolved_chapter_id = NULL,
+            update_time = NOW()
+        WHERE project_id = #{projectId}
+          AND resolved_chapter_id = #{chapterId}
+          AND deleted = 0
+    </update>
+
+    <!--
+        功能: 自愈孤儿回收标记（resolved → pending）
+        参数: projectId - 项目ID
+        返回: int 受影响行数
+        说明: 回收章节不存在或历史错误数据（resolved_chapter_id 误存 project_id）时回退为待回收
+    -->
+    <update id="healOrphanResolved">
+        UPDATE novel_foreshadowing fs
+        LEFT JOIN novel_chapter nc ON fs.resolved_chapter_id = nc.id AND nc.deleted = 0
+        SET fs.status = 'pending',
+            fs.resolved_chapter_id = NULL,
+            fs.update_time = NOW()
+        WHERE fs.project_id = #{projectId}
+          AND fs.status = 'resolved'
+          AND fs.deleted = 0
+          AND (nc.id IS NULL OR fs.resolved_chapter_id = fs.project_id)
+    </update>
+
 </mapper>

@@ -102,6 +102,7 @@ public class ChapterController {
                                                     @PathVariable Long chapterId,
                                                     @RequestBody AppendForeshadowRequest request) {
         request.setProjectId(projectId);
+        request.setChapterId(chapterId);
         Map<String, Object> result = foreshadowAppendService.appendForeshadowing(request);
         return R.ok(result);
     }

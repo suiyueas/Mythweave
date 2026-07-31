@@ -10,6 +10,7 @@ import com.novelcraft.web.entity.NovelVolume;
 import com.novelcraft.web.entity.NovelWritingLog;
 import com.novelcraft.web.mapper.NovelChapterMapper;
 import com.novelcraft.web.mapper.NovelChapterVersionMapper;
+import com.novelcraft.web.mapper.NovelForeshadowingMapper;
 import com.novelcraft.web.mapper.NovelProjectMapper;
 import com.novelcraft.web.mapper.NovelVolumeMapper;
 import com.novelcraft.web.mapper.NovelWritingLogMapper;
@@ -35,6 +36,7 @@ public class ChapterService {
     private final NovelVolumeMapper volumeMapper;
     private final NovelProjectMapper projectMapper;
     private final NovelWritingLogMapper writingLogMapper;
+    private final NovelForeshadowingMapper foreshadowingMapper;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final DashboardCacheService dashboardCacheService;
     private final SentinelService sentinelService;
@@ -154,6 +156,19 @@ public class ChapterService {
         int affected = chapterMapper.markDeletedById(id);
         if (affected == 0) {
             throw new BusinessException(404, "章节不存在");
+        }
+        // 联动伏笔：回收章节被删除 → 伏笔回收未完成，回退为待回收；
+        // 并自愈历史错误数据（resolved_chapter_id 误存 project_id 的孤儿标记）
+        if (projectId != null) {
+            try {
+                int reverted = foreshadowingMapper.revertResolvedByChapter(projectId, id);
+                int healed = foreshadowingMapper.healOrphanResolved(projectId);
+                if (reverted > 0 || healed > 0) {
+                    log.info("删除章节后伏笔状态回退: 直接回退{}条, 自愈{}条", reverted, healed);
+                }
+            } catch (Exception e) {
+                log.warn("删除章节后伏笔联动处理失败: {}", e.getMessage());
+            }
         }
         // 同步更新项目统计
         if (projectId != null) {

@@ -8,6 +8,7 @@ import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,18 +34,28 @@ public class DeepSeekClient {
     }
 
     /**
-     * 非流式调用
+     * 非流式调用（无 stop 序列）
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens) throws IOException {
-        Map<String, Object> body = Map.of(
-                "model", aiProperties.getDeepseek().getModel(),
-                "temperature", temperature,
-                "max_tokens", maxTokens,
-                "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", userMessage)
-                )
-        );
+        return chat(systemPrompt, userMessage, temperature, maxTokens, null);
+    }
+
+    /**
+     * 非流式调用
+     * @param stop 停止序列列表（如 ["\n\n"]），命中后提前终止生成，可为 null
+     */
+    public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop) throws IOException {
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", aiProperties.getDeepseek().getModel());
+        body.put("temperature", temperature);
+        body.put("max_tokens", maxTokens);
+        if (stop != null && !stop.isEmpty()) {
+            body.put("stop", stop);
+        }
+        body.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userMessage)
+        ));
 
         Request request = new Request.Builder()
                 .url(aiProperties.getDeepseek().getBaseUrl() + "/chat/completions")
@@ -80,13 +91,15 @@ public class DeepSeekClient {
 
             if (content != null && !content.trim().isEmpty()) {
                 return content.trim();
-            } else if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
-                log.warn("content为空，使用reasoning_content作为结果。finish_reason={}", finishReason);
-                return "[推理过程]\n" + reasoningContent.trim();
-            } else {
-                log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
-                throw new IOException("AI 返回空内容");
             }
+            // content 为空：推理过程（reasoning_content）不可作为业务结果，
+            // 明确抛错以触发上层降级/重试，避免把推理文字当作正文使用
+            if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
+                log.error("AI 仅返回推理内容（无有效正文），finish_reason={}，已丢弃推理内容", finishReason);
+                throw new IOException("AI 仅返回推理内容，无有效正文 (finish_reason=" + finishReason + ")");
+            }
+            log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
+            throw new IOException("AI 返回空内容");
         }
     }
 

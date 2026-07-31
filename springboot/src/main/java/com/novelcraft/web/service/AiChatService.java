@@ -252,14 +252,36 @@ public class AiChatService {
 
     /**
      * AI 生成章节标题（上下文感知版）
+     * 多层防御：完整 Prompt 尝试 → 轻量 Prompt 重试 → 大纲/哨兵降级
      */
     public String generateTitle(Long projectId, Map<String, Object> params) throws IOException {
+        Exception lastError = null;
+        // 尝试 1：完整上下文 Prompt
         try {
-            return generateTitleInternal(projectId, params);
+            String title = generateTitleInternal(projectId, params);
+            if (isValidTitle(title)) {
+                return title;
+            }
+            lastError = new IllegalStateException("标题无效: " + title);
+            log.warn("[标题生成] 首次生成标题无效: {}", title);
         } catch (Exception e) {
-            log.error("AI生成标题失败，使用降级方案: {}", e.getMessage(), e);
-            return generateTitleFallback(projectId, params);
+            lastError = e;
+            log.warn("[标题生成] 首次尝试失败: {}", e.getMessage());
         }
+        // 尝试 2-3：轻量 Prompt（去掉上下文，提高成功率）
+        for (int attempt = 2; attempt <= 3; attempt++) {
+            try {
+                String title = generateTitleLight(projectId, params);
+                if (isValidTitle(title)) {
+                    return title;
+                }
+                log.warn("[标题生成] 第{}次重试标题无效: {}", attempt, title);
+            } catch (Exception e) {
+                log.warn("[标题生成] 第{}次重试失败: {}", attempt, e.getMessage());
+            }
+        }
+        log.error("AI生成标题多次失败，使用降级方案: {}", lastError != null ? lastError.getMessage() : "未知原因");
+        return generateTitleFallback(projectId, params);
     }
 
     /**
@@ -280,51 +302,51 @@ public class AiChatService {
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一位专业小说作家，正在为小说《").append(projectTitle).append("》")
-              .append("第 ").append(chapterIndex).append(" 章创作标题。\n\n");
+              .append("第 ").append(chapterIndex).append(" 章创作一个章节标题。\n\n");
 
-        // 已有标题
-        prompt.append("【已有标题】（参考风格，勿重复）：");
+        // 精简输入：仅提供近期标题作为风格示例（不列禁用词，避免模型过度分析）
         if (existingTitles != null && !existingTitles.isEmpty()) {
-            prompt.append(String.join(" | ", existingTitles.stream().limit(8).toList()));
-        }
-        prompt.append("\n");
-
-        // 核心意象词禁用
-        Set<String> usedKeywords = TitleDeduplicator.extractAllKeywords(existingTitles);
-        if (!usedKeywords.isEmpty()) {
-            prompt.append("【禁用词】：").append(String.join("、", usedKeywords)).append("\n");
+            List<String> recent = existingTitles.stream()
+                    .skip(Math.max(0, existingTitles.size() - 3))
+                    .toList();
+            prompt.append("【近期标题风格示例】：").append(String.join("｜", recent)).append("\n");
         }
 
-        // 大纲
+        // 大纲：仅取前 3 个章节节点作为元素参考
         List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
         log.info("[标题生成] 项目{}查询到大纲{}条", projectId, outlines != null ? outlines.size() : 0);
         if (outlines != null && !outlines.isEmpty()) {
-            prompt.append("【大纲】：");
-            for (NovelOutline o : outlines) {
-                prompt.append(o.getTitle() != null ? o.getTitle() : "");
+            List<String> nodeTitles = outlines.stream()
+                    .filter(o -> !"volume".equals(o.getType()))
+                    .filter(o -> o.getTitle() != null && !o.getTitle().isEmpty())
+                    .limit(3)
+                    .map(NovelOutline::getTitle)
+                    .toList();
+            if (!nodeTitles.isEmpty()) {
+                prompt.append("【大纲关键节点】：").append(String.join("、", nodeTitles)).append("\n");
             }
-            prompt.append("\n");
         }
 
-        // 世界观关键词
+        // 世界观关键词（最多 3 个）
         List<NovelWorldSetting> worlds = worldSettingMapper.selectByProjectId(projectId);
         log.info("[标题生成] 项目{}查询到世界观{}条", projectId, worlds != null ? worlds.size() : 0);
         if (worlds != null && !worlds.isEmpty()) {
             List<String> keywords = new java.util.ArrayList<>();
             for (NovelWorldSetting w : worlds) {
                 if (w.getName() != null) keywords.add(w.getName());
+                if (keywords.size() >= 3) break;
             }
             if (!keywords.isEmpty()) {
-                prompt.append("【世界观】：").append(String.join("、", keywords.stream().limit(5).toList())).append("\n");
+                prompt.append("【世界观元素】：").append(String.join("、", keywords)).append("\n");
             }
         }
 
-        // 人物
+        // 人物（最多 3 个）
         List<NovelCharacter> chars = characterMapper.selectByProjectId(projectId);
         log.info("[标题生成] 项目{}查询到人物{}条", projectId, chars != null ? chars.size() : 0);
         if (chars != null && !chars.isEmpty()) {
             List<String> names = new java.util.ArrayList<>();
-            for (int i = 0; i < Math.min(chars.size(), 5); i++) {
+            for (int i = 0; i < Math.min(chars.size(), 3); i++) {
                 if (chars.get(i).getName() != null) names.add(chars.get(i).getName());
             }
             if (!names.isEmpty()) {
@@ -332,19 +354,22 @@ public class AiChatService {
             }
         }
 
-        // 待回收伏笔
+        // 待回收伏笔（最多 2 个）
         List<NovelForeshadowing> foreshadowings = foreshadowingMapper.selectByProjectId(projectId);
         if (foreshadowings != null) {
             List<NovelForeshadowing> pending = foreshadowings.stream()
                     .filter(f -> "pending".equals(f.getStatus()) || "developing".equals(f.getStatus()))
+                    .limit(2)
                     .toList();
             log.info("[标题生成] 项目{}查询到待回收伏笔{}条", projectId, pending.size());
             if (!pending.isEmpty()) {
-                prompt.append("【伏笔】：");
-                for (NovelForeshadowing f : pending) {
-                    prompt.append(f.getName() != null ? f.getName() : "");
+                List<String> names = pending.stream()
+                        .map(f -> f.getName() != null ? f.getName() : "")
+                        .filter(s -> !s.isEmpty())
+                        .toList();
+                if (!names.isEmpty()) {
+                    prompt.append("【伏笔】：").append(String.join("、", names)).append("\n");
                 }
-                prompt.append("\n");
             }
         }
 
@@ -354,27 +379,31 @@ public class AiChatService {
         }
 
         // 用户方向
-        prompt.append("【方向】：").append(direction).append("\n\n");
+        prompt.append("【方向】：").append(direction).append("\n");
 
-        // 生成要求
-        prompt.append("要求：5-8字标题，需与已有标题风格一致、禁止重复用词、融入世界观和大纲元素。\n");
-        prompt.append("请只返回标题文本：");
+        // 强制输出格式：只返回标题文本，禁止任何推理/解释/前缀
+        prompt.append("\n【输出要求】\n");
+        prompt.append("1. 直接输出 5-8 字的标题文本，只输出这一个标题，不要任何多余内容；\n");
+        prompt.append("2. 严禁输出任何推理过程、分析、解释、思考或自我评价；\n");
+        prompt.append("3. 严禁添加引号、书名号、序号、冒号等任何前缀或后缀；\n");
+        prompt.append("4. 标题需融入世界观或大纲元素，与近期标题风格一致，但避免重复用词。\n");
+        prompt.append("\n标题：");
 
-        int maxTokens = aiProperties.getDeepseek().getMaxToken();
-        log.info("[标题生成] 项目{}使用maxTokens={}", projectId, maxTokens);
-
-        // 调用 AI 生成标题
+        // 标题任务固定小 token，并设置 stop 序列提前终止，
+        // 避免模型将预算消耗在推理过程上导致 finish_reason=length 截断
         String fullPrompt = prompt.toString();
         log.info("[标题生成] 项目{}最终Prompt长度{}字，前150字：{}", projectId, fullPrompt.length(), fullPrompt.substring(0, Math.min(150, fullPrompt.length())));
-        String reply = deepSeekClient.chat("你是一位专业小说作家", fullPrompt, 0.7, maxTokens);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。只输出标题本身，绝不输出任何推理过程或解释。",
+                fullPrompt, 0.7, 2048, List.of("\n\n"));
         log.info("[标题生成] 项目{} AI原始回复：{}", projectId, reply);
         String title = cleanTitle(reply);
         int retry = 0;
-        while (TitleDeduplicator.isDuplicate(title, existingTitles) && retry < 3) {
+        while ((TitleDeduplicator.isDuplicate(title, existingTitles) || !isValidTitle(title)) && retry < 3) {
             retry++;
-            log.warn("AI 生成的标题「{}」与已有标题相似，第 {} 次重试...", title, retry);
+            log.warn("AI 生成的标题「{}」与已有标题相似或无效，第 {} 次重试...", title, retry);
             String retryPrompt = buildStrictTitlePrompt(projectTitle, chapterIndex, title, existingTitles, direction, retry);
-            String retryReply = deepSeekClient.chat("你是一位专业小说作家", retryPrompt, 0.7, 256);
+            String retryReply = deepSeekClient.chat("你是一位专业小说作家。只输出标题本身，绝不输出任何推理过程或解释。",
+                    retryPrompt, 0.7, 2048, List.of("\n\n"));
             title = cleanTitle(retryReply);
         }
         // 兜底：如果 3 次重试仍重复，追加后缀
@@ -396,49 +425,94 @@ public class AiChatService {
     }
 
     /**
-     * 清理 AI 返回的标题文本
+     * 清理 AI 返回的标题文本（去除前缀、引号与推理残留）
      */
     private String cleanTitle(String raw) {
         if (raw == null) return "";
-        return raw
+        String cleaned = raw
                 .replaceAll("^[\"「《]|[\"」》]$", "")
                 .replaceAll("\\n.*$", "")
                 .trim()
                 .replaceAll("^[0-9]+\\.", "")  // 去掉 "1. " 前缀
                 .replaceAll("^第.+章[：:]?\\s*", "")  // 去掉 "第X章：" 前缀
+                .replaceAll("^(标题|章节标题|标题为)[：:]?\\s*", "")  // 去掉 "标题：" 前缀
+                .replaceAll("^(好的|好的，|抱歉|不好意思|作为|直接输出)[，：:]?\\s*", "")  // 词穷自否定残留
                 .trim();
+        if (cleaned.length() > 50) {
+            cleaned = cleaned.substring(0, 50);
+        }
+        return cleaned;
     }
 
     /**
      * 构建更严格的重试 Prompt（当第一次生成重复时）
+     * 精简输入：仅提供重复标题与近期标题，避免模型过度分析
      */
     private String buildStrictTitlePrompt(String projectTitle, int chapterIndex,
                                            String duplicateTitle, List<String> existingTitles,
                                            String direction, int retryCount) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一位专业小说作家，正在为小说《").append(projectTitle).append("》")
-          .append("的第 ").append(chapterIndex).append(" 章创作标题。\n\n");
-        sb.append("⚠️ 第 ").append(retryCount).append(" 次重试：你刚才生成了「").append(duplicateTitle)
-          .append("」，该标题与已有章节标题重复！\n\n");
-        sb.append("【已有标题列表（严禁重复）】\n");
-        if (existingTitles != null) {
-            for (int i = 0; i < existingTitles.size(); i++) {
-                sb.append("第").append(i + 1).append("章：").append(existingTitles.get(i)).append("\n");
-            }
+        sb.append("你是一位专业小说作家，为小说《").append(projectTitle).append("》")
+          .append("第 ").append(chapterIndex).append(" 章创作标题。\n\n");
+        sb.append("你刚才的标题「").append(duplicateTitle)
+          .append("」与已有标题重复，请换一个不重复的标题。\n\n");
+        sb.append("【已有标题】：");
+        if (existingTitles != null && !existingTitles.isEmpty()) {
+            List<String> recent = existingTitles.stream()
+                    .skip(Math.max(0, existingTitles.size() - 3))
+                    .toList();
+            sb.append(String.join("｜", recent));
         }
-        sb.append("\n【⚠️ 已使用的核心意象词（严禁使用）】\n");
-        Set<String> usedKw = TitleDeduplicator.extractAllKeywords(existingTitles);
-        sb.append(String.join("、", usedKw)).append("\n\n");
-        sb.append("请重新生成一个全新的标题，要求：\n");
-        sb.append("1. 不与上述任何标题重复，包括同义或相似表达\n");
-        sb.append("2. 严禁使用上述核心意象词，必须使用全新词汇\n");
-        sb.append("3. 标题必须与大纲节点紧密关联\n");
-        sb.append("4. 只返回标题文本，不要任何解释或前缀\n");
+        sb.append("\n");
         if (direction != null && !direction.isEmpty()) {
-            sb.append("5. 方向：").append(direction).append("\n");
+            sb.append("【方向】：").append(direction).append("\n");
         }
-        sb.append("\n请返回标题：");
+        sb.append("\n【输出要求】\n");
+        sb.append("直接输出 5-8 字标题文本，只输出标题本身；\n");
+        sb.append("严禁输出推理过程、分析、解释、引号、书名号、序号或冒号。\n");
+        sb.append("\n标题：");
         return sb.toString();
+    }
+
+    /**
+     * 轻量 Prompt 标题生成（重试用）：去掉上下文，只保留核心指令，提高成功率
+     */
+    private String generateTitleLight(Long projectId, Map<String, Object> params) throws IOException {
+        NovelProject project = projectMapper.selectById(projectId);
+        String projectTitle = project != null ? project.getTitle() : "未命名作品";
+        Integer chapterIndex = params.get("chapterIndex") != null
+                ? ((Number) params.get("chapterIndex")).intValue() : 1;
+        String direction = params.get("direction") != null
+                ? params.get("direction").toString() : "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("为小说《").append(projectTitle).append("》第 ").append(chapterIndex).append(" 章创作一个 5-8 字章节标题。\n");
+        if (direction != null && !direction.isEmpty()) {
+            sb.append("创作方向：").append(direction).append("\n");
+        }
+        sb.append("直接输出标题，禁止任何推理、解释、分析、思考过程、引号、序号或冒号。\n");
+        sb.append("标题：");
+
+        String reply = deepSeekClient.chat("立即输出标题本身，不要思考也不要解释。",
+                sb.toString(), 0.7, 2048, List.of("\n\n"));
+        return cleanTitle(reply);
+    }
+
+    /**
+     * 校验标题有效性：长度、标点、推理残留等
+     */
+    private boolean isValidTitle(String title) {
+        if (title == null) return false;
+        String t = title.trim();
+        if (t.isEmpty() || t.length() < 2 || t.length() > 20) return false;
+        // 含标点/符号视为无效（标题应为纯文本）
+        if (t.matches(".*[：:，。！？、；;,.!?\\[\\]（）()\\-—].*")) return false;
+        // 推理/自否定残留词
+        if (t.contains("思考") || t.contains("分析") || t.contains("抱歉") || t.contains("不好意思")
+                || t.contains("好的") || t.contains("标题") || t.contains("让我") || t.contains("直接")) {
+            return false;
+        }
+        return true;
     }
 
     private String analyzeTitleStyle(List<String> titles) {
@@ -802,7 +876,7 @@ public class AiChatService {
 
     /**
      * AI 生成标题降级方案（当 AI 调用失败时使用）
-     * 基于已有标题和章节序号生成一个基础标题
+     * 优先级：大纲节点标题（与原文关联）→ 哨兵建议 → 已有标题意象 → 方向描述
      */
     private String generateTitleFallback(Long projectId, Map<String, Object> params) {
         Integer chapterIndex = params.get("chapterIndex") != null
@@ -814,15 +888,34 @@ public class AiChatService {
 
         String direction = params.get("direction") != null
                 ? params.get("direction").toString() : "";
-        String tone = params.get("tone") != null
-                ? params.get("tone").toString() : "诗意意象";
 
         String fallbackTitle = "第" + chapterIndex + "章";
 
-        // 尝试从哨兵建议中提取关键词
+        // 1) 优先使用大纲节点标题（AI 大纲已生成章节标题，与原文直接关联）
+        try {
+            List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
+            if (outlines != null && !outlines.isEmpty()) {
+                List<NovelOutline> nodes = outlines.stream()
+                        .filter(o -> !"volume".equals(o.getType()))
+                        .filter(o -> o.getTitle() != null && !o.getTitle().isEmpty())
+                        .sorted((a, b) -> Integer.compare(
+                                a.getSortOrder() != null ? a.getSortOrder() : 0,
+                                b.getSortOrder() != null ? b.getSortOrder() : 0))
+                        .toList();
+                if (!nodes.isEmpty()) {
+                    int idx = Math.min(Math.max(chapterIndex - 1, 0), nodes.size() - 1);
+                    String nodeTitle = nodes.get(idx).getTitle();
+                    log.info("降级标题（基于大纲节点）：{}", nodeTitle);
+                    return nodeTitle;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("降级标题-读取大纲失败: {}", e.getMessage());
+        }
+
+        // 2) 尝试从哨兵建议中提取关键词
         if (sentinelHints != null && !sentinelHints.isEmpty()) {
             String hint = sentinelHints.get(0);
-            // 提取前6个字作为标题后缀
             String keyword = hint.replaceAll("[^\\u4e00-\\u9fa5]", "").trim();
             if (keyword.length() > 0) {
                 keyword = keyword.length() > 6 ? keyword.substring(0, 6) : keyword;
@@ -832,27 +925,30 @@ public class AiChatService {
             }
         }
 
-        // 尝试从方向描述中提取关键词
-        if (direction != null && !direction.isEmpty()) {
-            String keyword = direction.replaceAll("[^\\u4e00-\\u9fa5]", "").trim();
-            if (keyword.length() > 0) {
-                keyword = keyword.length() > 6 ? keyword.substring(0, 6) : keyword;
-                fallbackTitle = "第" + chapterIndex + "章 · " + keyword;
-                log.info("降级标题（基于方向描述）：{}", fallbackTitle);
-                return fallbackTitle;
-            }
-        }
-
-        // 如果有已有标题，尝试生成递进式标题
+        // 3) 如果有已有标题，尝试提取意象词生成递进式标题
         if (existingTitles != null && !existingTitles.isEmpty()) {
-            String lastTitle = existingTitles.get(existingTitles.size() - 1);
-            // 提取已有标题中的意象词
             Set<String> keywords = TitleDeduplicator.extractAllKeywords(existingTitles);
             if (!keywords.isEmpty()) {
                 String lastKeyword = keywords.iterator().next();
                 fallbackTitle = "第" + chapterIndex + "章 · " + lastKeyword;
                 log.info("降级标题（基于已有标题意象）：{}", fallbackTitle);
                 return fallbackTitle;
+            }
+        }
+
+        // 4) 最后尝试从方向描述中提取关键词（过滤无意义的默认指令词）
+        if (direction != null && !direction.isEmpty()) {
+            String keyword = direction.replaceAll("[^\\u4e00-\\u9fa5]", "").trim();
+            if (keyword.length() > 0) {
+                keyword = keyword.length() > 6 ? keyword.substring(0, 6) : keyword;
+                // 过滤默认的通用指令词，避免生成与原文无关的标题
+                boolean generic = keyword.startsWith("延续主线") || keyword.startsWith("推动情节")
+                        || keyword.startsWith("延续故事") || keyword.startsWith("延续剧情");
+                if (!generic) {
+                    fallbackTitle = "第" + chapterIndex + "章 · " + keyword;
+                    log.info("降级标题（基于方向描述）：{}", fallbackTitle);
+                    return fallbackTitle;
+                }
             }
         }
 

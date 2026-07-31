@@ -32,4 +32,7 @@ public class AppendForeshadowRequest {
 
     @Schema(description = "项目ID")
     private Long projectId;
+
+    @Schema(description = "回收章节ID（由 Controller 从路径参数注入）")
+    private Long chapterId;
 }
