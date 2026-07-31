@@ -466,10 +466,7 @@ export const useNovelStore = defineStore('novel', () => {
     if (!projectId) return []
     loadingModules.value.plot = true
     try {
-      const [threads, kg] = await Promise.all([
-        plotApi.listThreads(projectId).catch(e => { console.warn('刷新情节-线程失败：', e.message); return [] }),
-        plotApi.listKG(projectId).catch(e => { console.warn('刷新情节-KG失败：', e.message); return [] })
-      ])
+      const threads = await plotApi.listThreads(projectId).catch(e => { console.warn('刷新情节-线程失败：', e.message); return [] })
       plotThreads.value = threads || []
       lastUpdated.value.plot = new Date().toISOString()
       return plotThreads.value

@@ -66,12 +66,9 @@ public class ForeshadowAppendService {
                 .replace("{originalContent}", originalContent);
 
         try {
-            insertedContent = deepSeekClient.chat(
-                    "你是一位专业小说作家，擅长在情节中自然地融入伏笔。直接输出补写段落，不要任何推理过程、思考或解释。",
-                    appendPrompt,
-                    0.7,
-                    1024
-            );
+            // 生成补写内容：推理型模型会先消耗大量推理 token，预算给足 8192；
+            // 失败后使用轻量上下文重试（仅插入位置前后文），降低推理负担
+            insertedContent = generateInsertedContent(request, appendPrompt, originalContent, insertIndex);
 
             insertedContent = insertedContent.trim();
             if (insertedContent.startsWith("\"") && insertedContent.endsWith("\"")) {
@@ -109,6 +106,60 @@ public class ForeshadowAppendService {
         }
 
         return result;
+    }
+
+    /**
+     * 生成伏笔补写内容（含失败重试）
+     * 首次使用完整章节上下文；失败后降级为插入位置前后文（轻量 prompt），再失败才抛出
+     */
+    private String generateInsertedContent(AppendForeshadowRequest request, String fullPrompt,
+                                           String originalContent, int insertIndex) throws IOException {
+        try {
+            return deepSeekClient.chat(
+                    "你是一位专业小说作家，擅长在情节中自然地融入伏笔。直接输出补写段落，不要任何推理过程、思考或解释。",
+                    fullPrompt,
+                    0.7,
+                    8192
+            );
+        } catch (IOException e) {
+            log.warn("伏笔追加首次生成失败（推理耗尽/无正文），使用轻量上下文重试: {}", e.getMessage());
+            // 轻量重试：只提供插入位置前后的上下文片段，缩小输入、降低模型推理负担
+            String retryPrompt = buildAppendRetryPrompt(request, originalContent, insertIndex);
+            return deepSeekClient.chat(
+                    "你是一位专业小说作家。禁止任何推理、分析或解释，直接输出补写段落。",
+                    retryPrompt,
+                    0.6,
+                    8192
+            );
+        }
+    }
+
+    /** 构建轻量重试 Prompt：仅含伏笔信息与插入位置前后 200 字 */
+    private String buildAppendRetryPrompt(AppendForeshadowRequest request, String originalContent, int insertIndex) {
+        if (originalContent == null || originalContent.isEmpty()) {
+            originalContent = "（无上下文）";
+        }
+        int start = Math.max(0, insertIndex - 200);
+        int end = Math.min(originalContent.length(), insertIndex + 200);
+        String around = originalContent.substring(start, end);
+        String desc = request.getForeshadowingDescription() != null
+                ? request.getForeshadowingDescription() : "";
+        return """
+                请为以下伏笔写一段 100-300 字的补写内容，插入到给定位置（前后文如下）。
+                直接输出补写段落，不要任何分析、推理、解释、前缀或标注。
+
+                【伏笔】
+                标题：%s
+                描述：%s
+
+                【插入位置前后文】
+                ...%s...
+
+                直接输出补写内容：
+                """.formatted(
+                request.getForeshadowingTitle(),
+                desc,
+                around);
     }
 
     // ════════════════════════════════════

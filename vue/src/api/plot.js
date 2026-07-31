@@ -9,7 +9,5 @@ export const plotApi = {
   listUrgentForeshadowing: (projectId, currentChapter) => get(`/api/projects/${projectId}/plot/foreshadowing/urgent?currentChapter=${currentChapter}`),
   createForeshadowing: (projectId, data) => post(`/api/projects/${projectId}/plot/foreshadowing`, data),
   updateForeshadowing: (projectId, id, data) => put(`/api/projects/${projectId}/plot/foreshadowing/${id}`, data),
-  deleteForeshadowing: (projectId, id) => del(`/api/projects/${projectId}/plot/foreshadowing/${id}`),
-  listKG: (projectId) => get(`/api/projects/${projectId}/plot/kg`),
-  createKG: (projectId, data) => post(`/api/projects/${projectId}/plot/kg`, data)
+  deleteForeshadowing: (projectId, id) => del(`/api/projects/${projectId}/plot/foreshadowing/${id}`)
 }

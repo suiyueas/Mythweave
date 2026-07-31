@@ -68,7 +68,9 @@ function streamPost(url, body, onToken, onDone, onError) {
   return streamFetch(url, body, 'POST', onToken, onDone, onError)
 }
 
-const HEARTBEAT_TIMEOUT_MS = 20000
+// 心跳超时：后端每 15 秒发心跳，前端 30 秒未收到任何数据（含心跳）才判定连接死亡，
+// 为推理型模型的长时间思考留出容差，避免误判断连重连
+const HEARTBEAT_TIMEOUT_MS = 30000
 const MAX_RECONNECT_ATTEMPTS = 3
 const RECONNECT_DELAY_MS = 2000
 

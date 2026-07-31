@@ -124,6 +124,17 @@ public class ChapterService {
         }
         // 记录写作日志（热力图数据源）
         recordWritingLog(exist.getProjectId(), chapter.getId(), chapter.getWordCount(), exist.getWordCount());
+        // 内容被清空时：该章节作为回收章节的伏笔其回收内容已消失，即时回退为待回收
+        if (contentChanged && chapter.getContent() != null && chapter.getContent().trim().isEmpty()) {
+            try {
+                int reverted = foreshadowingMapper.revertResolvedByChapter(exist.getProjectId(), chapter.getId());
+                if (reverted > 0) {
+                    log.info("章节{}内容清空，回退已回收伏笔{}条", chapter.getId(), reverted);
+                }
+            } catch (Exception e) {
+                log.warn("清空内容后伏笔回退失败: {}", e.getMessage());
+            }
+        }
         // 同步更新项目统计
         updateProjectStats(exist.getProjectId());
         try {
@@ -169,9 +180,7 @@ public class ChapterService {
             try {
                 int reverted = foreshadowingMapper.revertResolvedByChapter(projectId, id);
                 int healed = foreshadowingMapper.healOrphanResolved(projectId);
-                if (reverted > 0 || healed > 0) {
-                    log.info("删除章节后伏笔状态回退: 直接回退{}条, 自愈{}条", reverted, healed);
-                }
+                log.info("删除章节后伏笔联动: 章节={}, 直接回退{}条, 自愈{}条", id, reverted, healed);
             } catch (Exception e) {
                 log.warn("删除章节后伏笔联动处理失败: {}", e.getMessage());
             }

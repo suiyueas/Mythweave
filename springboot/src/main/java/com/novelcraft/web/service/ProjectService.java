@@ -121,15 +121,11 @@ public class ProjectService {
             int cnt16 = jdbcTemplate.update("DELETE FROM novel_style_profile WHERE project_id = ?", id);
             log.info("[16/18] novel_style_profile 删除 {} 条", cnt16);
 
-            // 17. 情节知识图谱
-            int cnt17 = jdbcTemplate.update("DELETE FROM novel_plot_knowledge_graph WHERE project_id = ?", id);
-            log.info("[17/19] novel_plot_knowledge_graph 删除 {} 条", cnt17);
+            // 17. 物理删除作品
+            int cnt17 = projectMapper.deletePhysically(id);
+            log.info("[17/18] novel_project 物理删除 {} 条", cnt17);
 
-            // 18. 物理删除作品
-            int cnt18 = projectMapper.deletePhysically(id);
-            log.info("[18/18] novel_project 物理删除 {} 条", cnt18);
-
-            if (cnt18 == 0) {
+            if (cnt17 == 0) {
                 throw new RuntimeException("作品物理删除失败（影响行数为0），可能已被其他操作删除");
             }
 

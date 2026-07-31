@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -18,7 +17,6 @@ import java.util.List;
 public class PlotController {
     private final NovelPlotThreadMapper threadMapper;
     private final NovelForeshadowingMapper foreshadowingMapper;
-    private final NovelPlotKnowledgeGraphMapper kgMapper;
 
     @GetMapping("/threads") public R<List<NovelPlotThread>> listThreads(@PathVariable Long projectId) { return R.ok(threadMapper.selectByProjectId(projectId)); }
     @PostMapping("/threads") public R<NovelPlotThread> createThread(@PathVariable Long projectId, @RequestBody NovelPlotThread t) { t.setProjectId(projectId); threadMapper.insert(t); return R.ok(t); }
@@ -47,15 +45,4 @@ public class PlotController {
             log.warn("伏笔自愈失败: {}", e.getMessage());
         }
     }
-
-    @GetMapping("/kg") public R<List<NovelPlotKnowledgeGraph>> listKG(@PathVariable Long projectId) {
-        try {
-            List<NovelPlotKnowledgeGraph> list = kgMapper.selectByProjectId(projectId);
-            return R.ok(list != null ? list : Collections.emptyList());
-        } catch (Exception e) {
-            log.warn("KG查询失败(projectId={}): {}", projectId, e.getMessage());
-            return R.ok(Collections.emptyList());
-        }
-    }
-    @PostMapping("/kg") public R<NovelPlotKnowledgeGraph> createKG(@PathVariable Long projectId, @RequestBody NovelPlotKnowledgeGraph k) { k.setProjectId(projectId); kgMapper.insert(k); return R.ok(k); }
 }

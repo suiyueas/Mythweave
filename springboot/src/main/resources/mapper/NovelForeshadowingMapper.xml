@@ -72,7 +72,7 @@
         功能: 自愈孤儿回收标记（resolved → pending）
         参数: projectId - 项目ID
         返回: int 受影响行数
-        说明: 回收章节不存在或历史错误数据（resolved_chapter_id 误存 project_id）时回退为待回收
+        说明: 回收章节不存在、回收章节内容为空（已被清空）、或历史错误数据（resolved_chapter_id 误存 project_id）时回退为待回收
     -->
     <update id="healOrphanResolved">
         UPDATE novel_foreshadowing fs
@@ -83,7 +83,10 @@
         WHERE fs.project_id = #{projectId}
           AND fs.status = 'resolved'
           AND fs.deleted = 0
-          AND (nc.id IS NULL OR fs.resolved_chapter_id = fs.project_id)
+          AND (nc.id IS NULL
+               OR fs.resolved_chapter_id = fs.project_id
+               OR nc.word_count IS NULL OR nc.word_count &lt;= 0
+               OR nc.content IS NULL OR nc.content = '')
     </update>
 
 </mapper>

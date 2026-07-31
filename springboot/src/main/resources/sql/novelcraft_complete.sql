@@ -203,26 +203,6 @@ CREATE TABLE IF NOT EXISTS novel_foreshadowing (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='伏笔管理';
 
 -- =====================================================
--- 9. 情节知识图谱
--- =====================================================
-CREATE TABLE IF NOT EXISTS novel_plot_knowledge_graph (
-    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
-    project_id      BIGINT          NOT NULL COMMENT '作品ID',
-    node_type       VARCHAR(50)     NOT NULL COMMENT '节点类型',
-    source_id       BIGINT          NOT NULL COMMENT '源节点ID',
-    target_id       BIGINT          NOT NULL COMMENT '目标节点ID',
-    relation_label  VARCHAR(200)    NOT NULL COMMENT '关系标签',
-    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
-    PRIMARY KEY (id),
-    INDEX idx_pkg_project (project_id),
-    INDEX idx_pkg_source (source_id),
-    INDEX idx_pkg_target (target_id),
-    INDEX idx_pkg_deleted (deleted)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='情节知识图谱';
-
--- =====================================================
 -- 10. 世界观设定
 -- =====================================================
 CREATE TABLE IF NOT EXISTS novel_world_setting (
