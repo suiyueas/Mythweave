@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS novel_project (
     chapter_count   INT             NOT NULL DEFAULT 0 COMMENT '当前章节数',
     target_word_count INT           DEFAULT NULL COMMENT '目标字数',
     tags            VARCHAR(500)    DEFAULT NULL COMMENT '标签',
+    starting_world  VARCHAR(255)    DEFAULT NULL COMMENT '起始时间',
+    planned_completion_date DATE    DEFAULT NULL COMMENT '预定完本时间',
     user_id         BIGINT          DEFAULT NULL COMMENT '用户ID',
     create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

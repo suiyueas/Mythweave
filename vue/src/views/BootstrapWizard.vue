@@ -84,6 +84,14 @@
           <label>目标章节数</label>
           <input v-model.number="createForm.targetChapters" type="number" min="10" max="500" />
         </div>
+        <div class="form-group">
+          <label>起始世界</label>
+          <input v-model="createForm.startingWorld" maxlength="255" placeholder="如：灵气复苏后的九州大陆" />
+        </div>
+        <div class="form-group">
+          <label>预定完本时间</label>
+          <input v-model="createForm.plannedCompletionDate" type="date" />
+        </div>
       </div>
       <p v-if="createError" class="error-msg-inline">{{ createError }}</p>
       <div class="step-actions step-actions-between">
@@ -232,7 +240,9 @@ const createForm = reactive({
   inspiration: '',
   description: '',
   style: '诗意',
-  targetChapters: 30
+  targetChapters: 30,
+  startingWorld: '',
+  plannedCompletionDate: ''
 })
 const creating = ref(false)
 const createError = ref('')
@@ -324,7 +334,9 @@ async function createProject() {
     const data = {
       title: createForm.title.trim(),
       genre: createForm.genre,
-      description: createForm.description || ''
+      description: createForm.description || '',
+      startingWorld: createForm.startingWorld || '',
+      plannedCompletionDate: createForm.plannedCompletionDate || null
     }
     const result = await store.createProject(data)
     const newId = result?.id || result?.data?.id

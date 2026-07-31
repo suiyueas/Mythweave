@@ -5,6 +5,8 @@ import com.novelcraft.web.entity.base.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDate;
+
 /**
  * 作品项目
  */
@@ -23,4 +25,6 @@ public class NovelProject extends BaseEntity {
     private Integer chapterCount;
     private Integer targetWordCount;
     private String tags;
+    private String startingWorld;
+    private LocalDate plannedCompletionDate;
 }

@@ -89,9 +89,11 @@
         >
           <!-- 卡片封面区 -->
           <div class="card-cover" :style="{ background: getCoverGradient(project) }">
-            <div class="cover-badge" v-if="!project.status || project.status === '连载中' || project.status === 'ongoing'">连载中</div>
-            <div class="cover-badge done" v-else-if="project.status === '已完成' || project.status === 'completed'">已完成</div>
-            <div class="cover-badge draft" v-else>草稿</div>
+            <!-- 状态标签（可点击切换） -->
+            <div class="cover-badge status-badge" v-if="!project.status || project.status === 'draft' || project.status === '连载中' || project.status === 'ongoing'"
+              @click.stop="toggleStatus(project)" title="点击切换状态">连载中</div>
+            <div class="cover-badge done status-badge" v-else-if="project.status === '已完成' || project.status === 'completed'"
+              @click.stop="toggleStatus(project)" title="点击切换状态">已完成</div>
             <div class="cover-emoji">{{ getProjectEmoji(project) }}</div>
             <!-- 悬停删除按钮 -->
             <button
@@ -139,6 +141,10 @@
               <div class="progress-bar">
                 <div class="progress-fill" :style="{ width: Math.min(getProgressPercent(project), 100) + '%' }"></div>
               </div>
+            </div>
+            <div class="card-deadline" v-if="project.plannedCompletionDate">
+              <span class="deadline-icon">🎯</span>
+              <span class="deadline-text" :class="{ overdue: isCompletionOverdue(project) }">{{ getCompletionDisplay(project) }}</span>
             </div>
             <div class="card-footer">
               <span class="card-time">🕐 {{ formatUpdateTime(project) }}</span>
@@ -273,6 +279,18 @@
             </div>
           </div>
 
+          <!-- 起始世界 + 预定完本时间 -->
+          <div class="form-row form-row-grid">
+            <div class="form-cell">
+              <label class="form-label">起始世界 <span class="optional">（选填）</span></label>
+              <input v-model="form.startingWorld" class="form-input" placeholder="如：灵气复苏后的九州大陆">
+            </div>
+            <div class="form-cell">
+              <label class="form-label">预定完本时间 <span class="optional">（选填）</span></label>
+              <input v-model="form.plannedCompletionDate" type="date" class="form-input">
+            </div>
+          </div>
+
           <!-- 目标字数 + 标签 -->
           <div class="form-row form-row-grid">
             <div class="form-cell">
@@ -282,6 +300,17 @@
             <div class="form-cell">
               <label class="form-label">标签（逗号分隔）</label>
               <input v-model="form.tags" class="form-input" placeholder="如：热血,成长,战斗">
+            </div>
+          </div>
+
+          <!-- 作品状态 -->
+          <div class="form-row">
+            <label class="form-label">作品状态</label>
+            <div class="input-group">
+              <select v-model="form.status" class="form-select">
+                <option value="ongoing">✍️ 连载中</option>
+                <option value="completed">✅ 已完成</option>
+              </select>
             </div>
           </div>
 
@@ -349,7 +378,7 @@ const workToDelete = ref(null)
 const deletingId = ref(null)
 
 // ─── 统计概览 ───
-const ongoingCount = computed(() => projects.value.filter(p => !p.status || p.status === '连载中' || p.status === 'ongoing').length)
+const ongoingCount = computed(() => projects.value.filter(p => !p.status || p.status === 'draft' || p.status === '连载中' || p.status === 'ongoing').length)
 const completedCount = computed(() => projects.value.filter(p => p.status === '已完成' || p.status === 'completed').length)
 const totalWords = computed(() => {
   const total = projects.value.reduce((s, p) => s + (p.wordCount || p.targetWordCount || 0), 0)
@@ -400,6 +429,22 @@ function getProgressPercent(p) {
   if (!p.targetWordCount || p.targetWordCount === 0) return 0
   return Math.min(Math.round(((p.wordCount || 0) / p.targetWordCount) * 100), 100)
 }
+// ─── 预定完本时间显示（修改完本时间后自动联动刷新） ───
+function getCompletionDisplay(p) {
+  if (!p.plannedCompletionDate) return ''
+  const d = new Date(String(p.plannedCompletionDate).slice(0, 10))
+  if (isNaN(d.getTime())) return `预定 ${String(p.plannedCompletionDate).slice(0, 10)} 完本`
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  const days = Math.ceil((d - new Date()) / 86400000)
+  if (days > 0) return `预定 ${dateStr} 完本 · 还有 ${days} 天`
+  if (days === 0) return `预定 ${dateStr} 完本 · 就是今天`
+  return `预定 ${dateStr} 完本 · 已超 ${Math.abs(days)} 天`
+}
+function isCompletionOverdue(p) {
+  if (!p.plannedCompletionDate) return false
+  const d = new Date(String(p.plannedCompletionDate).slice(0, 10))
+  return !isNaN(d.getTime()) && d < new Date()
+}
 // 使用公共格式化函数
 const formatCardNumber = formatNumber
 const formatUpdateTime = (p) => {
@@ -412,7 +457,7 @@ const formatUpdateTime = (p) => {
 const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
-const form = reactive({ title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '' })
+const form = reactive({ title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '', startingWorld: '', plannedCompletionDate: '', status: 'ongoing' })
 
 const templates = [
   { icon: '⚔️', label: '玄幻修真', value: '玄幻' },
@@ -432,7 +477,7 @@ function goToWorkspace(project) {
 // ─── 弹窗 ───
 function openCreateModal() {
   editingId.value = null
-  Object.assign(form, { title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '' })
+  Object.assign(form, { title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '', startingWorld: '', plannedCompletionDate: '', status: 'ongoing' })
   showModal.value = true
 }
 
@@ -442,7 +487,10 @@ function editProject(project) {
     title: project.title || '', description: project.description || '',
     genre: project.genre || '', subGenre: project.subGenre || '',
     targetWordCount: project.targetWordCount || null, tags: project.tags || '',
-    coreSetting: project.coreSetting || ''
+    coreSetting: project.coreSetting || '',
+    startingWorld: project.startingWorld || '',
+    plannedCompletionDate: project.plannedCompletionDate ? String(project.plannedCompletionDate).slice(0, 10) : '',
+    status: project.status || 'ongoing'
   })
   showModal.value = true
 }
@@ -457,7 +505,10 @@ async function handleSubmit() {
       title: form.title.trim(), description: form.description || '',
       genre: form.genre || '', subGenre: form.subGenre || '',
       targetWordCount: form.targetWordCount || null, tags: form.tags || '',
-      coreSetting: form.coreSetting || ''
+      coreSetting: form.coreSetting || '',
+      startingWorld: form.startingWorld || '',
+      plannedCompletionDate: form.plannedCompletionDate || null,
+      status: editingId.value ? form.status : 'ongoing'
     }
     if (editingId.value) {
       await store.updateProject(editingId.value, data)
@@ -481,6 +532,16 @@ function confirmDelete(project) {
 function cancelDelete() {
   showDeleteDialog.value = false
   workToDelete.value = null
+}
+
+async function toggleStatus(project) {
+  const newStatus = (project.status === 'completed' || project.status === '已完成') ? 'ongoing' : 'completed'
+  try {
+    await store.updateProject(project.id, { status: newStatus })
+    projects.value = store.projects
+  } catch (e) {
+    alert('状态切换失败：' + (e.message || '请稍后重试'))
+  }
 }
 
 async function handleDeleteConfirm() {
@@ -783,7 +844,10 @@ function aiGenerate(key) {
   background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(4px);
   color: #fff; font-size: 10px; font-weight: 600;
   padding: 2px 8px; border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
+.cover-badge:hover { background: rgba(255, 255, 255, 0.35); transform: scale(1.05); }
 
 .cover-badge.done { background: rgba(16, 185, 129, 0.3); }
 .cover-badge.draft { background: rgba(168, 164, 160, 0.3); }
@@ -891,6 +955,37 @@ function aiGenerate(key) {
 .stat-divider { color: #e0dcd6; }
 
 .card-progress { margin-bottom: 10px; }
+
+.card-deadline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+.deadline-icon { font-size: 12px; }
+
+.deadline-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.deadline-text.overdue {
+  color: #b91c1c;
+  background: #fef2f2;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.card-deadline:has(.overdue) {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
 
 .progress-header {
   display: flex; justify-content: space-between;

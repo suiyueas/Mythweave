@@ -294,11 +294,11 @@
           </div>
           <div class="flex-1 overflow-y-auto px-6 py-6">
             <div class="grid grid-cols-3 gap-4 mb-4">
-              <!-- 📅 发布与隐私卡片 -->
+              <!-- 📅 发布与完本卡片 -->
               <div class="col-span-2 border border-[#e8e3dc] rounded-xl p-5 bg-white shadow-sm">
                 <div class="flex items-center gap-2 mb-4">
                   <span class="text-lg">📅</span>
-                  <span class="text-sm font-bold text-[#6b6560]">发布与隐私</span>
+                  <span class="text-sm font-bold text-[#6b6560]">发布与完本</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <!-- 发布策略 -->
@@ -318,20 +318,20 @@
                       </div>
                     </div>
                   </div>
-                  <!-- 隐私控制 -->
+                  <!-- 完本计划 -->
                   <div class="p-4 bg-[#fefcfb] rounded-xl border border-[#e8e3dc]">
                     <div class="flex items-center justify-between mb-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-sm font-semibold text-[#6b6560]">隐私控制</span>
+                        <span class="text-sm font-semibold text-[#6b6560]">完本计划</span>
                       </div>
-                      <button class="text-xs px-2.5 py-1 rounded-lg border border-[#d97706] text-[#d97706] hover:bg-[#fef3c7] hover:border-[#d97706] transition-colors" @click="showPrivacyDialog = true">✏️ 修改</button>
+                      <button class="text-xs px-2.5 py-1 rounded-lg border border-[#d97706] text-[#d97706] hover:bg-[#fef3c7] hover:border-[#d97706] transition-colors" @click="openCompletionDialog">✏️ 修改</button>
                     </div>
-                    <p class="text-xs text-[#9c9690] leading-relaxed mb-2">管理作品可见性、评论权限与协作设置</p>
+                    <p class="text-xs text-[#9c9690] leading-relaxed mb-2">设定预定完本时间，把握创作节奏</p>
                     <div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-[#f3efe8]">
-                      <span class="text-lg">🔒</span>
+                      <span class="text-lg">🎯</span>
                       <div>
-                        <div class="text-sm font-medium text-[#6b6560]">{{ privacyConfig.visibility || '仅自己可见' }}</div>
-                        <div class="text-[10px] text-[#9c9690]">{{ privacyConfig.commentMode || '评论关闭' }}</div>
+                        <div class="text-sm font-medium text-[#6b6560]">{{ completionText }}</div>
+                        <div class="text-[10px] text-[#9c9690]">{{ completionHint }}</div>
                       </div>
                     </div>
                   </div>
@@ -1120,58 +1120,37 @@
       </Transition>
     </Teleport>
 
-    <!-- ═══ 策略与设置：隐私控制编辑弹窗 ═══ -->
+    <!-- ═══ 策略与设置：完本计划编辑弹窗 ═══ -->
     <Teleport to="body">
       <Transition name="modal-fade">
-        <div v-if="showPrivacyDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]" @click.self="showPrivacyDialog = false">
-          <div class="bg-white rounded-2xl w-[480px] max-w-[90vw] shadow-2xl border border-[#e8e3dc] overflow-hidden">
+        <div v-if="showCompletionDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]" @click.self="showCompletionDialog = false">
+          <div class="bg-white rounded-2xl w-[460px] max-w-[90vw] shadow-2xl border border-[#e8e3dc] overflow-hidden">
             <div class="px-5 py-4 border-b border-[#e8e3dc] bg-gradient-to-r from-[#fefcfb] to-[#fef9f5]">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <span class="text-lg">🔒</span>
-                  <h3 class="text-sm font-bold text-[#1a1a2e]">隐私控制设置</h3>
+                  <span class="text-lg">🎯</span>
+                  <h3 class="text-sm font-bold text-[#1a1a2e]">完本计划设置</h3>
                 </div>
-                <button class="text-[#9c9690] hover:text-[#6b6560] text-lg leading-none" @click="showPrivacyDialog = false">✕</button>
+                <button class="text-[#9c9690] hover:text-[#6b6560] text-lg leading-none" @click="showCompletionDialog = false">✕</button>
               </div>
             </div>
             <div class="p-5 space-y-4">
               <div>
-                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">作品可见性</label>
-                <select v-model="editPrivacyForm.visibility" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
-                  <option value="private">仅自己可见</option>
-                  <option value="public">公开</option>
-                  <option value="指定用户">指定用户可见</option>
-                </select>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">起始世界</label>
+                <input type="text" v-model="editCompletionForm.startingWorld" maxlength="255" placeholder="如：灵气复苏后的九州大陆" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" />
+                <p class="text-[10px] text-[#9c9690] mt-1">作品故事开始的世界背景，不同作品相互隔离</p>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">评论权限</label>
-                <select v-model="editPrivacyForm.commentMode" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
-                  <option value="disabled">关闭评论</option>
-                  <option value="allow">允许评论</option>
-                  <option value="review">审核后展示</option>
-                </select>
-              </div>
-              <div>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" v-model="editPrivacyForm.collabEnabled" class="w-4 h-4 accent-[#d97706] rounded">
-                  <span class="text-xs text-[#6b6560]">启用协作邀请链接</span>
-                </label>
-              </div>
-              <div v-if="editPrivacyForm.collabEnabled">
-                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">链接有效期</label>
-                <select v-model="editPrivacyForm.collabExpiry" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
-                  <option value="1h">1 小时</option>
-                  <option value="24h">24 小时</option>
-                  <option value="7d">7 天</option>
-                  <option value="30d">30 天</option>
-                </select>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">预定完本时间</label>
+                <input type="date" v-model="editCompletionForm.plannedCompletionDate" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" />
+                <p class="text-[10px] text-[#9c9690] mt-1">目标完结日期，可随时修改</p>
               </div>
             </div>
             <div class="flex items-center gap-2 p-4 bg-[#faf8f5] border-t border-[#e8e3dc]">
-              <button class="flex-1 px-4 py-2.5 text-sm font-semibold bg-[#d97706] text-white rounded-xl hover:bg-[#b45309] transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :disabled="settingsSaving" @click="savePrivacyConfig">
+              <button class="flex-1 px-4 py-2.5 text-sm font-semibold bg-[#d97706] text-white rounded-xl hover:bg-[#b45309] transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :disabled="settingsSaving" @click="saveCompletionConfig">
                 {{ settingsSaving ? '保存中...' : '💾 保存' }}
               </button>
-              <button class="px-4 py-2.5 text-sm font-semibold text-[#6b6560] bg-white border border-[#e8e3dc] rounded-xl hover:bg-[#f5f3f0] transition-colors" @click="showPrivacyDialog = false">取消</button>
+              <button class="px-4 py-2.5 text-sm font-semibold text-[#6b6560] bg-white border border-[#e8e3dc] rounded-xl hover:bg-[#f5f3f0] transition-colors" @click="showCompletionDialog = false">取消</button>
             </div>
           </div>
         </div>
@@ -2195,7 +2174,7 @@ function formatSentinelTime(t) {
 // ─── 策略与设置 ───
 const systemStatusLoading = ref(false)
 const showPublishDialog = ref(false)
-const showPrivacyDialog = ref(false)
+const showCompletionDialog = ref(false)
 const showBackupDialog = ref(false)
 const showAIModelDialog = ref(false)
 const showSystemStatusDetail = ref(false)
@@ -2217,19 +2196,31 @@ const editPublishForm = reactive({
   nextRun: null
 })
 
-const privacyConfig = reactive({
-  visibility: '仅自己可见',
-  commentMode: '评论关闭',
-  collabEnabled: false,
-  collabExpiry: '24h'
+// ─── 完本计划（起始世界 + 预定完本时间，按作品隔离） ───
+const editCompletionForm = reactive({
+  startingWorld: '',
+  plannedCompletionDate: ''
 })
 
-const editPrivacyForm = reactive({
-  visibility: 'private',
-  commentMode: 'disabled',
-  collabEnabled: false,
-  collabExpiry: '24h'
+const completionText = computed(() => {
+  const d = project.value?.plannedCompletionDate
+  return d ? `预定 ${String(d).slice(0, 10)} 完本` : '暂未设置'
 })
+
+const completionHint = computed(() => {
+  const d = project.value?.plannedCompletionDate
+  if (!d) return '设定目标日期，陪伴作品走向完结'
+  const days = Math.ceil((new Date(String(d).slice(0, 10)) - new Date()) / 86400000)
+  if (days > 0) return `距完本还有 ${days} 天`
+  if (days === 0) return '今天就是预定完本日！'
+  return `已超过预定时间 ${Math.abs(days)} 天`
+})
+
+function openCompletionDialog() {
+  editCompletionForm.startingWorld = project.value?.startingWorld || ''
+  editCompletionForm.plannedCompletionDate = project.value?.plannedCompletionDate ? String(project.value.plannedCompletionDate).slice(0, 10) : ''
+  showCompletionDialog.value = true
+}
 
 const backupConfig = reactive({
   interval: '每5分钟',
@@ -2308,7 +2299,7 @@ const systemStatusDetails = ref([
 const recentOperationLogs = ref([
   { id: 1, action: '更新发布计划', detail: '从"每周一次"改为"每周两次"', time: Date.now() - 3600000 },
   { id: 2, action: '保存 AI 偏好', detail: '温度参数调整为 0.8', time: Date.now() - 7200000 },
-  { id: 3, action: '修改隐私设置', detail: '评论权限改为"审核后展示"', time: Date.now() - 86400000 }
+  { id: 3, action: '更新完本计划', detail: '预定完本时间调整为下月', time: Date.now() - 86400000 }
 ])
 
 async function refreshSystemStatus() {
@@ -2370,34 +2361,22 @@ async function savePublishConfig() {
   }
 }
 
-async function savePrivacyConfig() {
-  if (editPrivacyForm.visibility === 'public' && privacyConfig.visibility !== '公开') {
-    if (!confirm('⚠️ 确定要将作品设为公开吗？公开后所有用户都可以查看您的作品。')) {
-      return
-    }
-  }
+async function saveCompletionConfig() {
   if (settingsSaving.value) return
+  const pid = store.currentProjectId
+  if (!pid) {
+    showChapterToast('未找到当前作品', 'error')
+    return
+  }
   settingsSaving.value = true
   try {
-    const visibilityMap = {
-      'private': '仅自己可见',
-      'public': '公开',
-      '指定用户': '指定用户可见'
-    }
-    const commentMap = {
-      'disabled': '评论关闭',
-      'allow': '允许评论',
-      'review': '审核后展示'
-    }
-
-    privacyConfig.visibility = visibilityMap[editPrivacyForm.visibility] || editPrivacyForm.visibility
-    privacyConfig.commentMode = commentMap[editPrivacyForm.commentMode] || editPrivacyForm.commentMode
-    privacyConfig.collabEnabled = editPrivacyForm.collabEnabled
-    privacyConfig.collabExpiry = editPrivacyForm.collabExpiry
-
-    showPrivacyDialog.value = false
-    showChapterToast('隐私设置已保存', 'success')
-    addOperationLog('修改隐私设置', `可见性: ${privacyConfig.visibility}, 评论: ${privacyConfig.commentMode}`)
+    await store.updateProject(pid, {
+      startingWorld: editCompletionForm.startingWorld || '',
+      plannedCompletionDate: editCompletionForm.plannedCompletionDate || null
+    })
+    showCompletionDialog.value = false
+    showChapterToast('完本计划已保存', 'success')
+    addOperationLog('更新完本计划', `预定完本: ${editCompletionForm.plannedCompletionDate || '未设置'}`)
   } catch (e) {
     showChapterToast('保存失败: ' + e.message, 'error')
   } finally {
@@ -2478,10 +2457,6 @@ function resetAllSettings() {
   publishConfig.schedule = '每周两次 08:00'
   publishConfig.frequency = 'twice-weekly'
   publishConfig.time = '08:00'
-
-  privacyConfig.visibility = '仅自己可见'
-  privacyConfig.commentMode = '评论关闭'
-  privacyConfig.collabEnabled = false
 
   backupConfig.interval = '每5分钟'
   backupConfig.keepVersions = 20

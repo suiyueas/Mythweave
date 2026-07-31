@@ -257,10 +257,14 @@ export const useNovelStore = defineStore('novel', () => {
     const pid = String(projectId)
     const idx = projects.value.findIndex(p => String(p.id) === pid)
     if (idx < 0) return
-    // 如果当前项目就是此项目（chapters 已加载），从本地计算
-    if (currentProject.value && String(currentProject.value.id) === pid) {
+    // 仅当本地章节数据真实存在（chapters 已加载且非空，或编辑器有内容）时才用本地计算，
+    // 否则回退到后端拉取实时统计——避免 chapters 尚未加载（空数组）时把统计错误覆盖为 0
+    const isCurrent = currentProject.value && String(currentProject.value.id) === pid
+    const hasEditorContent = currentChapterId.value && editorContent.value
+    const hasLocalChapters = chapters.value.length > 0
+    if (isCurrent && (hasLocalChapters || hasEditorContent)) {
       // 如果有当前编辑的章节，使用编辑器内容计算字数
-      if (currentChapterId.value && editorContent.value) {
+      if (hasEditorContent) {
         const currentChIdx = chapters.value.findIndex(c => c.id === currentChapterId.value)
         if (currentChIdx >= 0) {
           // 使用编辑器内容长度作为当前章节字数
@@ -297,7 +301,7 @@ export const useNovelStore = defineStore('novel', () => {
         }
       }
     } else {
-      // 非当前项目：从后端拉取最新统计，确保数据准确
+      // 非当前项目 / 本地数据不可信：从后端拉取最新统计，确保数据准确
       try {
         const p = await projectApi.getById(typeof projectId === 'string' ? parseInt(projectId) : projectId)
         if (p) {
