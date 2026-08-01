@@ -12,7 +12,7 @@
           <div class="ai-hint">
             <span class="icon">✨</span>
             <span class="text">让 AI 帮你生成章节内容</span>
-            <button class="btn-ai" @click="generateAI">AI 生成</button>
+            <button class="btn-ai" :disabled="generating" @click="generateAI">{{ generating ? '⏳ 生成中...' : 'AI 生成' }}</button>
           </div>
 
           <div class="modal-body">
@@ -64,6 +64,7 @@
 <script setup>
 import { ref, reactive, watch } from 'vue'
 import { useNovelStore } from '@/stores/novel'
+import { aiApi } from '@/api/ai'
 
 const props = defineProps({
   mode: { type: String, default: 'create' },
@@ -74,6 +75,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 const store = useNovelStore()
 const saving = ref(false)
+const generating = ref(false)
 
 const form = reactive({
   title: '',
@@ -110,7 +112,10 @@ async function submit() {
 
   try {
     if (props.mode === 'create') {
-      await store.createChapter(props.projectId, data)
+      const created = await store.createChapter(props.projectId, data)
+      if (created?._local) {
+        alert('后端服务不可用，章节已保存为本地临时草稿（重启后可能丢失）')
+      }
     } else {
       await store.updateChapter(props.projectId, { ...data, id: props.chapter.id })
     }
@@ -124,9 +129,29 @@ async function submit() {
 }
 
 function generateAI() {
-  // TODO: 接入 AI 接口生成内容
-  const aiContent = '（AI 生成的示例内容，实际应接入 AI 接口）\n\n夜色如墨，笼罩着整个星辰帝国。林越从黑暗中醒来，发现自己躺在冰冷的地面上，四周是残破的墙壁和散落的瓦砾。'
-  form.content = aiContent
+  if (generating.value) return
+  if (!props.projectId) { alert('缺少项目ID，无法生成'); return }
+  generating.value = true
+  const prevContent = form.content || ''
+  aiApi.generateContentStream(
+    props.projectId,
+    {
+      chapterIndex: 1,
+      title: form.title || '未命名章节',
+      direction: '承接上一章剧情，自然展开本章内容',
+      existingContent: prevContent,
+      style: '自然流畅'
+    },
+    (token) => {
+      if (token != null && token !== 'null' && token !== 'undefined') form.content += token
+    },
+    () => { generating.value = false },
+    (e) => {
+      console.error('AI 生成失败：', e)
+      generating.value = false
+      alert('AI 生成失败：' + (e?.message || '请检查后端 AI 配置'))
+    }
+  )
 }
 </script>
 
@@ -186,7 +211,8 @@ function generateAI() {
   background: #d97706; color: #fff; border: none; border-radius: 6px;
   cursor: pointer; transition: background 0.2s;
 }
-.btn-ai:hover { background: #b45309; }
+.btn-ai:hover:not(:disabled) { background: #b45309; }
+.btn-ai:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .form-group { margin-bottom: 14px; }
 .form-group.flex-1 { flex: 1; }

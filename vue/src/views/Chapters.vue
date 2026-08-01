@@ -283,6 +283,7 @@ function getChapterNumber(ch) {
   return `CH.${ch.sortOrder ?? ch.id}`
 }
 
+// 状态值与后端 NovelChapter.status 保持一致：draft(草稿)/writing(写作中)/published(已发布)/completed(已完成)
 function getStatusLabel(status) {
   const map = { draft: '草稿', writing: '写作中', published: '已发布', completed: '已完成' }
   return map[status] || status || '草稿'

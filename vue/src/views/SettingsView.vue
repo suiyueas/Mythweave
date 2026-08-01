@@ -403,6 +403,7 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
+import { userApi } from '@/api/user'
 import { openVipModal } from '@/services/vipService'
 
 const router = useRouter()
@@ -509,18 +510,22 @@ function handleAvatarUpload(e) {
 const showPasswordModal = ref(false)
 const passwordForm = reactive({ current: '', newPass: '', confirm: '' })
 
-function handleChangePassword() {
+async function handleChangePassword() {
   if (!passwordForm.current) { showToast('请输入当前密码', 'error'); return }
   if (!passwordForm.newPass || passwordForm.newPass.length < 6) { showToast('新密码至少 6 位', 'error'); return }
   if (passwordForm.newPass !== passwordForm.confirm) { showToast('两次密码不一致', 'error'); return }
 
-  // 模拟密码修改（本地存储）
-  localStorage.setItem('novel-password', btoa(passwordForm.newPass))
-  passwordForm.current = ''
-  passwordForm.newPass = ''
-  passwordForm.confirm = ''
-  showPasswordModal.value = false
-  showToast('密码修改成功')
+  try {
+    // 对接后端真实改密接口，不再本地存储密码
+    await userApi.changePassword({ oldPassword: passwordForm.current, newPassword: passwordForm.newPass })
+    passwordForm.current = ''
+    passwordForm.newPass = ''
+    passwordForm.confirm = ''
+    showPasswordModal.value = false
+    showToast('密码修改成功')
+  } catch (e) {
+    showToast(e?.message || '密码修改失败', 'error')
+  }
 }
 
 // ─── 退出登录 ───

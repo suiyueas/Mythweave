@@ -2,6 +2,7 @@ package com.novelcraft.web.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.novelcraft.web.entity.base.BaseEntity;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 public class NovelInspiration extends BaseEntity {
     private Long projectId;
     private String type;
+    @NotBlank(message = "灵感内容不能为空")
     private String content;
     private String tags;
     private Long chapterId;

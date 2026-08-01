@@ -8,6 +8,7 @@ import com.novelcraft.web.service.ChapterService;
 import com.novelcraft.web.service.ForeshadowAppendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,7 +40,7 @@ public class ChapterController {
 
     @Operation(summary = "创建章节")
     @PostMapping
-    public R<NovelChapter> createChapter(@PathVariable Long projectId, @RequestBody NovelChapter chapter) {
+    public R<NovelChapter> createChapter(@PathVariable Long projectId, @Valid @RequestBody NovelChapter chapter) {
         chapter.setProjectId(projectId);
         return R.ok(chapterService.createChapter(chapter));
     }

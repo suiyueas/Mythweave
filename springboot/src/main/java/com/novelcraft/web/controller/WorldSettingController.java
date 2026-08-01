@@ -5,6 +5,7 @@ import com.novelcraft.web.entity.NovelWorldSetting;
 import com.novelcraft.web.service.WorldSettingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -25,7 +26,7 @@ public class WorldSettingController {
 
     @Operation(summary = "创建设定")
     @PostMapping("/settings")
-    public R<NovelWorldSetting> createSetting(@PathVariable Long projectId, @RequestBody NovelWorldSetting s) {
+    public R<NovelWorldSetting> createSetting(@PathVariable Long projectId, @Valid @RequestBody NovelWorldSetting s) {
         return R.ok(worldSettingService.create(projectId, s));
     }
 

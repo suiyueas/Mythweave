@@ -5,6 +5,7 @@ import com.novelcraft.web.entity.NovelProject;
 import com.novelcraft.web.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +23,7 @@ public class ProjectController {
 
     @Operation(summary = "创建作品")
     @PostMapping
-    public R<NovelProject> create(@RequestAttribute("userId") Long userId, @RequestBody NovelProject project) {
+    public R<NovelProject> create(@RequestAttribute("userId") Long userId, @Valid @RequestBody NovelProject project) {
         project.setUserId(userId);
         return R.ok(projectService.create(project));
     }

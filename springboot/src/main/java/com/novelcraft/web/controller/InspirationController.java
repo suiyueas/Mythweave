@@ -5,6 +5,7 @@ import com.novelcraft.web.entity.NovelInspiration;
 import com.novelcraft.web.mapper.NovelInspirationMapper;
 import com.novelcraft.web.service.InspirationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -19,7 +20,7 @@ public class InspirationController {
     private final InspirationService inspirationService;
 
     @GetMapping public R<List<NovelInspiration>> list(@PathVariable Long projectId) { return R.ok(mapper.selectByProjectId(projectId)); }
-    @PostMapping public R<NovelInspiration> create(@PathVariable Long projectId, @RequestBody NovelInspiration i) { i.setProjectId(projectId); mapper.insert(i); return R.ok(i); }
+    @PostMapping public R<NovelInspiration> create(@PathVariable Long projectId, @Valid @RequestBody NovelInspiration i) { i.setProjectId(projectId); mapper.insert(i); return R.ok(i); }
     @PutMapping("/{id}") public R<NovelInspiration> update(@PathVariable Long id, @RequestBody NovelInspiration i) { i.setId(id); mapper.updateById(i); return R.ok(mapper.selectById(id)); }
     @DeleteMapping("/{id}") public R<Void> delete(@PathVariable Long id) { mapper.deleteById(id); return R.ok(); }
 

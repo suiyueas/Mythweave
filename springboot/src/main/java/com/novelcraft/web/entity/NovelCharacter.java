@@ -2,6 +2,7 @@ package com.novelcraft.web.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.novelcraft.web.entity.base.BaseEntity;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -10,6 +11,7 @@ import lombok.EqualsAndHashCode;
 @TableName("novel_character")
 public class NovelCharacter extends BaseEntity {
     private Long projectId;
+    @NotBlank(message = "人物名称不能为空")
     private String name;
     private String role;
     private String type;

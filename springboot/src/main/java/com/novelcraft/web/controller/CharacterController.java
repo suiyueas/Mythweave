@@ -5,6 +5,7 @@ import com.novelcraft.web.entity.NovelCharacter;
 import com.novelcraft.web.mapper.NovelCharacterMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -22,7 +23,7 @@ public class CharacterController {
         return R.ok(charMapper.selectByProjectId(projectId));
     }
     @PostMapping
-    public R<NovelCharacter> create(@PathVariable Long projectId, @RequestBody NovelCharacter c) {
+    public R<NovelCharacter> create(@PathVariable Long projectId, @Valid @RequestBody NovelCharacter c) {
         c.setProjectId(projectId); charMapper.insert(c); return R.ok(c);
     }
     @PutMapping("/{id}")

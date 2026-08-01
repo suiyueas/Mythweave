@@ -2,6 +2,7 @@ package com.novelcraft.web.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.novelcraft.web.entity.base.BaseEntity;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -13,6 +14,7 @@ public class NovelOutline extends BaseEntity {
     private Long parentId;
     /** 所属幕: first_act/second_act/third_act */
     private String act;
+    @NotBlank(message = "大纲节点标题不能为空")
     private String title;
     private String description;
     private String type;
