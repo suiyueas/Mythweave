@@ -131,6 +131,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { aiApi, sentinelApi } from '@/api'
 import { useNovelStore } from '@/stores/novel'
+import { requireVip } from '@/services/vipService'
 
 const store = useNovelStore()
 
@@ -215,6 +216,7 @@ function getAlertColor(severity) {
 
 async function handleGenerateTitle() {
   if (aiTitleLoading.value) return
+  if (!requireVip('章节标题生成')) return
   aiTitleLoading.value = true
   feedbackMessage.value = ''
   try {

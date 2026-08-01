@@ -122,6 +122,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { setupApi } from '@/api/setup'
+import { requireVip } from '@/services/vipService'
 
 const props = defineProps({
   projectId: { type: [Number, String], required: true },
@@ -231,6 +232,7 @@ function moduleIcon(mod) {
 
 // ─── 生成 ───
 async function generate() {
+  if (!requireVip('世界观自动生成')) return
   loading.value = true
   status.value = 'generating'
   errorMsg.value = ''

@@ -5,6 +5,8 @@ import com.novelcraft.web.entity.base.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDateTime;
+
 /**
  * 用户信息
  */
@@ -20,4 +22,12 @@ public class NovelUser extends BaseEntity {
     private String bio;
     private String avatar;
     private Boolean emailVerified;
+    /** 角色: admin-管理员 user-普通用户 */
+    private String role;
+    /** VIP等级 0-普通 1-白银 2-黄金 3-钻石 */
+    private Integer vipLevel;
+    /** VIP到期时间，null 表示未开通 */
+    private LocalDateTime vipExpireAt;
+    /** 最近一次VIP购买时间 */
+    private LocalDateTime vipPurchasedAt;
 }

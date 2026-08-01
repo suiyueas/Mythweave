@@ -431,11 +431,12 @@ import { useNovelStore } from '@/stores/novel'
 import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 import { formatWordCount, formatWan, formatTime, formatNumber, formatRelativeTime } from '@/utils/format'
 import { parseCharacterText, formatCharactersForAI } from '@/utils/characterParser'
-import { parseWorldText, formatWorldForAI } from '@/utils/worldParser'
-import { parseCoreSettingText, parseOutlineText, formatOutlineForAI } from '@/utils/outlineParser'
+import { parseWorldText } from '@/utils/worldParser'
+import { parseCoreSettingText, parseOutlineText } from '@/utils/outlineParser'
 import { characterApi } from '@/api/character'
 import { worldApi } from '@/api/world'
 import { outlineApi } from '@/api/outline'
+import { requireVip } from '@/services/vipService'
 
 const router = useRouter()
 const route = useRoute()
@@ -1009,6 +1010,8 @@ const outlineResult = ref('')
 
 function aiGenerate(key) {
   const types = { naming: 'AI 起名', polish: 'AI 润色', setting: 'AI 生成设定', outline: 'AI 生成大纲' }
+  // VIP 权限拦截：普通用户弹出升级引导
+  if (!requireVip(types[key] || 'AI 生成')) return
   aiLoading.value = key
   aiGenerated.value = ''
   setTimeout(() => {
@@ -1702,6 +1705,7 @@ function aiGenerate(key) {
 .char-personality {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1741,6 +1745,7 @@ function aiGenerate(key) {
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1778,6 +1783,7 @@ function aiGenerate(key) {
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1845,6 +1851,7 @@ function aiGenerate(key) {
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

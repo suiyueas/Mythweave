@@ -202,6 +202,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { setupApi } from '@/api/setup'
 import { aiApi } from '@/api'
 import { useNovelStore } from '@/stores/novel'
+import { requireVip } from '@/services/vipService'
 
 import StepWorld from './steps/StepWorld.vue'
 import StepCharacters from './steps/StepCharacters.vue'
@@ -264,6 +265,7 @@ const descLoading = ref(false)
 // ─── AI 生成灵感 ───
 async function aiGenerateInspiration() {
   if (inspireLoading.value) return
+  if (!requireVip('AI 灵感生成')) return
   inspireLoading.value = true
   try {
     const genre = createForm.genre || '奇幻'
@@ -284,6 +286,7 @@ async function aiGenerateInspiration() {
 // ─── AI 生成简介 ───
 async function aiGenerateDesc() {
   if (descLoading.value) return
+  if (!requireVip('AI 简介生成')) return
   descLoading.value = true
   try {
     const genre = createForm.genre || '奇幻'

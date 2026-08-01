@@ -359,6 +359,7 @@
 import { ref, computed, reactive, watch, onMounted, nextTick } from 'vue'
 import { useInspirationStore } from '@/stores/inspiration'
 import { useNovelStore } from '@/stores/novel'
+import { requireVip } from '@/services/vipService'
 
 const props = defineProps({
   projectId: { type: [String, Number], default: null }
@@ -597,6 +598,7 @@ const aiPanelCollapsed = ref(false)
 
 async function handleGenerate() {
   if (!aiKeywords.trim() || store.aiGenerating) return
+  if (!requireVip('角色灵感生成')) return
   await store.generateAI(aiKeywords.value)
 }
 

@@ -17,7 +17,30 @@
         </button>
       </div>
     </header>
-
+    
+    <!-- ═══ VIP 状态卡片（常驻内容区顶部） ═══ -->
+    <div class="vip-card" :class="vipCardClass">
+      <div class="vip-card-left">
+        <div class="vip-card-badge">👑</div>
+        <div class="vip-card-info">
+          <div class="vip-card-title-row">
+            <span class="vip-level">{{ userStore.vipLevelName }}</span>
+            <span v-if="userStore.isAdmin" class="vip-admin-tag">管理员</span>
+            <span v-if="userStore.isVip" class="vip-expire">到期时间：{{ userStore.vipExpireDate }}</span>
+            <span v-else-if="userStore.vipExpired" class="vip-expired-tag">已过期</span>
+            <span v-else class="vip-free-tag">免费用户</span>
+          </div>
+          <div class="vip-benefits-row">
+            <span v-for="b in vipBenefits" :key="b" class="vip-benefit-tag">{{ b }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="vip-card-actions">
+        <button v-if="userStore.isVip" class="btn-vip-renew" @click="openRecharge">续费</button>
+        <button v-else class="btn-vip-upgrade" @click="openRecharge">立即升级 →</button>
+      </div>
+    </div>
+    
     <!-- ═══ Tab 导航 ═══ -->
     <nav class="tab-bar">
       <button
@@ -356,9 +379,23 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
+import { openVipModal } from '@/services/vipService'
 
 const store = useSettingsStore()
 const userStore = useUserStore()
+
+// ─── VIP 卡片 ───
+const vipBenefits = ['AI 无限生成', '专属模板', '优先支持']
+
+const vipCardClass = computed(() => {
+  if (userStore.isVip) return 'vip-card-active'
+  if (userStore.vipExpired) return 'vip-card-expired'
+  return ''
+})
+
+function openRecharge() {
+  openVipModal({ mode: 'recharge' })
+}
 
 // ─── Tab 切换 ───
 const activeTab = ref('account')
@@ -703,6 +740,157 @@ onUnmounted(() => {
 }
 
 .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* ─── VIP 状态卡片 ─── */
+.vip-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  margin-bottom: 24px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.vip-card-active {
+  background: linear-gradient(120deg, #fffdf5, #fef3c7, #fffdf5);
+  border-color: #fbbf24;
+  box-shadow: 0 6px 24px rgba(217, 119, 6, 0.16);
+}
+
+.vip-card-expired {
+  border-color: #fca5a5;
+  background: linear-gradient(120deg, #fff, #fef2f2, #fff);
+}
+
+.vip-card-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.vip-card-badge {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.3);
+}
+
+.vip-card-info { min-width: 0; }
+
+.vip-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.vip-level {
+  font-family: 'Playfair Display', 'Noto Serif SC', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.vip-expire {
+  font-size: 12px;
+  color: #b45309;
+  background: rgba(217, 119, 6, 0.1);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.vip-expired-tag {
+  font-size: 12px;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.vip-admin-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  padding: 2px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+}
+
+.vip-free-tag {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(120, 113, 108, 0.08);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.vip-benefits-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vip-benefit-tag {
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.vip-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-vip-upgrade {
+  padding: 9px 22px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Crimson Pro', 'Noto Serif SC', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-vip-upgrade:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(217, 119, 6, 0.45);
+}
+
+.btn-vip-renew {
+  padding: 9px 22px;
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  background: rgba(217, 119, 6, 0.08);
+  font-family: 'Crimson Pro', 'Noto Serif SC', serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #b45309;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-vip-renew:hover { background: rgba(217, 119, 6, 0.16); }
 
 /* ─── Tab 导航条 ─── */
 .tab-bar {

@@ -87,6 +87,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { setupApi } from '@/api/setup'
+import { requireVip } from '@/services/vipService'
 
 import { CHARACTER_CATEGORIES, getCategoryLabel } from '@/config/categories'
 
@@ -116,6 +117,7 @@ function roleLabel(role) {
 }
 
 async function generate() {
+  if (!requireVip('人物群像生成')) return
   loading.value = true
   status.value = 'generating'
   errorMsg.value = ''

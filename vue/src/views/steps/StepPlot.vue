@@ -74,6 +74,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { setupApi } from '@/api/setup'
+import { requireVip } from '@/services/vipService'
 
 const props = defineProps({
   projectId: { type: [Number, String], required: true },
@@ -97,6 +98,7 @@ const preview = computed(() => {
 })
 
 async function generate() {
+  if (!requireVip('情节生成')) return
   loading.value = true; status.value = 'generating'; errorMsg.value = ''
   try {
     const res = await setupApi.generatePlot(props.projectId, {

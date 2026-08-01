@@ -600,6 +600,7 @@ import CreateChapterModal from '@/components/common/CreateChapterModal.vue'
 import AiWritePanel from '@/components/common/AiWritePanel.vue'
 import AICoWriter from '@/components/editor/AICoWriter.vue'
 import { sendNotification } from '@/services/notificationService'
+import { requireVip } from '@/services/vipService'
 
 const store = useNovelStore()
 const settingsStore = useSettingsStore()
@@ -840,6 +841,7 @@ async function confirmDelete() {
 // ─── AI 扩写 ───
 function handleAiExpand() {
   if (!store.currentChapterId) return
+  if (!requireVip('AI 续写 / 扩写')) return
   showAiPanel.value = true
 }
 
@@ -864,6 +866,7 @@ function onContentGenerated(result) {
 async function handleAiPolish() {
   const pid = store.currentProjectId
   if (!pid || !selectedText.value) return
+  if (!requireVip('智能润色 / 改写')) return
   try {
     const result = await aiApi.chat(pid,
       `请润色以下小说片段，使其更加生动流畅，保持原意和风格：\n\n${selectedText.value}`
@@ -975,6 +978,7 @@ function handleAppendForeshadow(fs) {
 
 async function confirmAppendForeshadow() {
   if (!appendForeshadowTarget.value || !store.currentChapterId) return
+  if (!requireVip('伏笔智能追加')) return
   appendLoading.value = true
   // AI 推理型模型生成补写内容可能耗时较长（数十几秒到两分钟），
   // 加 150 秒超时保护：超时后明确提示，避免静默丢失后端响应
@@ -1068,6 +1072,7 @@ async function handleMarkResolved(fs) {
 async function handleSendChat() {
   const text = chatInput.value.trim()
   if (!text || chatLoading.value) return
+  if (!requireVip('AI 对话生成')) return
   const pid = store.currentProjectId
   if (!pid) return
 
@@ -1242,6 +1247,7 @@ async function handleAIFixAlert(alert) {
     showToast('无修复建议', 'warning')
     return
   }
+  if (!requireVip('智能润色 / 改写')) return
   try {
     const pid = store.currentProjectId
     const direction = `请根据以下哨兵告警修复内容：${alert.suggestion}\n\n原文：${store.editorContent.slice(0, 500)}...`

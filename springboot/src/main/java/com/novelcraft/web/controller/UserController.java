@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -148,5 +149,25 @@ public class UserController {
         } else {
             return R.fail("发送失败");
         }
+    }
+
+    /**
+     * 获取 VIP 套餐列表（支付接入前为占位配置）
+     */
+    @GetMapping("/vip/plans")
+    public R<List<Map<String, Object>>> getVipPlans() {
+        return R.ok(userService.getVipPlans());
+    }
+
+    /**
+     * 激活/续费 VIP（模拟支付成功，后续可对接真实支付回调）
+     */
+    @PostMapping("/vip/activate")
+    public R<Map<String, Object>> activateVip(@RequestBody Map<String, String> params) {
+        String planId = params.get("planId");
+        if (planId == null || planId.isBlank()) {
+            return R.badRequest("套餐不能为空");
+        }
+        return R.ok(userService.activateVip(planId));
     }
 }

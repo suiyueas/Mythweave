@@ -378,6 +378,10 @@ CREATE TABLE IF NOT EXISTS novel_user (
     bio             VARCHAR(500)    DEFAULT NULL COMMENT '个人简介',
     avatar          VARCHAR(500)    DEFAULT NULL COMMENT '头像URL',
     email_verified  TINYINT(1)      NOT NULL DEFAULT 0 COMMENT '邮箱是否已验证',
+    role            VARCHAR(20)     NOT NULL DEFAULT 'user' COMMENT '角色: admin-管理员 user-普通用户',
+    vip_level       INT             NOT NULL DEFAULT 0 COMMENT 'VIP等级 0-普通 1-白银 2-黄金 3-钻石',
+    vip_expire_at   DATETIME        DEFAULT NULL COMMENT 'VIP到期时间，NULL表示未开通',
+    vip_purchased_at DATETIME       DEFAULT NULL COMMENT '最近一次VIP购买时间',
     create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
@@ -386,6 +390,16 @@ CREATE TABLE IF NOT EXISTS novel_user (
     INDEX idx_user_email (email),
     INDEX idx_user_deleted (deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息';
+
+-- 已有库升级（VIP 会员体系）：逐条执行，已存在字段会报错，属正常现象可跳过
+-- ALTER TABLE novel_user ADD COLUMN vip_level INT NOT NULL DEFAULT 0 COMMENT 'VIP等级 0-普通 1-白银 2-黄金 3-钻石';
+-- ALTER TABLE novel_user ADD COLUMN vip_expire_at DATETIME DEFAULT NULL COMMENT 'VIP到期时间，NULL表示未开通';
+-- ALTER TABLE novel_user ADD COLUMN vip_purchased_at DATETIME DEFAULT NULL COMMENT '最近一次VIP购买时间';
+-- 已有库升级（用户角色字段）：
+-- ALTER TABLE novel_user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '角色: admin-管理员 user-普通用户';
+-- UPDATE novel_user SET role='admin' WHERE username='admin';
+-- 已有库升级（管理员默认 VIP）：
+-- UPDATE novel_user SET vip_level=3, vip_expire_at='2099-12-31 23:59:59', vip_purchased_at=NOW() WHERE username='admin';
 
 -- =====================================================
 -- 18. 用户设置表
@@ -430,8 +444,8 @@ CREATE TABLE IF NOT EXISTS novel_user_stats (
 -- =====================================================
 -- 初始化默认用户
 -- =====================================================
-INSERT INTO novel_user (username, password, nickname, email, phone, bio, email_verified)
-VALUES ('admin', '$2b$12$lR2oJF.cGkX/7pYK64omhuGYdmdY.1Snr/zqAbPggb3Bo.zzE5bzW', '墨染青衫', 'writer@example.com', '138****8888', '玄幻小说爱好者，笔耕不辍', 0);
+INSERT INTO novel_user (username, password, nickname, email, phone, bio, email_verified, role, vip_level, vip_expire_at, vip_purchased_at)
+VALUES ('admin', '$2b$12$lR2oJF.cGkX/7pYK64omhuGYdmdY.1Snr/zqAbPggb3Bo.zzE5bzW', '墨染青衫', 'writer@example.com', '138****8888', '玄幻小说爱好者，笔耕不辍', 0, 'admin', 3, '2099-12-31 23:59:59', NOW());
 
 INSERT INTO novel_user_stats (user_id, total_words, continuous_days, works_count, user_level)
 VALUES (1, 127430, 32, 3, 8);

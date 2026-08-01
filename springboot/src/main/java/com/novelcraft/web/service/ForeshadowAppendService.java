@@ -31,7 +31,7 @@ public class ForeshadowAppendService {
     private final NovelChapterMapper chapterMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** 锚点引号模式：'XXX' / "XXX" / “XXX” / 「XXX」 / 『XXX』 **/
+    /* 锚点引号模式：'XXX' / "XXX" / “XXX” / 「XXX」 / 『XXX』 */
     private static final Pattern ANCHOR_PATTERN =
             Pattern.compile("['\"“”『』「」]([^'\"“”『』「」]{2,40})['\"“”『』「」]");
 

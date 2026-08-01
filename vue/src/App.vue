@@ -1,10 +1,13 @@
 <template>
   <router-view />
+  <!-- 全局 VIP 升级/续费弹窗（权限拦截 + 充值中心） -->
+  <VipUpgradeModal />
 </template>
 
 <script setup>
 import { watch, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import VipUpgradeModal from '@/components/vip/VipUpgradeModal.vue'
 
 const settingsStore = useSettingsStore()
 

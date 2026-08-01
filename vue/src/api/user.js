@@ -13,5 +13,10 @@ export const userApi = {
   
   sendEmailVerification: () => post('/api/users/email/verify'),
   
-  getStats: () => get('/api/users/stats')
+  getStats: () => get('/api/users/stats'),
+
+  // ─── VIP 会员 ───
+  getVipPlans: () => get('/api/users/vip/plans'),
+
+  activateVip: (planId) => post('/api/users/vip/activate', { planId })
 }
