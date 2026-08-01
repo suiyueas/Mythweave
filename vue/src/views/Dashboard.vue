@@ -190,6 +190,34 @@
         </BaseCard>
       </div>
     </section>
+
+    <!-- ==================== 项目设定 ==================== -->
+    <section class="settings-section" v-if="project?.coreSetting || project?.worldSettings || project?.characters || project?.outlines">
+      <BaseCard class="settings-card">
+        <div class="card-header">
+          <h3 class="card-title">📝 项目设定</h3>
+          <button class="link-btn" @click="$emit('navigate', 'world')">编辑设定 →</button>
+        </div>
+        <div class="settings-grid">
+          <div v-if="project?.coreSetting" class="setting-item">
+            <div class="setting-label">核心设定</div>
+            <div class="setting-content">{{ project.coreSetting }}</div>
+          </div>
+          <div v-if="project?.worldSettings" class="setting-item">
+            <div class="setting-label">世界观设定</div>
+            <div class="setting-content">{{ project.worldSettings }}</div>
+          </div>
+          <div v-if="project?.characters" class="setting-item">
+            <div class="setting-label">人物设定</div>
+            <div class="setting-content">{{ project.characters }}</div>
+          </div>
+          <div v-if="project?.outlines" class="setting-item">
+            <div class="setting-label">大纲结构</div>
+            <div class="setting-content">{{ project.outlines }}</div>
+          </div>
+        </div>
+      </BaseCard>
+    </section>
   </div>
 </template>
 
@@ -822,6 +850,21 @@ const weekAvgWords = computed(() => {
   color: #94a3b8;
 }
 .empty-icon { font-size: 28px; opacity: 0.5; }
+
+/* ─── 项目设定 ─── */
+.settings-section { margin-top: 16px; }
+.settings-card { padding: 16px 20px; }
+.settings-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.settings-card .card-title { font-size: 15px; font-weight: 600; color: #1a1a2e; margin: 0; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.setting-item { background: #faf8f5; border-radius: 8px; padding: 12px 14px; }
+.setting-label { font-size: 11px; font-weight: 600; color: #7c3aed; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.setting-content { font-size: 13px; color: #475569; line-height: 1.6; max-height: 80px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 
 /* ─── 响应式 ─── */
 @media (max-width: 1200px) {

@@ -90,7 +90,7 @@
           <!-- 卡片封面区 -->
           <div class="card-cover" :style="{ background: getCoverGradient(project) }">
             <!-- 状态标签（可点击切换） -->
-            <div class="cover-badge status-badge" v-if="!project.status || project.status === 'draft' || project.status === '连载中' || project.status === 'ongoing'"
+            <div class="cover-badge status-badge" v-if="!project.status || project.status === 'draft' || project.status === '连载中' || project.status === 'ongoing' || project.status === 'done'"
               @click.stop="toggleStatus(project)" title="点击切换状态">连载中</div>
             <div class="cover-badge done status-badge" v-else-if="project.status === '已完成' || project.status === 'completed'"
               @click.stop="toggleStatus(project)" title="点击切换状态">已完成</div>
@@ -111,7 +111,7 @@
           <div class="card-body">
             <div class="card-header-row">
               <h3 class="card-title">{{ project.title || '未命名' }}</h3>
-              <button class="card-menu" @click.stop="openCardMenu(project, $event)">⋯</button>
+              <button class="card-edit-btn" @click.stop="editProject(project)" title="编辑作品">✏️</button>
             </div>
             <div class="card-tags" v-if="getProjectTags(project).length > 0">
               <span v-for="tag in getProjectTags(project).slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
@@ -133,10 +133,10 @@
                 <span class="stat-unit">月</span>
               </div>
             </div>
-            <div class="card-progress" v-if="project.targetWordCount">
+            <div class="card-progress" v-if="project.targetWordCount && project.targetWordCount > 0">
               <div class="progress-header">
-                <span class="progress-label">目标 {{ formatWan(project.targetWordCount) }}字，完成</span>
-                <span class="progress-percent">{{ getProgressPercent(project) }}%</span>
+                <span class="progress-label">目标 {{ formatWan(project.targetWordCount) }}字</span>
+                <span class="progress-percent" :class="{ done: getProgressPercent(project) >= 100 }">{{ getProgressPercent(project) >= 100 ? '已完成' : getProgressPercent(project) + '%' }}</span>
               </div>
               <div class="progress-bar">
                 <div class="progress-fill" :style="{ width: Math.min(getProgressPercent(project), 100) + '%' }"></div>
@@ -245,45 +245,141 @@
             </div>
           </div>
 
-          <!-- 核心设定 + AI生成设定 -->
+          <!-- 核心设定 + 作品简介 -->
           <div class="form-row">
             <label class="form-label">核心设定 <span class="optional">（选填）</span></label>
             <div class="input-group">
-              <textarea v-model="form.coreSetting" class="form-textarea" rows="4" placeholder="描述世界观、力量体系、核心冲突等..."></textarea>
-              <button type="button" class="btn-ai btn-ai-right" :disabled="aiLoading === 'setting'" @click="aiGenerate('setting')">
-                <span v-if="aiLoading === 'setting'" class="spinner"></span>
-                <span v-else-if="aiGenerated === 'setting'" class="check">✓</span>
-                <span v-else>✨</span>
-                <span class="btn-text">{{ aiGenerated === 'setting' ? '已生成' : '生成设定' }}</span>
+              <textarea v-model="form.coreSetting" class="form-textarea" rows="3" placeholder="描述世界观、力量体系、核心冲突等..."></textarea>
+              <button v-if="form.coreSetting" type="button" class="btn-parse" @click="showCorePreview = !showCorePreview">
+                {{ showCorePreview ? '🔼 收起预览' : '🔽 预览解析' }}
               </button>
             </div>
-          </div>
-
-          <!-- 生成的大纲预览 + AI生成大纲 -->
-          <div class="form-row">
-            <label class="form-label">生成的大纲预览</label>
-            <div class="input-group">
-              <div class="outline-preview" :class="{ 'has-content': outlineResult }">
-                <div v-if="outlineResult" class="outline-content">{{ outlineResult }}</div>
-                <div v-else class="outline-placeholder">
-                  <span class="placeholder-icon">📋</span>
-                  <span>点击「AI 生成大纲」后，大纲内容将显示在这里</span>
+            <!-- 核心设定解析预览 -->
+            <div v-if="showCorePreview && parsedCoreItems.length > 0" class="core-preview">
+              <div class="preview-header">
+                <span class="preview-badge">✅ 已识别 {{ parsedCoreItems.length }} 个核心设定项</span>
+              </div>
+              <div class="preview-items">
+                <div v-for="(item, idx) in parsedCoreItems" :key="idx" class="preview-item">
+                  <div class="item-title">{{ item.title }}</div>
+                  <div class="item-content">{{ item.content }}</div>
                 </div>
               </div>
-              <button type="button" class="btn-ai btn-ai-right" :disabled="aiLoading === 'outline'" @click="aiGenerate('outline')">
-                <span v-if="aiLoading === 'outline'" class="spinner"></span>
-                <span v-else-if="aiGenerated === 'outline'" class="check">✓</span>
-                <span v-else>✨</span>
-                <span class="btn-text">{{ aiGenerated === 'outline' ? '已生成' : 'AI 生成大纲' }}</span>
-              </button>
+            </div>
+            <div v-else-if="showCorePreview && form.coreSetting && parsedCoreItems.length === 0" class="core-preview">
+              <div class="preview-header">
+                <span class="preview-badge muted">未能识别结构化内容，将作为原始文本保存</span>
+              </div>
             </div>
           </div>
 
-          <!-- 起始世界 + 预定完本时间 -->
+          <!-- 世界观设定 -->
+          <div class="form-row">
+            <label class="form-label">世界观设定 <span class="optional">（选填）</span></label>
+            <div class="input-group">
+              <textarea v-model="form.worldSettings" class="form-textarea" rows="4" placeholder="直接粘贴完整的世界观设定文本，系统将自动解析章节结构..."></textarea>
+              <button v-if="form.worldSettings" type="button" class="btn-parse" @click="showWorldPreview = !showWorldPreview">
+                {{ showWorldPreview ? '🔼 收起预览' : '🔽 预览解析' }}
+              </button>
+            </div>
+            <!-- 世界观解析预览 -->
+            <div v-if="showWorldPreview && parsedWorldSections.length > 0" class="world-preview">
+              <div class="preview-header">
+                <span class="preview-badge">✅ 已识别 {{ parsedWorldSections.length }} 个章节</span>
+              </div>
+              <div class="preview-sections">
+                <div v-for="(sec, idx) in parsedWorldSections" :key="idx" class="preview-sec">
+                  <div class="sec-title">{{ sec.title }}</div>
+                  <div class="sec-content">{{ sec.content }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="showWorldPreview && form.worldSettings && parsedWorldSections.length === 0" class="world-preview">
+              <div class="preview-header">
+                <span class="preview-badge muted">未能识别结构化内容，将作为原始文本保存</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 人物设定 -->
+          <div class="form-row">
+            <label class="form-label">人物设定 <span class="optional">（选填）</span></label>
+            <div class="input-group">
+              <textarea v-model="form.characters" class="form-textarea" rows="4" placeholder="直接粘贴人物设定文本（如：1. 林彻 · 凡骨改写者&#10;年龄：17岁&#10;身份：采石工 → ...），系统将自动解析..."></textarea>
+              <button v-if="form.characters" type="button" class="btn-parse" @click="showCharacterPreview = !showCharacterPreview">
+                {{ showCharacterPreview ? '🔼 收起预览' : '🔽 预览解析' }}
+              </button>
+            </div>
+            <!-- 人物解析预览 -->
+            <div v-if="showCharacterPreview && parsedCharacters.length > 0" class="character-preview">
+              <div class="preview-header">
+                <span class="preview-badge">✅ 已识别 {{ parsedCharacters.length }} 位人物</span>
+              </div>
+              <div class="preview-list">
+                <div v-for="(ch, idx) in parsedCharacters" :key="idx" class="preview-char">
+                  <div class="char-header">
+                    <span class="char-name">{{ ch.name }}</span>
+                    <span class="char-role" :class="'role-' + ch.role">{{ ch.role }}</span>
+                  </div>
+                  <div v-if="ch.age" class="char-field">年龄：{{ ch.age }}</div>
+                  <div v-if="ch.identity" class="char-field">身份：{{ ch.identity }}</div>
+                  <div v-if="ch.realm" class="char-field">境界：{{ ch.realm }}</div>
+                  <div v-if="ch.personality" class="char-field char-personality">{{ ch.personality }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="showCharacterPreview && form.characters && parsedCharacters.length === 0" class="character-preview">
+              <div class="preview-header">
+                <span class="preview-badge muted">未能识别结构化人物，将作为原始文本保存</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 大纲结构 -->
+          <div class="form-row">
+            <label class="form-label">大纲结构 <span class="optional">（选填）</span></label>
+            <div class="input-group">
+              <textarea v-model="form.outlines" class="form-textarea outline-textarea" rows="5" placeholder="描述故事的三幕结构、各章节的关键事件、转折点等...支持多行文本"></textarea>
+              <button v-if="form.outlines" type="button" class="btn-parse" @click="showOutlinePreview = !showOutlinePreview">
+                {{ showOutlinePreview ? '🔼 收起预览' : '🔽 预览解析' }}
+              </button>
+            </div>
+            <!-- 大纲解析预览 -->
+            <div v-if="showOutlinePreview && (parsedOutline.acts.length > 0 || parsedOutline.chapters.length > 0)" class="outline-parse-preview">
+              <div class="preview-header">
+                <span class="preview-badge">✅ 已识别 {{ parsedOutline.acts.length || 1 }} 幕，{{ parsedOutline.chapters.length }} 章</span>
+              </div>
+              <div v-if="parsedOutline.acts.length > 0" class="preview-acts">
+                <div v-for="(act, actIdx) in parsedOutline.acts" :key="actIdx" class="preview-act">
+                  <div class="act-title">{{ act.title || `第${actIdx + 1}幕` }}</div>
+                  <div v-if="act.description" class="act-desc">{{ act.description }}</div>
+                  <div v-if="act.chapters && act.chapters.length > 0" class="act-chapters">
+                    <div v-for="(ch, chIdx) in act.chapters" :key="chIdx" class="preview-chapter">
+                      <span class="ch-num">{{ ch.title || ch.number || `第${chIdx + 1}章` }}</span>
+                      <span v-if="ch.summary" class="ch-summary">{{ ch.summary }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="parsedOutline.chapters.length > 0" class="preview-chapters-list">
+                <div v-for="(ch, idx) in parsedOutline.chapters" :key="idx" class="preview-chapter">
+                  <span class="ch-num">{{ ch.title || `第${idx + 1}章` }}</span>
+                  <span v-if="ch.summary" class="ch-summary">{{ ch.summary }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="showOutlinePreview && form.outlines && parsedOutline.acts.length === 0 && parsedOutline.chapters.length === 0" class="outline-parse-preview">
+              <div class="preview-header">
+                <span class="preview-badge muted">未能识别结构化大纲，将作为原始文本保存</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 起始时间 + 预定完本时间 -->
           <div class="form-row form-row-grid">
             <div class="form-cell">
-              <label class="form-label">起始世界 <span class="optional">（选填）</span></label>
-              <input v-model="form.startingWorld" class="form-input" placeholder="如：灵气复苏后的九州大陆">
+              <label class="form-label">起始时间 <span class="optional">（选填）</span></label>
+              <input v-model="form.startingTime" type="date" class="form-input">
             </div>
             <div class="form-cell">
               <label class="form-label">预定完本时间 <span class="optional">（选填）</span></label>
@@ -334,6 +430,12 @@ import { useRouter, useRoute } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import DeleteConfirmDialog from '@/components/common/DeleteConfirmDialog.vue'
 import { formatWordCount, formatWan, formatTime, formatNumber, formatRelativeTime } from '@/utils/format'
+import { parseCharacterText, formatCharactersForAI } from '@/utils/characterParser'
+import { parseWorldText, formatWorldForAI } from '@/utils/worldParser'
+import { parseCoreSettingText, parseOutlineText, formatOutlineForAI } from '@/utils/outlineParser'
+import { characterApi } from '@/api/character'
+import { worldApi } from '@/api/world'
+import { outlineApi } from '@/api/outline'
 
 const router = useRouter()
 const route = useRoute()
@@ -378,10 +480,10 @@ const workToDelete = ref(null)
 const deletingId = ref(null)
 
 // ─── 统计概览 ───
-const ongoingCount = computed(() => projects.value.filter(p => !p.status || p.status === 'draft' || p.status === '连载中' || p.status === 'ongoing').length)
+const ongoingCount = computed(() => projects.value.filter(p => !p.status || p.status === 'draft' || p.status === '连载中' || p.status === 'ongoing' || p.status === 'done').length)
 const completedCount = computed(() => projects.value.filter(p => p.status === '已完成' || p.status === 'completed').length)
 const totalWords = computed(() => {
-  const total = projects.value.reduce((s, p) => s + (p.wordCount || p.targetWordCount || 0), 0)
+  const total = projects.value.reduce((s, p) => s + (p.wordCount || 0), 0)
   return formatWordCount(total)
 })
 
@@ -397,14 +499,45 @@ const filteredProjects = computed(() => {
 })
 
 // ─── 辅助方法 ───
-const genreEmojis = { '玄幻': '⚔️', '都市': '🏙️', '科幻': '🚀', '悬疑': '🔍', '言情': '💕', '历史': '📜' }
+const genreEmojis = {
+  '玄幻': '⚔️', '科幻': '🚀', '悬疑': '🔍', '言情': '💕', '都市': '🏙️', '历史': '📜',
+  '奇幻': '🌟', '武侠': '⚔️', '青春': '🌸', '浪漫': '💝', '恐怖': '👻', '惊悚': '😱',
+  '冒险': '🗺️', '战争': '🎖️', '谍战': '🕵️', '军事': '🎯', '悬疑推理': '🔎',
+  '科幻末世': '☢️', '科幻星际': '🛸', '奇幻异世': '🌈', '奇幻魔法': '✨',
+  '玄幻修仙': '🔥', '玄幻异火': '💥', '玄幻剑道': '⚡', '仙侠': '☁️',
+  '轻小说': '📖', '同人': '🎭', '短篇小说': '📝', '诗歌': '🎼', '散文': '🌿'
+}
 const genreGradients = {
   '玄幻': 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-  '都市': 'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)',
   '科幻': 'linear-gradient(135deg, #0c0a3e 0%, #1b1464 50%, #2d1b69 100%)',
   '悬疑': 'linear-gradient(135deg, #1a0a0a 0%, #3d1212 50%, #5c1a1a 100%)',
   '言情': 'linear-gradient(135deg, #3b1d2e 0%, #5c2a4a 50%, #7c3a6a 100%)',
-  '历史': 'linear-gradient(135deg, #1a1a0a 0%, #3d3d12 50%, #5c4a1a 100%)'
+  '都市': 'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)',
+  '历史': 'linear-gradient(135deg, #2d2010 0%, #4a3518 50%, #6b4a20 100%)',
+  '奇幻': 'linear-gradient(135deg, #1a1a3e 0%, #2d2d6b 50%, #3d3d98 100%)',
+  '武侠': 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 50%, #3d5c3d 100%)',
+  '青春': 'linear-gradient(135deg, #3e2d4a 0%, #5c4a6b 50%, #7c5c8c 100%)',
+  '浪漫': 'linear-gradient(135deg, #4a2d3e 0%, #6b4a5c 50%, #8c5c7c 100%)',
+  '恐怖': 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2a2a2a 100%)',
+  '惊悚': 'linear-gradient(135deg, #1a0a10 0%, #3d1220 50%, #5c1a30 100%)',
+  '冒险': 'linear-gradient(135deg, #0a1a0a 0%, #123d12 50%, #1a5c1a 100%)',
+  '战争': 'linear-gradient(135deg, #2d2d1a 0%, #4a4a2d 50%, #5c5c3d 100%)',
+  '谍战': 'linear-gradient(135deg, #1a1a2e 0%, #2d2d4a 50%, #3d3d5c 100%)',
+  '军事': 'linear-gradient(135deg, #2e2e1a 0%, #4a4a2d 50%, #5c5c3d 100%)',
+  '悬疑推理': 'linear-gradient(135deg, #1a0a1a 0%, #3d123d 50%, #5c1a5c 100%)',
+  '科幻末世': 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2a2a2a 100%)',
+  '科幻星际': 'linear-gradient(135deg, #0a0a2e 0%, #12124a 50%, #1a1a5c 100%)',
+  '奇幻异世': 'linear-gradient(135deg, #2e1a3e 0%, #4a2d5c 50%, #5c3d7c 100%)',
+  '奇幻魔法': 'linear-gradient(135deg, #1a2e3e 0%, #2d4a5c 50%, #3d5c7c 100%)',
+  '玄幻修仙': 'linear-gradient(135deg, #1a1a3e 0%, #2d2d6b 50%, #3d3d98 100%)',
+  '玄幻异火': 'linear-gradient(135deg, #3e1a0a 0%, #6b2d12 50%, #8c3d1a 100%)',
+  '玄幻剑道': 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 50%, #3d5c3d 100%)',
+  '仙侠': 'linear-gradient(135deg, #1a3e3e 0%, #2d5c5c 50%, #3d7c7c 100%)',
+  '轻小说': 'linear-gradient(135deg, #3e3e2d 0%, #5c5c4a 50%, #7c7c5c 100%)',
+  '同人': 'linear-gradient(135deg, #2d1a2d 0%, #4a2d4a 50%, #5c3d5c 100%)',
+  '短篇小说': 'linear-gradient(135deg, #3e3e3e 0%, #5c5c5c 50%, #7c7c7c 100%)',
+  '诗歌': 'linear-gradient(135deg, #2d3e2d 0%, #4a5c4a 50%, #5c7c5c 100%)',
+  '散文': 'linear-gradient(135deg, #2d2d3e 0%, #4a4a5c 50%, #5c5c7c 100%)'
 }
 
 function getProjectEmoji(p) { return genreEmojis[p.genre] || '📖' }
@@ -457,15 +590,100 @@ const formatUpdateTime = (p) => {
 const showModal = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
-const form = reactive({ title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '', startingWorld: '', plannedCompletionDate: '', status: 'ongoing' })
+const form = reactive({
+  title: '', description: '', genre: '', subGenre: '',
+  targetWordCount: null, tags: '',
+  coreSetting: '', worldSettings: '', characters: '', charactersFormatted: '', outlines: '',
+  startingTime: '', plannedCompletionDate: '', status: 'ongoing'
+})
+const parsedCharacters = ref([])
+const showCharacterPreview = ref(false)
+const parsedWorldSections = ref([])
+const showWorldPreview = ref(false)
+const parsedCoreItems = ref([])
+const showCorePreview = ref(false)
+const parsedOutline = ref({ acts: [], chapters: [] })
+const showOutlinePreview = ref(false)
+
+// 监听人物设定文本变化，自动解析
+watch(() => form.characters, (newVal) => {
+  if (newVal && newVal.trim().length > 20) {
+    const result = parseCharacterText(newVal)
+    parsedCharacters.value = result.characters
+    showCharacterPreview.value = result.success
+  } else {
+    parsedCharacters.value = []
+    showCharacterPreview.value = false
+  }
+})
+
+// 监听世界观设定文本变化，自动解析
+watch(() => form.worldSettings, (newVal) => {
+  if (newVal && newVal.trim().length > 30) {
+    const result = parseWorldText(newVal)
+    parsedWorldSections.value = result.sections
+    showWorldPreview.value = result.success
+  } else {
+    parsedWorldSections.value = []
+    showWorldPreview.value = false
+  }
+})
+
+// 监听核心设定文本变化，自动解析
+watch(() => form.coreSetting, (newVal) => {
+  if (newVal && newVal.trim().length > 20) {
+    const result = parseCoreSettingText(newVal)
+    parsedCoreItems.value = result.items
+    showCorePreview.value = result.success
+  } else {
+    parsedCoreItems.value = []
+    showCorePreview.value = false
+  }
+})
+
+// 监听大纲文本变化，自动解析
+watch(() => form.outlines, (newVal) => {
+  if (newVal && newVal.trim().length > 30) {
+    const result = parseOutlineText(newVal)
+    parsedOutline.value = result
+    showOutlinePreview.value = result.success
+  } else {
+    parsedOutline.value = { acts: [], chapters: [] }
+    showOutlinePreview.value = false
+  }
+})
 
 const templates = [
-  { icon: '⚔️', label: '玄幻修真', value: '玄幻' },
-  { icon: '🏙️', label: '都市异能', value: '都市' },
-  { icon: '🚀', label: '科幻末世', value: '科幻' },
-  { icon: '🔍', label: '悬疑推理', value: '悬疑' },
+  { icon: '⚔️', label: '玄幻', value: '玄幻' },
+  { icon: '🚀', label: '科幻', value: '科幻' },
+  { icon: '🔍', label: '悬疑', value: '悬疑' },
   { icon: '💕', label: '言情', value: '言情' },
-  { icon: '📜', label: '历史架空', value: '历史' }
+  { icon: '🏙️', label: '都市', value: '都市' },
+  { icon: '📜', label: '历史', value: '历史' },
+  { icon: '🌟', label: '奇幻', value: '奇幻' },
+  { icon: '⚔️', label: '武侠', value: '武侠' },
+  { icon: '🌸', label: '青春', value: '青春' },
+  { icon: '💝', label: '浪漫', value: '浪漫' },
+  { icon: '👻', label: '恐怖', value: '恐怖' },
+  { icon: '😱', label: '惊悚', value: '惊悚' },
+  { icon: '🗺️', label: '冒险', value: '冒险' },
+  { icon: '🎖️', label: '战争', value: '战争' },
+  { icon: '🕵️', label: '谍战', value: '谍战' },
+  { icon: '🎯', label: '军事', value: '军事' },
+  { icon: '🔎', label: '悬疑推理', value: '悬疑推理' },
+  { icon: '☢️', label: '科幻末世', value: '科幻末世' },
+  { icon: '🛸', label: '科幻星际', value: '科幻星际' },
+  { icon: '🌈', label: '奇幻异世', value: '奇幻异世' },
+  { icon: '✨', label: '奇幻魔法', value: '奇幻魔法' },
+  { icon: '🔥', label: '玄幻修仙', value: '玄幻修仙' },
+  { icon: '💥', label: '玄幻异火', value: '玄幻异火' },
+  { icon: '⚡', label: '玄幻剑道', value: '玄幻剑道' },
+  { icon: '☁️', label: '仙侠', value: '仙侠' },
+  { icon: '📖', label: '轻小说', value: '轻小说' },
+  { icon: '🎭', label: '同人', value: '同人' },
+  { icon: '📝', label: '短篇小说', value: '短篇小说' },
+  { icon: '🎼', label: '诗歌', value: '诗歌' },
+  { icon: '🌿', label: '散文', value: '散文' }
 ]
 
 // ─── 导航 ───
@@ -477,7 +695,18 @@ function goToWorkspace(project) {
 // ─── 弹窗 ───
 function openCreateModal() {
   editingId.value = null
-  Object.assign(form, { title: '', description: '', genre: '', subGenre: '', targetWordCount: null, tags: '', coreSetting: '', startingWorld: '', plannedCompletionDate: '', status: 'ongoing' })
+  Object.assign(form, {
+    title: '', description: '', genre: '', subGenre: '',
+    targetWordCount: null, tags: '',
+    coreSetting: '', worldSettings: '', characters: '', charactersFormatted: '', outlines: '',
+    startingTime: '', plannedCompletionDate: '', status: 'ongoing'
+  })
+  parsedCharacters.value = []
+  showCharacterPreview.value = false
+  parsedWorldSections.value = []
+  showWorldPreview.value = false
+  parsedCoreItems.value = []
+  showCorePreview.value = false
   showModal.value = true
 }
 
@@ -486,12 +715,40 @@ function editProject(project) {
   Object.assign(form, {
     title: project.title || '', description: project.description || '',
     genre: project.genre || '', subGenre: project.subGenre || '',
-    targetWordCount: project.targetWordCount || null, tags: project.tags || '',
+    targetWordCount: project.targetWordCount ?? null, tags: project.tags || '',
     coreSetting: project.coreSetting || '',
-    startingWorld: project.startingWorld || '',
+    worldSettings: project.worldSettings || '',
+    characters: project.characters || '',
+    charactersFormatted: project.charactersFormatted || '',
+    outlines: project.outlines || '',
+    startingTime: project.startingTime || '',
     plannedCompletionDate: project.plannedCompletionDate ? String(project.plannedCompletionDate).slice(0, 10) : '',
     status: project.status || 'ongoing'
   })
+  if (form.characters && form.characters.trim().length > 20) {
+    const result = parseCharacterText(form.characters)
+    parsedCharacters.value = result.characters
+    showCharacterPreview.value = result.success
+  } else {
+    parsedCharacters.value = []
+    showCharacterPreview.value = false
+  }
+  if (form.worldSettings && form.worldSettings.trim().length > 30) {
+    const result = parseWorldText(form.worldSettings)
+    parsedWorldSections.value = result.sections
+    showWorldPreview.value = result.success
+  } else {
+    parsedWorldSections.value = []
+    showWorldPreview.value = false
+  }
+  if (form.coreSetting && form.coreSetting.trim().length > 20) {
+    const result = parseCoreSettingText(form.coreSetting)
+    parsedCoreItems.value = result.items
+    showCorePreview.value = result.success
+  } else {
+    parsedCoreItems.value = []
+    showCorePreview.value = false
+  }
   showModal.value = true
 }
 
@@ -501,26 +758,195 @@ async function handleSubmit() {
   if (!form.title.trim() || saving.value) return
   saving.value = true
   try {
+    const charactersFormatted = parsedCharacters.value.length > 0
+      ? formatCharactersForAI(parsedCharacters.value)
+      : ''
     const data = {
       title: form.title.trim(), description: form.description || '',
       genre: form.genre || '', subGenre: form.subGenre || '',
-      targetWordCount: form.targetWordCount || null, tags: form.tags || '',
+      targetWordCount: form.targetWordCount ?? null, tags: form.tags || '',
       coreSetting: form.coreSetting || '',
-      startingWorld: form.startingWorld || '',
+      worldSettings: form.worldSettings || '',
+      characters: form.characters || '',
+      charactersFormatted: charactersFormatted || '',
+      outlines: form.outlines || '',
+      startingTime: form.startingTime || '',
       plannedCompletionDate: form.plannedCompletionDate || null,
       status: editingId.value ? form.status : 'ongoing'
     }
+    
+    let projectId
     if (editingId.value) {
       await store.updateProject(editingId.value, data)
+      projectId = editingId.value
     } else {
-      await store.createProject(data)
+      const newProject = await store.createProject(data)
+      projectId = newProject.id
     }
+    
+    await synchronizeParsedData(projectId)
+    
     projects.value = store.projects
     closeModal()
   } catch (e) {
     alert('操作失败：' + (e.message || '请稍后重试'))
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * 同步解析后的结构化数据到各个模块
+ */
+async function synchronizeParsedData(projectId) {
+  if (!projectId) return
+  
+  try {
+    await Promise.all([
+      synchronizeCharacters(projectId),
+      synchronizeWorldSettings(projectId),
+      synchronizeOutline(projectId),
+      synchronizeCoreSettings(projectId)
+    ])
+  } catch (e) {
+    console.warn('同步解析数据失败:', e.message)
+  }
+}
+
+/**
+ * 同步人物数据
+ */
+async function synchronizeCharacters(projectId) {
+  if (parsedCharacters.value.length === 0) return
+  
+  try {
+    const charactersData = parsedCharacters.value.map(ch => ({
+      name: ch.name || '未命名人物',
+      role: ch.role || '待定',
+      age: ch.age || null,
+      identity: ch.identity || null,
+      realm: ch.realm || null,
+      personality: ch.personality || null,
+      appearance: ch.appearance || null,
+      backstory: ch.backstory || null,
+      abilities: ch.abilities || null,
+      quotes: ch.quotes || null,
+      hiddenSettings: ch.hiddenSettings || null,
+      raw: ch.raw || null
+    }))
+    
+    for (const char of charactersData) {
+      await characterApi.create(projectId, char)
+    }
+    
+    console.log(`✅ 已同步 ${charactersData.length} 个人物到项目 ${projectId}`)
+  } catch (e) {
+    console.warn('同步人物数据失败:', e.message)
+  }
+}
+
+/**
+ * 同步世界观设定数据
+ */
+async function synchronizeWorldSettings(projectId) {
+  if (parsedWorldSections.value.length === 0) return
+  
+  try {
+    for (const section of parsedWorldSections.value) {
+      await worldApi.createSetting(projectId, {
+        name: section.title || '未命名设定',
+        category: detectWorldCategory(section.title),
+        content: section.content || '',
+        level: section.level || 1
+      })
+    }
+    
+    console.log(`✅ 已同步 ${parsedWorldSections.value.length} 个世界观设定到项目 ${projectId}`)
+  } catch (e) {
+    console.warn('同步世界观设定失败:', e.message)
+  }
+}
+
+/**
+ * 根据标题检测世界观分类
+ */
+function detectWorldCategory(title) {
+  if (!title) return '其他'
+  const t = title.toLowerCase()
+  if (t.includes('时代') || t.includes('背景')) return 'era'
+  if (t.includes('地理') || t.includes('版图') || t.includes('山川') || t.includes('城市')) return 'geography'
+  if (t.includes('历史') || t.includes('年表') || t.includes('事件')) return 'history'
+  if (t.includes('力量') || t.includes('体系') || t.includes('修炼') || t.includes('魔法')) return 'magic'
+  if (t.includes('政治') || t.includes('势力') || t.includes('王国') || t.includes('派系')) return 'politics'
+  if (t.includes('文化') || t.includes('社会') || t.includes('民俗')) return 'culture'
+  if (t.includes('科技') || t.includes('技术') || t.includes('器械')) return 'technology'
+  if (t.includes('种族') || t.includes('人种')) return 'races'
+  if (t.includes('信仰') || t.includes('神明') || t.includes('宗教')) return 'religion'
+  if (t.includes('规则') || t.includes('核心')) return 'uniqueRules'
+  return 'other'
+}
+
+/**
+ * 同步大纲数据
+ */
+async function synchronizeOutline(projectId) {
+  if (!parsedOutline.value || (parsedOutline.value.acts.length === 0 && parsedOutline.value.chapters.length === 0)) return
+  
+  try {
+    if (parsedOutline.value.acts.length > 0) {
+      const actsData = parsedOutline.value.acts.map((act, actIndex) => ({
+        title: act.title || `第${actIndex + 1}幕`,
+        description: act.description || '',
+        order: actIndex,
+        chapters: (act.chapters || []).map((ch, chIndex) => ({
+          title: ch.title || ch.summary || `第${chIndex + 1}章`,
+          summary: ch.summary || '',
+          order: chIndex,
+          actOrder: actIndex
+        }))
+      }))
+      
+      await outlineApi.saveActs(projectId, actsData)
+      console.log(`✅ 已同步 ${actsData.length} 幕大纲到项目 ${projectId}`)
+    } else if (parsedOutline.value.chapters.length > 0) {
+      const chaptersData = parsedOutline.value.chapters.map((ch, index) => ({
+        title: ch.title || ch.summary || `第${index + 1}章`,
+        summary: ch.summary || '',
+        order: index
+      }))
+      
+      await outlineApi.saveActs(projectId, [{
+        title: '第一幕',
+        description: '自动生成的大纲',
+        order: 0,
+        chapters: chaptersData
+      }])
+      console.log(`✅ 已同步 ${chaptersData.length} 个章节大纲到项目 ${projectId}`)
+    }
+  } catch (e) {
+    console.warn('同步大纲数据失败:', e.message)
+  }
+}
+
+/**
+ * 同步核心设定数据
+ */
+async function synchronizeCoreSettings(projectId) {
+  if (parsedCoreItems.value.length === 0) return
+  
+  try {
+    for (const item of parsedCoreItems.value) {
+      await worldApi.createSetting(projectId, {
+        name: item.title || '核心设定',
+        category: 'core',
+        content: item.content || '',
+        level: 1
+      })
+    }
+    
+    console.log(`✅ 已同步 ${parsedCoreItems.value.length} 个核心设定到项目 ${projectId}`)
+  } catch (e) {
+    console.warn('同步核心设定失败:', e.message)
   }
 }
 
@@ -535,7 +961,8 @@ function cancelDelete() {
 }
 
 async function toggleStatus(project) {
-  const newStatus = (project.status === 'completed' || project.status === '已完成') ? 'ongoing' : 'completed'
+  const isCompleted = project.status === 'completed' || project.status === '已完成' || project.status === 'done'
+  const newStatus = isCompleted ? 'ongoing' : 'completed'
   try {
     await store.updateProject(project.id, { status: newStatus })
     projects.value = store.projects
@@ -926,6 +1353,13 @@ function aiGenerate(key) {
 
 .card-menu:hover { background: #f0ece6; color: #6b6560; }
 
+.card-edit-btn {
+  background: none; border: none; font-size: 14px;
+  color: #a8a4a0; cursor: pointer; padding: 2px 6px;
+  border-radius: 4px; transition: all 0.2s; margin-left: auto;
+}
+.card-edit-btn:hover { background: #f0ece6; color: #6b6560; }
+
 .card-tags { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
 
 .tag {
@@ -1184,6 +1618,235 @@ function aiGenerate(key) {
 
 .btn-ai .btn-text {
   font-size: 14px;
+}
+
+/* ─── 人物解析预览 ─── */
+.btn-parse {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+.btn-parse:hover {
+  background: #dcfce7;
+}
+
+.character-preview {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+}
+.preview-header {
+  margin-bottom: 10px;
+}
+.preview-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  color: #166534;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.preview-badge.muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.preview-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.preview-char {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.char-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.char-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+}
+.char-role {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.char-role.role-主角 { background: #fef3c7; color: #92400e; }
+.char-role.role-反派 { background: #fee2e2; color: #991b1b; }
+.char-role.role-导师 { background: #dbeafe; color: #1e40af; }
+.char-role.role-盟友 { background: #dcfce7; color: #166534; }
+.char-role.role-配角 { background: #f1f5f9; color: #475569; }
+.char-role.role-待定 { background: #f1f5f9; color: #64748b; }
+.char-field {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.char-personality {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── 世界观解析预览 ─── */
+.world-preview {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+.preview-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-sec {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.sec-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.sec-content {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── 核心设定解析预览 ─── */
+.core-preview {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+}
+.preview-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-item {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.item-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.item-content {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── 大纲解析预览 ─── */
+.outline-parse-preview {
+  margin-top: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+}
+.preview-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.preview-act {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.act-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.act-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.act-chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.preview-chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-chapter {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ch-num {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 13px;
+}
+.ch-summary {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ─── 大纲展示区域 ─── */

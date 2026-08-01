@@ -526,6 +526,7 @@ export const useNovelStore = defineStore('novel', () => {
     const pid = projectId || currentProject.value?.id
     if (!pid) return
     await Promise.all([
+      fetchProjectById(pid),
       refreshWorld(pid),
       refreshCharacters(pid),
       refreshOutlines(pid),

@@ -1136,9 +1136,9 @@
             </div>
             <div class="p-5 space-y-4">
               <div>
-                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">起始世界</label>
-                <input type="text" v-model="editCompletionForm.startingWorld" maxlength="255" placeholder="如：灵气复苏后的九州大陆" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" />
-                <p class="text-[10px] text-[#9c9690] mt-1">作品故事开始的世界背景，不同作品相互隔离</p>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">起始时间</label>
+                <input type="date" v-model="editCompletionForm.startingTime" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" />
+                <p class="text-[10px] text-[#9c9690] mt-1">作品故事开始的时间点，不同作品相互隔离</p>
               </div>
               <div>
                 <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">预定完本时间</label>
@@ -2196,9 +2196,9 @@ const editPublishForm = reactive({
   nextRun: null
 })
 
-// ─── 完本计划（起始世界 + 预定完本时间，按作品隔离） ───
+// ─── 完本计划（起始时间 + 预定完本时间，按作品隔离） ───
 const editCompletionForm = reactive({
-  startingWorld: '',
+  startingTime: '',
   plannedCompletionDate: ''
 })
 
@@ -2217,7 +2217,7 @@ const completionHint = computed(() => {
 })
 
 function openCompletionDialog() {
-  editCompletionForm.startingWorld = project.value?.startingWorld || ''
+  editCompletionForm.startingTime = project.value?.startingTime || ''
   editCompletionForm.plannedCompletionDate = project.value?.plannedCompletionDate ? String(project.value.plannedCompletionDate).slice(0, 10) : ''
   showCompletionDialog.value = true
 }
@@ -2371,7 +2371,7 @@ async function saveCompletionConfig() {
   settingsSaving.value = true
   try {
     await store.updateProject(pid, {
-      startingWorld: editCompletionForm.startingWorld || '',
+      startingTime: editCompletionForm.startingTime || '',
       plannedCompletionDate: editCompletionForm.plannedCompletionDate || null
     })
     showCompletionDialog.value = false

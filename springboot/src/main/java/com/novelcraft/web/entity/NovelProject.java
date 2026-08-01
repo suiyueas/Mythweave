@@ -27,4 +27,9 @@ public class NovelProject extends BaseEntity {
     private String tags;
     private String startingWorld;
     private LocalDate plannedCompletionDate;
+    private String coreSetting;
+    private String worldSettings;
+    private String characters;
+    private String charactersFormatted;
+    private String outlines;
 }

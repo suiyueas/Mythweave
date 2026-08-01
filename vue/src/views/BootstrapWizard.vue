@@ -85,8 +85,12 @@
           <input v-model.number="createForm.targetChapters" type="number" min="10" max="500" />
         </div>
         <div class="form-group">
-          <label>起始世界</label>
-          <input v-model="createForm.startingWorld" maxlength="255" placeholder="如：灵气复苏后的九州大陆" />
+          <label>目标字数</label>
+          <input v-model.number="createForm.targetWordCount" type="number" min="10000" max="10000000" placeholder="如：2000000" />
+        </div>
+        <div class="form-group">
+          <label>起始时间</label>
+          <input v-model="createForm.startingTime" type="date" />
         </div>
         <div class="form-group">
           <label>预定完本时间</label>
@@ -223,7 +227,7 @@ const stepList = [
 ]
 
 // ─── 表单参数 ───
-const genres = ['玄幻', '科幻', '悬疑', '言情', '都市', '历史', '奇幻', '武侠']
+const genres = ['玄幻', '科幻', '悬疑', '言情', '都市', '历史', '奇幻', '武侠', '青春', '浪漫', '恐怖', '惊悚', '冒险', '战争', '谍战', '军事', '悬疑推理', '科幻末世', '科幻星际', '奇幻异世', '奇幻魔法', '玄幻修仙', '玄幻异火', '玄幻剑道', '仙侠', '轻小说', '同人', '短篇小说', '诗歌', '散文']
 const styles = ['诗意', '平实', '热血', '悬疑', '温情']
 const params = reactive({
   title: '',
@@ -234,6 +238,7 @@ const params = reactive({
 })
 
 // ─── 新建作品表单 ───
+const today = new Date().toISOString().slice(0, 10)
 const createForm = reactive({
   title: '',
   genre: '',
@@ -241,7 +246,8 @@ const createForm = reactive({
   description: '',
   style: '诗意',
   targetChapters: 30,
-  startingWorld: '',
+  targetWordCount: null,
+  startingTime: today,
   plannedCompletionDate: ''
 })
 const creating = ref(false)
@@ -335,7 +341,8 @@ async function createProject() {
       title: createForm.title.trim(),
       genre: createForm.genre,
       description: createForm.description || '',
-      startingWorld: createForm.startingWorld || '',
+      targetWordCount: createForm.targetWordCount ?? null,
+      startingTime: createForm.startingTime || '',
       plannedCompletionDate: createForm.plannedCompletionDate || null
     }
     const result = await store.createProject(data)
