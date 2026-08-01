@@ -369,12 +369,12 @@
                     <div class="flex items-center gap-2">
                       <span class="relative flex h-3 w-3">
                         <span v-if="systemStatus.es === 'healthy'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-3 w-3 shadow-sm" :class="systemStatus.es === 'healthy' ? 'bg-emerald-500 shadow-emerald-200' : systemStatus.es === 'warning' ? 'bg-amber-500 shadow-amber-200' : 'bg-red-500 shadow-red-200'"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 shadow-sm" :class="systemStatus.es === 'healthy' ? 'bg-emerald-500 shadow-emerald-200' : systemStatus.es === 'warning' ? 'bg-amber-500 shadow-amber-200' : systemStatus.es === 'not_configured' ? 'bg-gray-400 shadow-gray-200' : 'bg-red-500 shadow-red-200'"></span>
                       </span>
                       <span class="text-xs text-[#6b6560]">ES 集群</span>
                     </div>
-                    <div class="text-xs font-semibold" :class="systemStatus.es === 'healthy' ? 'text-emerald-600' : systemStatus.es === 'warning' ? 'text-amber-600' : 'text-red-600'">
-                      {{ systemStatus.es === 'healthy' ? '绿色' : systemStatus.es === 'warning' ? '警告' : '异常' }}
+                    <div class="text-xs font-semibold" :class="systemStatus.es === 'healthy' ? 'text-emerald-600' : systemStatus.es === 'warning' ? 'text-amber-600' : systemStatus.es === 'not_configured' ? 'text-gray-500' : 'text-red-600'">
+                      {{ systemStatus.es === 'healthy' ? '绿色' : systemStatus.es === 'warning' ? '警告' : systemStatus.es === 'not_configured' ? '未接入' : '异常' }}
                     </div>
                   </div>
                   <!-- 数据库 -->
@@ -489,7 +489,7 @@
                   <div v-for="log in recentOperationLogs.slice(0, 5)" :key="log.id" class="p-2 bg-[#faf8f5] rounded-lg">
                     <div class="flex items-center justify-between mb-1">
                       <span class="text-xs font-medium text-[#6b6560] truncate">{{ log.action }}</span>
-                      <span class="text-[10px] text-[#9c9690]">{{ formatRelativeTime(log.time) }}</span>
+                      <span class="text-[10px] text-[#9c9690]">{{ formatActivityTime(log.time) }}</span>
                     </div>
                     <div class="text-[10px] text-[#9c9690] truncate">{{ log.detail }}</div>
                   </div>
@@ -1210,15 +1210,16 @@
               <div v-for="service in systemStatusDetails" :key="service.name" class="p-4 rounded-xl border" :class="{
                 'bg-emerald-50 border-emerald-200': service.status === 'healthy',
                 'bg-amber-50 border-amber-200': service.status === 'warning',
-                'bg-red-50 border-red-200': service.status === 'error'
+                'bg-red-50 border-red-200': service.status === 'error',
+                'bg-gray-50 border-gray-200': service.status === 'not_configured'
               }">
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full" :class="service.status === 'healthy' ? 'bg-emerald-500' : service.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'"></span>
+                    <span class="w-3 h-3 rounded-full" :class="service.status === 'healthy' ? 'bg-emerald-500' : service.status === 'warning' ? 'bg-amber-500' : service.status === 'not_configured' ? 'bg-gray-400' : 'bg-red-500'"></span>
                     <span class="text-sm font-semibold text-[#6b6560]">{{ service.name }}</span>
                   </div>
-                  <span class="text-xs font-medium" :class="service.status === 'healthy' ? 'text-emerald-600' : service.status === 'warning' ? 'text-amber-600' : 'text-red-600'">
-                    {{ service.status === 'healthy' ? '正常' : service.status === 'warning' ? '警告' : '异常' }}
+                  <span class="text-xs font-medium" :class="service.status === 'healthy' ? 'text-emerald-600' : service.status === 'warning' ? 'text-amber-600' : service.status === 'not_configured' ? 'text-gray-500' : 'text-red-600'">
+                    {{ service.status === 'healthy' ? '正常' : service.status === 'warning' ? '警告' : service.status === 'not_configured' ? '未接入' : '异常' }}
                   </span>
                 </div>
                 <div class="text-xs text-[#9c9690] space-y-1">
@@ -1539,7 +1540,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import { plotApi, inspirationApi, characterApi, aiApi, sentinelApi } from '@/api'
 import { CHARACTER_CATEGORIES, PLOT_CATEGORIES, getCategoryLabel, getCategoryOptions } from '@/config/categories'
-import { formatNumber, formatFileSize } from '@/utils/format'
+import { formatNumber, formatFileSize, formatActivityTime } from '@/utils/format'
+import { systemApi } from '@/api/system'
 import Editor from '@/views/Editor.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Chapters from '@/views/Chapters.vue'
@@ -2170,14 +2172,21 @@ const editAIModelForm = reactive({
 
 const systemStatus = reactive({
   ai: 'healthy',
-  aiLatency: 120,
-  es: 'healthy',
+  aiLatency: null,
+  aiMessage: '',
+  es: 'not_configured',
+  esMessage: '',
   db: 'healthy',
-  dbPoolUsage: 45
+  dbPoolUsage: 0,
+  dbLatency: null,
+  dbMessage: ''
 })
 
+// 存储空间（真实探测数据）
+const storageData = ref({ usedPercent: 0, used: '0 B', free: '0 B', status: 'healthy', message: '' })
+
 const storageStatus = computed(() => {
-  const used = 62
+  const used = storageData.value.usedPercent || 0
   const usedPercent = used
   let colorClass = 'bg-emerald-500'
   let barColor = 'bg-gradient-to-r from-emerald-500 to-teal-400'
@@ -2197,39 +2206,55 @@ const storageStatus = computed(() => {
 
   return {
     usedPercent,
-    used: '61.8 GB',
-    free: '38.2 GB',
+    used: storageData.value.used,
+    free: storageData.value.free,
     colorClass,
     barColor,
     textColor
   }
 })
 
-const systemStatusDetails = ref([
-  { name: 'AI 服务', status: 'healthy', latency: '120ms', uptime: '99.9%', message: '所有模型服务正常运行' },
-  { name: 'ES 集群', status: 'healthy', latency: '15ms', uptime: '99.99%', message: '3个节点全部在线' },
-  { name: '数据库', status: 'healthy', latency: '8ms', uptime: '99.95%', message: '主从复制正常' },
-  { name: '对象存储', status: 'warning', message: '使用率达到62%，建议清理' },
-  { name: '向量检索服务', status: 'healthy', latency: '25ms', uptime: '99.8%', message: '千问 Embedding 服务正常' }
+// 系统状态详情（真实数据动态生成）
+const systemStatusDetails = computed(() => [
+  { name: 'AI 服务', status: systemStatus.ai, latency: systemStatus.aiLatency != null ? systemStatus.aiLatency + 'ms' : '', message: systemStatus.aiMessage },
+  { name: 'ES 集群', status: systemStatus.es, message: systemStatus.esMessage },
+  { name: '数据库', status: systemStatus.db, latency: systemStatus.dbLatency != null ? systemStatus.dbLatency + 'ms' : '', message: systemStatus.dbMessage },
+  { name: '存储空间', status: storageData.value.status, message: storageData.value.message }
 ])
 
-const recentOperationLogs = ref([
-  { id: 1, action: '更新发布计划', detail: '从"每周一次"改为"每周两次"', time: Date.now() - 3600000 },
-  { id: 2, action: '保存 AI 偏好', detail: '温度参数调整为 0.8', time: Date.now() - 7200000 },
-  { id: 3, action: '更新完本计划', detail: '预定完本时间调整为下月', time: Date.now() - 86400000 }
-])
+// 最近操作：对接真实最近活动接口（章节更新 + 写作记录）
+const recentOperationLogs = computed(() =>
+  (store.recentActivities || []).slice(0, 5).map(act => ({
+    id: act.id,
+    action: act.title,
+    detail: act.desc,
+    time: act.time
+  }))
+)
 
 async function refreshSystemStatus() {
   systemStatusLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 800))
-    systemStatus.ai = 'healthy'
-    systemStatus.aiLatency = Math.floor(Math.random() * 50) + 100
-    systemStatus.es = 'healthy'
-    systemStatus.db = 'healthy'
-    systemStatus.dbPoolUsage = Math.floor(Math.random() * 30) + 30
+    const data = await systemApi.getStatus()
+    if (!data) return
+    systemStatus.ai = data.ai?.status || 'error'
+    systemStatus.aiLatency = data.ai?.latency || null
+    systemStatus.aiMessage = data.ai?.message || ''
+    systemStatus.es = data.es?.status || 'not_configured'
+    systemStatus.esMessage = data.es?.message || ''
+    systemStatus.db = data.db?.status || 'error'
+    systemStatus.dbPoolUsage = data.db?.poolUsage || 0
+    systemStatus.dbLatency = data.db?.latency || null
+    systemStatus.dbMessage = data.db?.message || ''
+    storageData.value = {
+      usedPercent: data.storage?.usedPercent || 0,
+      used: data.storage?.used || '0 B',
+      free: data.storage?.free || '0 B',
+      status: data.storage?.status || 'healthy',
+      message: data.storage?.message || ''
+    }
   } catch (e) {
-    showChapterToast('刷新系统状态失败', 'error')
+    showChapterToast('刷新系统状态失败：' + (e.message || ''), 'error')
   } finally {
     systemStatusLoading.value = false
   }
@@ -2411,9 +2436,16 @@ watch(() => activeTool.value, (newTool) => {
 function startStatusPolling() {
   if (statusPollingTimer) return
   refreshSystemStatus()
+  refreshRecentOperations()
   statusPollingTimer = setInterval(() => {
     refreshSystemStatus()
+    refreshRecentOperations()
   }, 30000)
+}
+
+function refreshRecentOperations() {
+  const pid = store.currentProjectId
+  if (pid) store.fetchRecentActivities(pid, 10)
 }
 
 function stopStatusPolling() {

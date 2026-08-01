@@ -188,6 +188,17 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
+  /** 轻量刷新最近活动（策略页“最近操作”等场景用） */
+  async function fetchRecentActivities(projectId, limit = 10) {
+    if (!projectId) return
+    try {
+      const activities = await dashboardApi.getRecentActivities(projectId, limit)
+      recentActivities.value = activities || []
+    } catch (e) {
+      console.warn('最近活动刷新失败：', e.message)
+    }
+  }
+
   // 编辑器计算属性
   const currentChapter = computed(() =>
     chapters.value.find(c => c.id === currentChapterId.value) || null
@@ -1448,7 +1459,7 @@ export const useNovelStore = defineStore('novel', () => {
     // 仪表盘计算属性
     todayWords, weekWords, writingDuration, totalDashboardChapterCount, targetWordCount, bestHours, avgSpeed, progress,
     // 仪表盘方法
-    loadDashboard,
+    loadDashboard, fetchRecentActivities,
     // 编辑器状态
     currentChapterId, editorContent, chapterTitle, isSaving, lastSavedAt, targetWords,
     aiSuggestLoading, aiExpandLoading,
