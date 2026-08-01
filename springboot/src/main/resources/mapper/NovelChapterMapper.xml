@@ -17,18 +17,6 @@
     </select>
 
     <!--
-        功能: 查询指定卷的所有章节
-        参数: volumeId - 卷ID
-        返回: List<NovelChapter> 章节列表
-        说明: 用于卷详情页面，展示卷内所有章节
-    -->
-    <select id="selectByVolumeId" resultType="com.novelcraft.web.entity.NovelChapter">
-        SELECT * FROM novel_chapter
-        WHERE volume_id = #{volumeId} AND deleted = 0
-        ORDER BY sort_order
-    </select>
-
-    <!--
         功能: 按ID查询章节（绕过逻辑删除）
         参数: id - 章节ID
         返回: NovelChapter 章节对象

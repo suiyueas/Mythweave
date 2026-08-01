@@ -13,10 +13,6 @@ export const contextApi = {
   updateConfig: (projectId, data) =>
     put(`/api/projects/${projectId}/context/config`, data),
 
-  /** 获取最近索引活动 */
-  getActivities: (projectId, limit = 10) =>
-    get(`/api/projects/${projectId}/context/activities`, { limit }),
-
   /** 语义搜索 */
   search: (projectId, query, topK = 10) =>
     get(`/api/projects/${projectId}/context/search`, { query, topK }),
@@ -44,10 +40,6 @@ export const contextApi = {
   /** 获取索引健康检查详情 */
   getHealthCheck: (projectId) =>
     get(`/api/projects/${projectId}/context/health`),
-
-  /** 导出索引报告 */
-  exportReport: (projectId, format = 'json') =>
-    get(`/api/projects/${projectId}/context/export`, { format }),
 
   /** 获取索引大小趋势 */
   getSizeTrend: (projectId, days = 7) =>

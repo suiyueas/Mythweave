@@ -727,10 +727,6 @@
                     <div v-if="store.contextStats.lastFullIndexTime" class="text-[10px] text-[#9c9690]">最后更新: {{ formatIndexTime(store.contextStats.lastFullIndexTime) }}</div>
                   </div>
                   <div class="grid grid-cols-2 gap-3">
-                    <div class="p-3 bg-[#fff7ed] rounded-lg border border-[#fed7aa]">
-                      <div class="text-2xl font-bold text-[#ea580c]" style="font-family:var(--font-display)">{{ formatNumber(store.contextStats.totalChunks || 0) }}</div>
-                      <div class="text-[10px] text-[#9c9690] mt-0.5">已索引段落块</div>
-                    </div>
                     <div class="p-3 bg-[#f0fdfa] rounded-lg border border-[#99f6e4]">
                       <div class="text-2xl font-bold text-[#0d9488]" style="font-family:var(--font-display)">{{ formatNumber(store.contextStats.characterVectors || 0) }}</div>
                       <div class="text-[10px] text-[#9c9690] mt-0.5">人物向量条目</div>
@@ -794,34 +790,6 @@
                 </div>
               </div>
 
-              <!-- 索引活动日志卡片 -->
-              <div class="border border-[#e8e3dc] rounded-xl p-4 bg-white shadow-sm mb-4">
-                <div class="flex items-center justify-between mb-3">
-                  <div class="text-xs font-semibold text-[#6b6560]">🔄 最近索引活动 <span class="text-[#9c9690] font-normal">({{ store.contextActivities.length }} 条)</span></div>
-                  <button v-if="store.contextActivities.length > 0" class="text-xs px-2.5 py-1 rounded-lg text-[#d97706] hover:bg-[#fef3c7] transition-colors" @click="showAllLogsPanel = true">📋 查看全部日志</button>
-                </div>
-                <div v-if="store.contextActivities.length === 0" class="py-8 text-center">
-                  <div class="text-3xl mb-2">📭</div>
-                  <div class="text-sm text-[#9c9690]">暂无索引活动记录</div>
-                  <div class="text-xs text-[#c4bdb5] mt-1">系统将在有新内容时自动创建索引</div>
-                </div>
-                <div v-else class="space-y-1 max-h-48 overflow-y-auto">
-                  <div v-for="act in store.contextActivities.slice(0, 5)" :key="act.id" class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#faf8f5] cursor-pointer transition-colors" @click="act.chapterId && goToChapter(act.chapterId)">
-                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="{
-                      'bg-emerald-400': act.status === 'done' || act.status === 'completed',
-                      'bg-amber-400': act.status === 'running' || act.status === 'pending',
-                      'bg-red-400': act.status === 'failed' || act.status === 'error',
-                      'bg-blue-400': act.status === 'cancelled'
-                    }"></span>
-                    <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium text-[#6b6560] truncate">{{ act.title }}</div>
-                      <div class="text-xs text-[#9c9690] truncate">{{ act.desc || act.description || '' }}</div>
-                    </div>
-                    <span class="text-xs text-[#9c9690] flex-shrink-0">{{ act.time || act.createTime ? formatRelativeTime(act.time || act.createTime) : '' }}</span>
-                  </div>
-                </div>
-              </div>
-
               <!-- 索引维护与监控 -->
               <div class="grid grid-cols-3 gap-4 mb-4">
                 <!-- 索引维护 -->
@@ -866,15 +834,8 @@
               <div class="border border-[#e8e3dc] rounded-xl p-4 bg-white shadow-sm">
                 <div class="flex items-center justify-between mb-3">
                   <div class="text-xs font-semibold text-[#6b6560]">📊 监控指标</div>
-                  <button class="text-xs px-2.5 py-1 rounded-lg border border-[#e8e3dc] text-[#6b6560] hover:bg-[#f3efe8] transition-colors flex items-center gap-1" @click="handleExportReport">
-                    <span>📥</span> 导出报告
-                  </button>
                 </div>
-                <div class="grid grid-cols-5 gap-3">
-                  <div class="text-center p-2 bg-[#faf8f5] rounded-lg">
-                    <div class="text-lg font-bold text-[#d97706]" style="font-family:var(--font-display)">{{ formatNumber(store.contextStats.totalChunks || 0) }}</div>
-                    <div class="text-[10px] text-[#9c9690]">段落块总数</div>
-                  </div>
+                <div class="grid grid-cols-4 gap-3">
                   <div class="text-center p-2 bg-[#faf8f5] rounded-lg">
                     <div class="text-lg font-bold text-[#0d9488]" style="font-family:var(--font-display)">{{ formatNumber(store.contextStats.characterVectors || 0) }}</div>
                     <div class="text-[10px] text-[#9c9690]">人物向量</div>
@@ -1000,50 +961,6 @@
             <div class="flex justify-end gap-2 p-4 bg-[#faf8f5] border-t border-[#e8e3dc]">
               <button class="px-4 py-2 text-xs rounded-lg border border-[#e8e3dc] text-[#6b6560] hover:bg-white transition-colors" @click="showHealthCheckModal = false">关闭</button>
               <button class="px-4 py-2 text-xs rounded-lg bg-[#d97706] text-white hover:bg-[#b45309] transition-colors" @click="loadHealthCheck">🔄 重新检查</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ═══ 上下文引擎：全部日志侧滑面板 ═══ -->
-    <Teleport to="body">
-      <Transition name="slide-fade">
-        <div v-if="showAllLogsPanel" class="fixed inset-0 z-50 flex">
-          <div class="fixed inset-0 bg-black/20" @click="showAllLogsPanel = false"></div>
-          <div class="ml-auto w-[480px] max-w-[90vw] h-full bg-white shadow-2xl flex flex-col border-l border-[#e8e3dc]">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-[#e8e3dc] bg-[#faf8f5]">
-              <div class="flex items-center gap-2">
-                <span class="text-lg">📋</span>
-                <span class="text-sm font-bold text-[#1a1a2e]">索引活动日志</span>
-                <span class="text-xs text-[#9c9690]">({{ store.contextActivities.length }} 条)</span>
-              </div>
-              <button class="text-[#9c9690] hover:text-[#6b6560] text-lg leading-none" @click="showAllLogsPanel = false">✕</button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-4">
-              <div v-if="store.contextActivities.length === 0" class="py-12 text-center">
-                <div class="text-3xl mb-2">📭</div>
-                <div class="text-sm text-[#9c9690]">暂无索引活动记录</div>
-              </div>
-              <div v-else class="space-y-2">
-                <div v-for="(act, idx) in store.contextActivities" :key="act.id || idx" class="p-3 rounded-lg border border-[#e8e3dc] hover:border-[#d97706] hover:bg-[#fef3c7]/30 transition-all cursor-pointer" @click="act.chapterId && goToChapter(act.chapterId)">
-                  <div class="flex items-center gap-2 mb-1.5">
-                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="{
-                      'bg-emerald-400': act.status === 'done' || act.status === 'completed',
-                      'bg-amber-400': act.status === 'running' || act.status === 'pending',
-                      'bg-red-400': act.status === 'failed' || act.status === 'error',
-                      'bg-blue-400': act.status === 'cancelled'
-                    }"></span>
-                    <span class="text-sm font-semibold text-[#6b6560] flex-1 truncate">{{ act.title }}</span>
-                    <span class="text-xs text-[#9c9690]">{{ act.time || act.createTime ? formatRelativeTime(act.time || act.createTime) : '' }}</span>
-                  </div>
-                  <div class="text-xs text-[#9c9690] leading-relaxed">{{ act.desc || act.description || '无描述' }}</div>
-                  <div v-if="act.chunksAffected" class="mt-1.5 text-[10px] text-[#d97706]">影响 {{ act.chunksAffected }} 个段落块</div>
-                </div>
-              </div>
-            </div>
-            <div class="p-4 bg-[#faf8f5] border-t border-[#e8e3dc]">
-              <button class="w-full py-2 text-xs rounded-lg border border-[#e8e3dc] text-[#6b6560] hover:bg-white transition-colors" @click="loadMoreLogs">🔄 加载更多</button>
             </div>
           </div>
         </div>
@@ -2542,7 +2459,6 @@ const editConfigForm = reactive({
 const showRebuildConfirm = ref(false)
 const rebuildConfirmChecked = ref(false)
 const showHealthCheckModal = ref(false)
-const showAllLogsPanel = ref(false)
 const sizeTrendChartRef = ref(null)
 let sizeTrendChartInstance = null
 
@@ -2552,7 +2468,6 @@ function toggleAutoRefresh() {
     autoRefreshTimer.value = setInterval(() => {
       if (activeTool.value === 'contextEngine' && store.currentProjectId) {
         store.fetchContextStats(store.currentProjectId)
-        store.fetchContextActivities(store.currentProjectId, 20)
       }
     }, 30000)
     showChapterToast('已开启自动刷新（每30秒）', 'success')
@@ -2683,20 +2598,12 @@ async function loadHealthCheck() {
   }
 }
 
-function loadMoreLogs() {
-  const pid = store.currentProjectId
-  if (!pid) return
-  store.fetchContextActivities(pid, 50)
-  showChapterToast('已加载更多日志', 'success')
-}
-
 function goToChapter(chapterId) {
   if (!chapterId) return
   const ch = chapters.value.find(c => String(c.id) === String(chapterId))
   if (ch) {
     store.selectChapter(ch)
     activeTool.value = 'aiWrite'
-    showAllLogsPanel.value = false
   }
 }
 
@@ -2754,28 +2661,6 @@ function renderSizeTrendChart() {
     })
   } catch (e) {
     console.warn('趋势图渲染失败:', e.message)
-  }
-}
-
-async function handleExportReport() {
-  const pid = store.currentProjectId
-  if (!pid) return
-  try {
-    const data = await store.exportContextReport(pid, 'json')
-    if (data) {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `index-report-${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      showChapterToast('报告已导出', 'success')
-    }
-  } catch (e) {
-    showChapterToast('导出失败：' + (e.message || '未知错误'), 'error')
   }
 }
 

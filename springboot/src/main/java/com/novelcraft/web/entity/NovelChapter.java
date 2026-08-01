@@ -13,7 +13,6 @@ import lombok.EqualsAndHashCode;
 @TableName("novel_chapter")
 public class NovelChapter extends BaseEntity {
     private Long projectId;
-    private Long volumeId;
     private String title;
     private String content;
     private String status;

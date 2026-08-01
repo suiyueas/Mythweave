@@ -20,7 +20,6 @@ export const useNovelStore = defineStore('novel', () => {
   const projects = ref([])
   const currentProject = ref(null)
   const chapters = ref([])
-  const volumes = ref([])
   const characters = ref([])
   const worldSettings = ref([])
   const outlines = ref([])
@@ -85,9 +84,8 @@ export const useNovelStore = defineStore('novel', () => {
   const exportStatusText = ref('')
 
   // ─── 上下文引擎状态 ───
-  const contextStats = ref({ totalChunks: 0, characterVectors: 0, worldEntries: 0, outlineNodes: 0, indexSize: 0, lastFullIndexTime: null })
+  const contextStats = ref({ characterVectors: 0, worldEntries: 0, outlineNodes: 0, indexSize: 0, lastFullIndexTime: null })
   const contextConfig = ref({ autoIndex: true, windowSize: 512, topK: 10, hybridWeights: { semantic: 0.7, bm25: 0.3 } })
-  const contextActivities = ref([])
   const searching = ref(false)
   const searchResults = ref([])
   const contextLoading = ref(false)
@@ -502,12 +500,8 @@ export const useNovelStore = defineStore('novel', () => {
     if (!projectId) return []
     loadingModules.value.chapters = true
     try {
-      const [ch, vol] = await Promise.all([
-        chapterApi.listChapters(projectId),
-        chapterApi.listVolumes(projectId)
-      ])
+      const ch = await chapterApi.listChapters(projectId)
       chapters.value = (ch || []).map(c => ({ ...c, id: c.id != null ? String(c.id) : c.id }))
-      volumes.value = (vol || []).map(v => ({ ...v, id: v.id != null ? String(v.id) : v.id }))
       lastUpdated.value.chapters = new Date().toISOString()
 
       // ✅ 同步项目统计到 projects 列表
@@ -542,20 +536,15 @@ export const useNovelStore = defineStore('novel', () => {
   async function fetchChapters(projectId) {
     if (!projectId) return
     try {
-      const [ch, vol] = await Promise.all([
-        chapterApi.listChapters(projectId),
-        chapterApi.listVolumes(projectId)
-      ])
+      const ch = await chapterApi.listChapters(projectId)
       // 统一 ID 为字符串，防止 Snowflake Long ID 在 JS 中精度丢失
       chapters.value = (ch || []).map(c => ({ ...c, id: c.id != null ? String(c.id) : c.id }))
-      volumes.value = (vol || []).map(v => ({ ...v, id: v.id != null ? String(v.id) : v.id }))
 
       // ✅ 同步项目统计到 projects 列表
       await syncProjectStats(projectId)
     } catch (e) {
       console.warn('章节列表加载失败：', e.message)
       chapters.value = []
-      volumes.value = []
     }
   }
 
@@ -1155,16 +1144,6 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
-  async function fetchContextActivities(projectId, limit) {
-    if (!projectId) return
-    try {
-      contextActivities.value = await contextApi.getActivities(projectId, limit || 10) || []
-    } catch (e) {
-      console.warn('上下文活动日志加载失败：', e.message)
-      contextActivities.value = []
-    }
-  }
-
   async function doContextSearch(projectId, query, topK) {
     searching.value = true
     try {
@@ -1206,7 +1185,6 @@ export const useNovelStore = defineStore('novel', () => {
       const result = await contextApi.incrementalIndex(projectId)
       contextOperationStatus.value = { type: 'incremental', status: 'success', message: '增量索引完成' }
       await fetchContextStats(projectId)
-      await fetchContextActivities(projectId, 20)
       return result
     } catch (e) {
       contextOperationStatus.value = { type: 'incremental', status: 'failed', message: e.message }
@@ -1262,16 +1240,6 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
-  async function exportContextReport(projectId, format = 'json') {
-    if (!projectId) return
-    try {
-      const data = await contextApi.exportReport(projectId, format)
-      return data
-    } catch (e) {
-      throw e
-    }
-  }
-
   async function cancelContextOperation(projectId) {
     if (!projectId || !contextRebuildTaskId.value) return
     try {
@@ -1308,7 +1276,6 @@ export const useNovelStore = defineStore('novel', () => {
             contextRebuilding.value = false
             if (progress.status === 'completed') {
               await fetchContextStats(projectId)
-              await fetchContextActivities(projectId, 20)
             }
           }
         }
@@ -1330,7 +1297,6 @@ export const useNovelStore = defineStore('novel', () => {
     await Promise.all([
       fetchContextStats(projectId),
       fetchContextConfig(projectId),
-      fetchContextActivities(projectId, 20),
       fetchContextSizeTrend(projectId, 7)
     ])
   }
@@ -1473,7 +1439,7 @@ export const useNovelStore = defineStore('novel', () => {
 
   return {
     // 项目数据
-    projects, currentProject, chapters, volumes, characters, loading, error,
+    projects, currentProject, chapters, characters, loading, error,
     worldSettings, outlines, plotThreads, inspirations,
     loadingModules, lastUpdated,
     currentProjectId, totalWordCount, completedChapters,
@@ -1507,11 +1473,11 @@ export const useNovelStore = defineStore('novel', () => {
     fetchExportFormats, fetchExportHistory, doExport,
     removeExportRecord, clearInvalidExportRecords, addLocalExportRecord, validateExportRecords,
     // 上下文引擎操作
-    contextStats, contextConfig, contextActivities, searching, searchResults,
+    contextStats, contextConfig, searching, searchResults,
     contextLoading, contextRebuilding, contextRebuildProgress, contextHealthCheck, contextSizeTrend, contextOperationStatus,
-    fetchContextStats, fetchContextConfig, updateContextConfig, fetchContextActivities, doContextSearch,
+    fetchContextStats, fetchContextConfig, updateContextConfig, doContextSearch,
     rebuildContextIndex, incrementalContextIndex, cleanupContextIndex,
-    fetchContextHealthCheck, fetchContextSizeTrend, exportContextReport, cancelContextOperation,
+    fetchContextHealthCheck, fetchContextSizeTrend, cancelContextOperation,
     loadAllContextData,
     // 通知 & 哨兵
     notifications, unreadCount, notifLoading, sentinelStats, sentinelAlerts, sentinelFilter, scanning,

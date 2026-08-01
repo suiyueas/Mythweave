@@ -11,7 +11,6 @@ import java.util.List;
 @Mapper
 public interface NovelChapterMapper extends BaseMapper<NovelChapter> {
     List<NovelChapter> selectByProjectId(@Param("projectId") Long projectId);
-    List<NovelChapter> selectByVolumeId(@Param("volumeId") Long volumeId);
     NovelChapter selectByIdWithDeleted(@Param("id") Long id);
     int markDeletedById(@Param("id") Long id);
     Integer countByProject(@Param("projectId") Long projectId);

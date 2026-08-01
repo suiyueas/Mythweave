@@ -104,7 +104,30 @@
               <button class="btn-tag" @click="showPasswordModal = true">修改密码</button>
             </div>
           </div>
-
+        
+          <!-- ══ 退出登录 ══ -->
+          <div class="logout-zone">
+            <div class="logout-info">
+              <div class="card-label">🚪 退出登录</div>
+              <p class="logout-desc">退出后将返回登录页，未保存的修改可能丢失</p>
+            </div>
+            <button class="btn-logout" @click="showLogoutModal = true">退出登录</button>
+          </div>
+        
+          <!-- ══ 退出登录确认弹窗 ══ -->
+          <Transition name="modal-fade">
+            <div v-if="showLogoutModal" class="modal-overlay" @click.self="showLogoutModal = false">
+              <div class="password-modal">
+                <h3 class="modal-title">🚪 退出登录</h3>
+                <p class="logout-confirm-text">确定要退出登录吗？退出后需要重新登录才能继续创作。</p>
+                <div class="modal-actions">
+                  <button class="btn btn-ghost" @click="showLogoutModal = false">取消</button>
+                  <button class="btn btn-logout-confirm" @click="handleConfirmLogout">确定退出</button>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        
           <!-- ══ 修改密码弹窗 ══ -->
           <Transition name="modal-fade">
             <div v-if="showPasswordModal" class="modal-overlay" @click.self="showPasswordModal = false">
@@ -377,10 +400,12 @@
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
 import { openVipModal } from '@/services/vipService'
 
+const router = useRouter()
 const store = useSettingsStore()
 const userStore = useUserStore()
 
@@ -496,6 +521,16 @@ function handleChangePassword() {
   passwordForm.confirm = ''
   showPasswordModal.value = false
   showToast('密码修改成功')
+}
+
+// ─── 退出登录 ───
+const showLogoutModal = ref(false)
+
+function handleConfirmLogout() {
+  userStore.logout()
+  showLogoutModal.value = false
+  showToast('已退出登录')
+  router.push('/login')
 }
 
 // ─── 主题色选项 ───
@@ -1558,6 +1593,59 @@ onUnmounted(() => {
 @keyframes toastOut {
   from { opacity: 1; transform: translateY(0) scale(1); }
   to { opacity: 0; transform: translateY(8px) scale(0.95); }
+}
+
+/* ─── 退出登录 ─── */
+.logout-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.logout-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.btn-logout {
+  padding: 9px 20px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  background: transparent;
+  color: #dc2626;
+  font-family: 'Crimson Pro', 'Noto Serif SC', serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-logout:hover {
+  background: #dc2626;
+  color: #fff;
+}
+
+.logout-confirm-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 14px 0 22px;
+  line-height: 1.6;
+}
+
+.btn-logout-confirm {
+  background: #dc2626;
+  box-shadow: 0 2px 12px rgba(220, 38, 38, 0.25);
+}
+.btn-logout-confirm:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
 }
 
 /* ═══ 密码修改弹窗 ═══ */

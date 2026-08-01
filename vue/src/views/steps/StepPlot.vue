@@ -121,7 +121,6 @@ function skip() { emit('skipped'); emit('next') }
 </script>
 
 <style scoped>
-.step-plot { }
 .step-header h2 { font-size: 20px; font-weight: 700; color: #1a1a2e; margin: 0 0 4px 0; }
 .step-desc { font-size: 13px; color: #94a3b8; margin: 0 0 20px 0; }
 .step-body { min-height: 200px; }

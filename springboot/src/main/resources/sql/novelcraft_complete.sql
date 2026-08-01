@@ -50,29 +50,11 @@ CREATE TABLE IF NOT EXISTS novel_project (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='作品项目';
 
 -- =====================================================
--- 2. 分卷
--- =====================================================
-CREATE TABLE IF NOT EXISTS novel_volume (
-    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
-    project_id      BIGINT          NOT NULL COMMENT '作品ID',
-    title           VARCHAR(200)    NOT NULL COMMENT '分卷标题',
-    description     VARCHAR(500)    DEFAULT NULL COMMENT '分卷描述',
-    sort_order      INT             NOT NULL DEFAULT 0 COMMENT '排序',
-    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
-    PRIMARY KEY (id),
-    INDEX idx_volume_project (project_id),
-    INDEX idx_volume_deleted (deleted)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分卷';
-
--- =====================================================
--- 3. 章节
+-- 2. 章节
 -- =====================================================
 CREATE TABLE IF NOT EXISTS novel_chapter (
     id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
     project_id      BIGINT          NOT NULL COMMENT '作品ID',
-    volume_id       BIGINT          DEFAULT NULL COMMENT '分卷ID',
     title           VARCHAR(200)    NOT NULL COMMENT '章节标题',
     content         LONGTEXT        DEFAULT NULL COMMENT '章节正文',
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft' COMMENT '状态: draft/writing/completed',
@@ -86,7 +68,6 @@ CREATE TABLE IF NOT EXISTS novel_chapter (
     deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
     PRIMARY KEY (id),
     INDEX idx_chapter_project (project_id),
-    INDEX idx_chapter_volume (volume_id),
     INDEX idx_chapter_deleted (deleted),
     INDEX idx_chapter_list_covering (project_id, deleted, sort_order, word_count, title, status),
     INDEX idx_chapter_update_time (project_id, deleted, update_time)
@@ -271,25 +252,6 @@ CREATE TABLE IF NOT EXISTS novel_ai_session (
     INDEX idx_ais_type (session_type),
     INDEX idx_ais_deleted (deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI会话记录（含Chat对话与Agent任务）';
-
--- =====================================================
--- 13. 上下文快照
--- =====================================================
-CREATE TABLE IF NOT EXISTS novel_context_snapshot (
-    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
-    project_id      BIGINT          NOT NULL COMMENT '作品ID',
-    chapter_id      BIGINT          DEFAULT NULL COMMENT '章节ID',
-    context_type    VARCHAR(50)     NOT NULL COMMENT '上下文类型',
-    query_text      VARCHAR(1000)   DEFAULT NULL COMMENT '查询文本',
-    assembled_prompt TEXT           DEFAULT NULL COMMENT '组装后的Prompt',
-    tokens_used     INT             NOT NULL DEFAULT 0 COMMENT '消耗Token数',
-    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
-    PRIMARY KEY (id),
-    INDEX idx_cs_project (project_id),
-    INDEX idx_cs_deleted (deleted)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='上下文快照';
 
 -- =====================================================
 -- 14. 灵感素材

@@ -60,69 +60,57 @@ public class ProjectService {
 
             // 2. 章节
             int cnt2 = deleteIfExists("novel_chapter", "project_id = ?", id);
-            log.info("[ 2/17] novel_chapter 删除 {} 条", cnt2);
+            log.info("[ 2/16] novel_chapter 删除 {} 条", cnt2);
 
-            // 3. 卷
-            int cnt3 = deleteIfExists("novel_volume", "project_id = ?", id);
-            log.info("[ 3/17] novel_volume 删除 {} 条", cnt3);
+            // 3. 人物（人物关系表已废弃，直接删人物）
+            int cnt3 = deleteIfExists("novel_character", "project_id = ?", id);
+            log.info("[ 3/16] novel_character 删除 {} 条", cnt3);
 
-            // 4. 人物（人物关系表已废弃，直接删人物）
-            int cnt4 = deleteIfExists("novel_character", "project_id = ?", id);
-            log.info("[ 4/17] novel_character 删除 {} 条", cnt4);
+            // 4. 世界观
+            int cnt4 = deleteIfExists("novel_world_setting", "project_id = ?", id);
+            log.info("[ 4/16] novel_world_setting 删除 {} 条", cnt4);
 
-            // 5. 世界观
-            int cnt5 = deleteIfExists("novel_world_setting", "project_id = ?", id);
-            log.info("[ 5/17] novel_world_setting 删除 {} 条", cnt5);
+            // 5. 大纲
+            int cnt5 = deleteIfExists("novel_outline", "project_id = ?", id);
+            log.info("[ 5/16] novel_outline 删除 {} 条", cnt5);
 
-            // 6. 大纲
-            int cnt6 = deleteIfExists("novel_outline", "project_id = ?", id);
-            log.info("[ 6/17] novel_outline 删除 {} 条", cnt6);
+            // 6. 情节线
+            int cnt6 = deleteIfExists("novel_plot_thread", "project_id = ?", id);
+            log.info("[ 6/14] novel_plot_thread 删除 {} 条", cnt6);
 
-            // 7. 情节线
-            int cnt7 = deleteIfExists("novel_plot_thread", "project_id = ?", id);
-            log.info("[ 7/17] novel_plot_thread 删除 {} 条", cnt7);
+            // 7. 伏笔
+            int cnt7 = deleteIfExists("novel_foreshadowing", "project_id = ?", id);
+            log.info("[ 7/14] novel_foreshadowing 删除 {} 条", cnt7);
 
-            // 7b. 情节知识图谱
-            int cnt7b = deleteIfExists("novel_plot_knowledge_graph", "project_id = ?", id);
-            log.info("[7b/17] novel_plot_knowledge_graph 删除 {} 条", cnt7b);
+            // 8. 灵感
+            int cnt8 = deleteIfExists("novel_inspiration", "project_id = ?", id);
+            log.info("[ 8/14] novel_inspiration 删除 {} 条", cnt8);
 
-            // 8. 伏笔
-            int cnt8 = deleteIfExists("novel_foreshadowing", "project_id = ?", id);
-            log.info("[ 8/17] novel_foreshadowing 删除 {} 条", cnt8);
+            // 9. AI 配置
+            int cnt9 = deleteIfExists("novel_ai_config", "project_id = ?", id);
+            log.info("[ 9/14] novel_ai_config 删除 {} 条", cnt9);
 
-            // 9. 灵感
-            int cnt9 = deleteIfExists("novel_inspiration", "project_id = ?", id);
-            log.info("[ 9/17] novel_inspiration 删除 {} 条", cnt9);
+            // 10. AI 会话
+            int cnt10 = deleteIfExists("novel_ai_session", "project_id = ?", id);
+            log.info("[10/14] novel_ai_session 删除 {} 条", cnt10);
 
-            // 10. 上下文快照
-            int cnt10 = deleteIfExists("novel_context_snapshot", "project_id = ?", id);
-            log.info("[10/17] novel_context_snapshot 删除 {} 条", cnt10);
+            // 11. 写作日志
+            int cnt11 = deleteIfExists("novel_writing_log", "project_id = ?", id);
+            log.info("[11/14] novel_writing_log 删除 {} 条", cnt11);
 
-            // 11. AI 配置
-            int cnt11 = deleteIfExists("novel_ai_config", "project_id = ?", id);
-            log.info("[11/17] novel_ai_config 删除 {} 条", cnt11);
+            // 12. 哨兵告警
+            int cnt12 = deleteIfExists("novel_sentinel_alert", "project_id = ?", id);
+            log.info("[12/14] novel_sentinel_alert 删除 {} 条", cnt12);
 
-            // 12. AI 会话
-            int cnt12 = deleteIfExists("novel_ai_session", "project_id = ?", id);
-            log.info("[12/17] novel_ai_session 删除 {} 条", cnt12);
+            // 13. 哨兵巡查日志
+            int cnt13 = deleteIfExists("novel_sentinel_check_log", "project_id = ?", id);
+            log.info("[13/14] novel_sentinel_check_log 删除 {} 条", cnt13);
 
-            // 13. 写作日志
-            int cnt13 = deleteIfExists("novel_writing_log", "project_id = ?", id);
-            log.info("[13/17] novel_writing_log 删除 {} 条", cnt13);
+            // 14. 物理删除作品
+            int cnt14 = projectMapper.deletePhysically(id);
+            log.info("[14/14] novel_project 物理删除 {} 条", cnt14);
 
-            // 14. 哨兵告警
-            int cnt14 = deleteIfExists("novel_sentinel_alert", "project_id = ?", id);
-            log.info("[14/17] novel_sentinel_alert 删除 {} 条", cnt14);
-
-            // 14b. 哨兵巡查日志
-            int cnt14b = deleteIfExists("novel_sentinel_check_log", "project_id = ?", id);
-            log.info("[14b/17] novel_sentinel_check_log 删除 {} 条", cnt14b);
-
-            // 15. 物理删除作品
-            int cnt15 = projectMapper.deletePhysically(id);
-            log.info("[15/17] novel_project 物理删除 {} 条", cnt15);
-
-            if (cnt15 == 0) {
+            if (cnt14 == 0) {
                 throw new RuntimeException("作品物理删除失败（影响行数为0），可能已被其他操作删除");
             }
 

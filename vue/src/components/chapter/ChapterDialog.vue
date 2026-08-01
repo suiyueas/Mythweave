@@ -32,20 +32,9 @@
               <span class="char-count">{{ (form.content || '').length }} 字</span>
             </div>
 
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label>所属分卷</label>
-                <select v-model="form.volumeId" class="form-select">
-                  <option :value="null">无分卷</option>
-                  <option v-for="vol in volumes" :key="vol.id" :value="vol.id">
-                    {{ vol.title }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group flex-1">
-                <label>目标字数</label>
-                <input v-model.number="form.targetWordCount" type="number" placeholder="如：3000" class="form-input" />
-              </div>
+            <div class="form-group">
+              <label>目标字数</label>
+              <input v-model.number="form.targetWordCount" type="number" placeholder="如：3000" class="form-input" />
             </div>
 
             <div class="form-group">
@@ -79,8 +68,7 @@ import { useNovelStore } from '@/stores/novel'
 const props = defineProps({
   mode: { type: String, default: 'create' },
   chapter: { type: Object, default: null },
-  projectId: { type: [Number, String], required: true },
-  volumes: { type: Array, default: () => [] }
+  projectId: { type: [Number, String], required: true }
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -90,7 +78,6 @@ const saving = ref(false)
 const form = reactive({
   title: '',
   content: '',
-  volumeId: null,
   targetWordCount: null,
   status: 'draft'
 })
@@ -100,13 +87,11 @@ watch(() => props.chapter, (ch) => {
   if (ch && props.mode === 'edit') {
     form.title = ch.title || ''
     form.content = ch.content || ''
-    form.volumeId = ch.volumeId || null
     form.targetWordCount = ch.targetWordCount || null
     form.status = ch.status || 'draft'
   } else {
     form.title = ''
     form.content = ''
-    form.volumeId = null
     form.targetWordCount = null
     form.status = 'draft'
   }
@@ -119,7 +104,6 @@ async function submit() {
   const data = {
     title: form.title.trim(),
     content: form.content?.trim() || '',
-    volumeId: form.volumeId,
     targetWordCount: form.targetWordCount,
     status: form.status
   }

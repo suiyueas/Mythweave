@@ -4,7 +4,6 @@ import com.novelcraft.web.common.R;
 import com.novelcraft.web.dto.AppendForeshadowRequest;
 import com.novelcraft.web.entity.NovelChapter;
 import com.novelcraft.web.entity.NovelChapterVersion;
-import com.novelcraft.web.entity.NovelVolume;
 import com.novelcraft.web.service.ChapterService;
 import com.novelcraft.web.service.ForeshadowAppendService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,21 +22,6 @@ public class ChapterController {
 
     private final ChapterService chapterService;
     private final ForeshadowAppendService foreshadowAppendService;
-
-    // ── 分卷 ──
-
-    @Operation(summary = "获取分卷列表")
-    @GetMapping("/volumes")
-    public R<List<NovelVolume>> listVolumes(@PathVariable Long projectId) {
-        return R.ok(chapterService.listVolumes(projectId));
-    }
-
-    @Operation(summary = "创建分卷")
-    @PostMapping("/volumes")
-    public R<NovelVolume> createVolume(@PathVariable Long projectId, @RequestBody NovelVolume volume) {
-        volume.setProjectId(projectId);
-        return R.ok(chapterService.createVolume(volume));
-    }
 
     // ── 章节 ──
 

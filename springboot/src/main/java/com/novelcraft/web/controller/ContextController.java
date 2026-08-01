@@ -3,11 +3,9 @@ package com.novelcraft.web.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.novelcraft.web.common.R;
 import com.novelcraft.web.entity.NovelCharacter;
-import com.novelcraft.web.entity.NovelContextSnapshot;
 import com.novelcraft.web.entity.NovelOutline;
 import com.novelcraft.web.entity.NovelWorldSetting;
 import com.novelcraft.web.mapper.NovelCharacterMapper;
-import com.novelcraft.web.mapper.NovelContextSnapshotMapper;
 import com.novelcraft.web.mapper.NovelOutlineMapper;
 import com.novelcraft.web.mapper.NovelWorldSettingMapper;
 import com.novelcraft.web.service.ContextAssembler;
@@ -22,7 +20,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Tag(name = "上下文引擎")
@@ -33,7 +30,6 @@ public class ContextController {
 
     private final ContextAssembler contextAssembler;
     private final EmbeddingService embeddingService;
-    private final NovelContextSnapshotMapper snapshotMapper;
     private final NovelCharacterMapper characterMapper;
     private final NovelWorldSettingMapper worldSettingMapper;
     private final NovelOutlineMapper outlineMapper;
@@ -58,15 +54,6 @@ public class ContextController {
     @GetMapping("/stats")
     public R<Map<String, Object>> stats(@PathVariable Long projectId) {
         Map<String, Object> result = new LinkedHashMap<>();
-        try {
-            Long chunks = snapshotMapper.selectCount(
-                    new LambdaQueryWrapper<NovelContextSnapshot>()
-                            .eq(NovelContextSnapshot::getProjectId, projectId));
-            result.put("totalChunks", chunks != null ? chunks.intValue() : 0);
-        } catch (Exception e) {
-            log.warn("查询快照统计异常", e);
-            result.put("totalChunks", 0);
-        }
         try {
             Long chars = characterMapper.selectCount(
                     new LambdaQueryWrapper<NovelCharacter>()
@@ -113,33 +100,6 @@ public class ContextController {
         if (config.getTopK() != null) existing.setTopK(config.getTopK());
         if (config.getHybridWeights() != null) existing.setHybridWeights(config.getHybridWeights());
         return R.ok(existing);
-    }
-
-    @Operation(summary = "获取最近索引活动")
-    @GetMapping("/activities")
-    public R<List<Map<String, Object>>> activities(@PathVariable Long projectId,
-                                                    @RequestParam(defaultValue = "10") int limit) {
-        try {
-            List<NovelContextSnapshot> snapshots = snapshotMapper.selectList(
-                    new LambdaQueryWrapper<NovelContextSnapshot>()
-                            .eq(NovelContextSnapshot::getProjectId, projectId)
-                            .orderByDesc(NovelContextSnapshot::getCreateTime)
-                            .last("LIMIT " + Math.min(limit, 100)));
-            List<Map<String, Object>> list = new ArrayList<>();
-            for (NovelContextSnapshot s : snapshots) {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", s.getId());
-                item.put("title", (s.getContextType() != null ? s.getContextType() : "索引") + " 完成");
-                item.put("desc", "tokens: " + s.getTokensUsed());
-                item.put("status", "done");
-                item.put("time", s.getCreateTime() != null ? s.getCreateTime().toString() : "");
-                list.add(item);
-            }
-            return R.ok(list);
-        } catch (Exception e) {
-            log.warn("查询索引活动异常 (projectId={})", projectId, e);
-            return R.ok(new ArrayList<>());
-        }
     }
 
     @Operation(summary = "语义搜索全书")
@@ -263,30 +223,6 @@ public class ContextController {
         result.put("message", "清理完成（无过期数据）");
         result.put("cleanedCount", 0);
         return R.ok(result);
-    }
-
-    @Operation(summary = "导出索引报告")
-    @GetMapping("/export")
-    public R<List<Map<String, Object>>> exportReport(@PathVariable Long projectId,
-                                                      @RequestParam(defaultValue = "json") String format) {
-        try {
-            List<NovelContextSnapshot> snapshots = snapshotMapper.selectList(
-                    new LambdaQueryWrapper<NovelContextSnapshot>()
-                            .eq(NovelContextSnapshot::getProjectId, projectId)
-                            .orderByDesc(NovelContextSnapshot::getCreateTime));
-            List<Map<String, Object>> report = snapshots.stream().map(s -> {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", s.getId());
-                item.put("type", s.getContextType());
-                item.put("tokens", s.getTokensUsed());
-                item.put("time", s.getCreateTime() != null ? s.getCreateTime().toString() : "");
-                return item;
-            }).collect(Collectors.toList());
-            return R.ok(report);
-        } catch (Exception e) {
-            log.warn("导出索引报告异常", e);
-            return R.ok(new ArrayList<>());
-        }
     }
 
     @Operation(summary = "获取索引操作进度")

@@ -17,7 +17,7 @@
 
     <!-- ==================== 统计卡片 ==================== -->
     <div class="stats-grid">
-      <StatCard label="总章节" :value="chapters.length" subtext="分卷" color="accent" />
+      <StatCard label="总章节" :value="chapters.length" color="accent" />
       <StatCard
         label="已完成"
         :value="publishedCount"
@@ -45,12 +45,6 @@
         <option value="draft">草稿</option>
         <option value="published">已发布</option>
         <option value="completed">已完成</option>
-      </select>
-      <select v-model="filterVolume" class="filter-select">
-        <option value="all">全部卷</option>
-        <option v-for="vol in volumes" :key="vol.id" :value="String(vol.id)">
-          {{ vol.title }}
-        </option>
       </select>
       <div class="filter-tabs">
         <span
@@ -87,39 +81,23 @@
         </div>
       </template>
 
-      <template v-for="(group, volumeId) in groupedChapters" :key="volumeId">
-        <!-- 分卷头部 -->
-        <div class="volume-header" :class="{ disabled: group.chapters.length === 0 }">
-          <span class="volume-title">
-            {{ group.volumeTitle || '未分类' }}
-          </span>
-          <div class="volume-meta">
-            <BaseTag v-if="group.chapters.length > 0" color="emerald" style="font-size:0.55rem;">
-              {{ group.chapters.length }} 章
-            </BaseTag>
-            <span class="volume-stats">
-              {{ formatNumber(group.totalWords) }} 字
-            </span>
-          </div>
-        </div>
-
-        <!-- 章节表格 -->
-        <table class="chapters-table">
-          <thead>
-            <tr>
-              <th style="width:60px;">章节</th>
-              <th style="min-width:140px;">标题</th>
-              <th style="min-width:200px;">内容预览</th>
-              <th style="width:80px;">字数</th>
-              <th style="width:80px;">状态</th>
-              <th style="width:100px;">更新时间</th>
-              <th style="width:120px;">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="ch in group.chapters"
-              :key="ch.id"
+      <!-- 章节表格 -->
+      <table class="chapters-table">
+        <thead>
+          <tr>
+            <th style="width:60px;">章节</th>
+            <th style="min-width:140px;">标题</th>
+            <th style="min-width:200px;">内容预览</th>
+            <th style="width:80px;">字数</th>
+            <th style="width:80px;">状态</th>
+            <th style="width:100px;">更新时间</th>
+            <th style="width:120px;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="ch in filteredAndSortedChapters"
+            :key="ch.id"
               class="chapter-row"
               :class="{ 'current-row': isCurrentChapter(ch) }"
               @click.self="viewChapter(ch)"
@@ -174,7 +152,6 @@
             </tr>
           </tbody>
         </table>
-      </template>
     </div>
 
     <!-- ==================== 新建/编辑章节弹窗 ==================== -->
@@ -183,7 +160,6 @@
       :mode="dialogMode"
       :chapter="editingChapter"
       :project-id="project?.id"
-      :volumes="volumes"
       @close="dialogVisible = false"
       @saved="onChapterSaved"
     />
@@ -213,7 +189,6 @@ const router = useRouter()
 // ─── 状态 ───
 const searchKeyword = ref('')
 const filterStatus = ref('all')
-const filterVolume = ref('all')
 const sortBy = ref('updatedAt')
 const sortOrder = ref('desc')
 const dialogVisible = ref(false)
@@ -225,7 +200,6 @@ const previewChapter = ref(null)
 // ─── 数据 ───
 const project = computed(() => store.currentProject)
 const chapters = computed(() => store.chapters || [])
-const volumes = computed(() => store.volumes || [])
 
 // ─── 计算统计 ───
 const publishedCount = computed(() =>
@@ -254,10 +228,6 @@ const filteredAndSortedChapters = computed(() => {
     list = list.filter(c => c.status === filterStatus.value)
   }
 
-  if (filterVolume.value !== 'all') {
-    list = list.filter(c => String(c.volumeId) === filterVolume.value)
-  }
-
   const sortMap = {
     updatedAt: (a, b) => {
       const valA = new Date(a.updateTime || 0)
@@ -278,25 +248,6 @@ const filteredAndSortedChapters = computed(() => {
   list.sort(sortMap[sortBy.value] || sortMap.updatedAt)
 
   return list
-})
-
-// ─── 分卷分组 ───
-const groupedChapters = computed(() => {
-  const groups = {}
-  for (const ch of filteredAndSortedChapters.value) {
-    const volId = ch.volumeId ? String(ch.volumeId) : 'uncategorized'
-    if (!groups[volId]) {
-      const vol = volumes.value.find(v => String(v.id) === volId)
-      groups[volId] = {
-        volumeTitle: vol ? vol.title : '未分类',
-        chapters: [],
-        totalWords: 0
-      }
-    }
-    groups[volId].chapters.push(ch)
-    groups[volId].totalWords += ch.wordCount || 0
-  }
-  return groups
 })
 
 // ─── 排序方向切换 ───
@@ -568,37 +519,6 @@ watch(() => project.value?.id, (newId) => {
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 1rem;
-}
-
-/* 分卷头部 */
-.volume-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.7rem 1.2rem;
-  background: #faf8f5;
-  border-bottom: 1px solid var(--border);
-}
-
-.volume-header.disabled {
-  opacity: 0.6;
-}
-
-.volume-title {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--accent);
-}
-
-.volume-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.volume-stats {
-  font-size: 0.65rem;
-  color: var(--text-muted);
 }
 
 /* ─── 章节表格 ─── */

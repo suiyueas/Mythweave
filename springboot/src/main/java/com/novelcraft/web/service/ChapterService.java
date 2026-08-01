@@ -6,13 +6,11 @@ import com.novelcraft.web.common.BusinessException;
 import com.novelcraft.web.entity.NovelChapter;
 import com.novelcraft.web.entity.NovelChapterVersion;
 import com.novelcraft.web.entity.NovelProject;
-import com.novelcraft.web.entity.NovelVolume;
 import com.novelcraft.web.entity.NovelWritingLog;
 import com.novelcraft.web.mapper.NovelChapterMapper;
 import com.novelcraft.web.mapper.NovelChapterVersionMapper;
 import com.novelcraft.web.mapper.NovelForeshadowingMapper;
 import com.novelcraft.web.mapper.NovelProjectMapper;
-import com.novelcraft.web.mapper.NovelVolumeMapper;
 import com.novelcraft.web.mapper.NovelWritingLogMapper;
 import com.novelcraft.web.service.DashboardCacheService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +31,6 @@ public class ChapterService {
 
     private final NovelChapterMapper chapterMapper;
     private final NovelChapterVersionMapper versionMapper;
-    private final NovelVolumeMapper volumeMapper;
     private final NovelProjectMapper projectMapper;
     private final NovelWritingLogMapper writingLogMapper;
     private final NovelForeshadowingMapper foreshadowingMapper;
@@ -45,15 +42,6 @@ public class ChapterService {
     private boolean autoCheckEnabled;
 
     private static final java.time.ZoneId ZONE_CN = java.time.ZoneId.of("Asia/Shanghai");
-
-    public List<NovelVolume> listVolumes(Long projectId) {
-        return volumeMapper.selectByProjectId(projectId);
-    }
-
-    public NovelVolume createVolume(NovelVolume volume) {
-        volumeMapper.insert(volume);
-        return volume;
-    }
 
     public List<NovelChapter> listChapters(Long projectId) {
         return chapterMapper.selectByProjectId(projectId);
