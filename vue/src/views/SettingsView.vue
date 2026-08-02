@@ -66,7 +66,7 @@
             <div class="avatar-frame">
               <label class="avatar-upload-label" :style="{ cursor: 'pointer' }">
                 <img v-if="avatarDataUrl" :src="avatarDataUrl" class="avatar-img" />
-                <div v-else class="avatar-letter">墨</div>
+                <div v-else class="avatar-letter">{{ userStore.avatarText }}</div>
                 <input type="file" accept="image/*" class="avatar-input" @change="handleAvatarUpload" />
                 <div class="avatar-overlay">
                   <span class="avatar-overlay-icon">📷</span>
@@ -75,7 +75,7 @@
             </div>
             <div class="profile-meta">
               <h2 class="profile-name">{{ accountInfo.username || '未命名作者' }}</h2>
-              <span class="profile-badge">签约作者 · LV.8</span>
+              <span class="profile-badge">{{ userRoleBadge }}</span>
             </div>
           </div>
 
@@ -423,6 +423,13 @@ function openRecharge() {
   openVipModal({ mode: 'recharge' })
 }
 
+// ─── 用户角色 Badge ───
+const userRoleBadge = computed(() => {
+  if (userStore.isAdmin) return '管理员'
+  if (userStore.isVip) return userStore.vipLevelName
+  return '普通用户'
+})
+
 // ─── Tab 切换 ───
 const activeTab = ref('account')
 const tabs = [
@@ -462,31 +469,92 @@ function showToast(message, type = 'success') {
 // ─── 设置数据 ───
 const settings = store.settings
 
-// ─── 账户信息持久化 ───
-const PROFILE_KEY = 'novel-profile'
+// ─── 账户信息持久化（key 绑定当前用户 ID，防止多账号串号） ───
+function profileKey() {
+  return userStore.profile.id ? `novel-profile-${userStore.profile.id}` : 'novel-profile'
+}
+
+// 格式化后端返回的时间（LocalDateTime 字符串 → 日期）
+function formatDate(val) {
+  if (!val) return ''
+  const d = new Date(val)
+  if (isNaN(d.getTime())) return String(val)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function loadProfile() {
+  // 已登录时以 userStore.profile 为准（真实接口数据），localStorage 仅作未登录时兜底
+  if (userStore.profile.id) {
+    return {
+      username: userStore.profile.nickname || userStore.profile.email?.split('@')[0] || '未命名作者',
+      email: userStore.profile.email || '',
+      bio: userStore.profile.bio || '',
+      createdAt: formatDate(userStore.profile.createdAt) || new Date().toISOString().split('T')[0]
+    }
+  }
   try {
-    const raw = localStorage.getItem(PROFILE_KEY)
+    const raw = localStorage.getItem(profileKey())
     if (raw) return JSON.parse(raw)
   } catch (_) {}
   return {
-    username: '墨染青衫',
-    email: 'writer@example.com',
-    bio: '以笔为剑，以墨为锋。',
-    createdAt: '2024-01-01'
+    username: '',
+    email: '',
+    bio: '',
+    createdAt: ''
   }
 }
 
+let saveProfileTimer = null
 function saveProfile() {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...accountInfo, avatarDataUrl: avatarDataUrl.value }))
+  // 防抖：延迟保存到后端
+  clearTimeout(saveProfileTimer)
+  saveProfileTimer = setTimeout(async () => {
+    localStorage.setItem(profileKey(), JSON.stringify({ ...accountInfo, avatarDataUrl: avatarDataUrl.value }))
+    // 同时同步到 userStore
+    if (userStore.profile) {
+      userStore.profile.nickname = accountInfo.username
+      userStore.profile.email = accountInfo.email
+      userStore.profile.bio = accountInfo.bio
+    }
+    // 保存到后端数据库
+    if (userStore.profile?.id) {
+      try {
+        await userApi.updateProfile({
+          nickname: accountInfo.username,
+          email: accountInfo.email,
+          bio: accountInfo.bio
+        })
+      } catch (e) {
+        console.warn('保存个人资料失败:', e.message)
+      }
+    }
+  }, 500)
 }
 
 const accountInfo = reactive(loadProfile())
-const avatarDataUrl = ref(localStorage.getItem('novel-avatar') || '')
+const avatarDataUrl = ref(userStore.profile.avatar || localStorage.getItem(`novel-avatar-${userStore.profile.id}`) || '')
 
 // 自动保存个人资料
 watch(() => ({ ...accountInfo }), () => { saveProfile() }, { deep: true })
+
+// 监听用户登录状态变化，重新加载账户信息
+watch(() => userStore.profile, (newProfile) => {
+  if (newProfile && newProfile.id) {
+    // 已登录，加载用户信息
+    accountInfo.username = newProfile.nickname || newProfile.email?.split('@')[0] || '未命名作者'
+    accountInfo.email = newProfile.email || ''
+    accountInfo.bio = newProfile.bio || ''
+    accountInfo.createdAt = formatDate(newProfile.createdAt) || new Date().toISOString().split('T')[0]
+    if (newProfile.avatar) avatarDataUrl.value = newProfile.avatar
+  } else {
+    // 未登录或已退出，清空账户信息
+    accountInfo.username = ''
+    accountInfo.email = ''
+    accountInfo.bio = ''
+    accountInfo.createdAt = ''
+    avatarDataUrl.value = ''
+  }
+}, { immediate: true })
 
 // ─── 头像上传 ───
 function handleAvatarUpload(e) {
@@ -499,7 +567,7 @@ function handleAvatarUpload(e) {
   const reader = new FileReader()
   reader.onload = (ev) => {
     avatarDataUrl.value = ev.target.result
-    localStorage.setItem('novel-avatar', avatarDataUrl.value)
+    if (userStore.profile.id) localStorage.setItem(`novel-avatar-${userStore.profile.id}`, avatarDataUrl.value)
     saveProfile()
     showToast('头像已更新')
   }
@@ -657,8 +725,17 @@ function resetAll() {
 }
 
 function saveAll() {
+  // 立即同步用户资料到后端（不等待防抖）
+  if (userStore.profile?.id) {
+    localStorage.setItem(profileKey(), JSON.stringify({ ...accountInfo, avatarDataUrl: avatarDataUrl.value }))
+    userApi.updateProfile({
+      nickname: accountInfo.username,
+      email: accountInfo.email,
+      bio: accountInfo.bio
+    }).catch(e => console.warn('保存个人资料失败:', e.message))
+  }
   store.saveSettings()
-  showToast('设置已保存', 'success')
+  showToast('全部已保存', 'success')
 }
 
 function resetShortcuts() {

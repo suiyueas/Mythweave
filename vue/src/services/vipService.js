@@ -39,13 +39,13 @@ export function useVipModalState() {
 }
 
 /**
- * AI 功能权限拦截：VIP 生效中放行；普通用户/已过期用户弹出升级引导
+ * AI 功能权限拦截：VIP 生效中放行；管理员直接放行；普通用户/已过期用户弹出升级引导
  * @param {string} featureName - 触发的功能名称（如"智能大纲生成"）
  * @returns {boolean} true-可继续执行，false-已拦截需升级
  */
 export function requireVip(featureName = '') {
   const userStore = useUserStore()
-  if (userStore.isVip) return true
+  if (userStore.isAdmin || userStore.isVip) return true
   openVipModal({ mode: 'guard', expired: userStore.vipExpired, featureName })
   return false
 }

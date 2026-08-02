@@ -38,65 +38,115 @@ export function parseWorldText(text) {
  * 解析结构化文本
  */
 function parseStructuredWorldText(text, sections) {
-  // 按主要章节分割
-  const chapterPatterns = [
-    /^(第?[一二三四五六七八九十\d]+[章节部])\s*[:：]?\s*(.+)?$/gm,
-    /^(\d+[.、])\s*(.+)$/gm,
-  ]
-
-  // 提取章节标题
   const lines = text.split('\n')
   let currentSection = null
+  let currentSubSection = null
   let currentContent = []
+  let currentSubContent = []
+
+  function isMainChapter(line) {
+    const trimmed = line.trim()
+    return /^第?[一二三四五六七八九十]+[、:：]\s*[\u4e00-\u9fa5]/.test(trimmed)
+  }
+
+  function isSubChapter(line) {
+    const trimmed = line.trim()
+    return /^\d+\.\d+/.test(trimmed)
+  }
+
+  function isSubSubChapter(line) {
+    const trimmed = line.trim()
+    return /^\d+\.\d+\.\d+/.test(trimmed)
+  }
+
+  function extractMainTitle(line) {
+    const match = line.trim().match(/^第?[一二三四五六七八九十]+[、:：]\s*(.+)?$/)
+    return match ? (match[1] || line.trim()) : line.trim()
+  }
+
+  function extractSubTitle(line) {
+    const match = line.trim().match(/^\d+\.\d+\s*(.+)$/)
+    return match ? match[1] : line.trim()
+  }
+
+  function saveCurrentSection() {
+    if (currentSection && currentContent.length > 0) {
+      const sectionData = {
+        title: currentSection,
+        content: currentContent.join('\n').trim(),
+        level: 1
+      }
+      if (currentSubSection && currentSubContent.length > 0) {
+        sectionData.subSections = sectionData.subSections || []
+        sectionData.subSections.push({
+          title: currentSubSection,
+          content: currentSubContent.join('\n').trim(),
+          level: 2
+        })
+      }
+      sections.push(sectionData)
+    } else if (currentSubSection && currentSubContent.length > 0) {
+      sections.push({
+        title: currentSubSection,
+        content: currentSubContent.join('\n').trim(),
+        level: 2
+      })
+    }
+  }
+
+  function saveSubSection() {
+    if (currentSubSection && currentSubContent.length > 0) {
+      const lastSection = sections[sections.length - 1]
+      if (lastSection && lastSection.title === currentSection && lastSection.subSections) {
+        lastSection.subSections.push({
+          title: currentSubSection,
+          content: currentSubContent.join('\n').trim(),
+          level: 2
+        })
+      } else {
+        sections.push({
+          title: currentSubSection,
+          content: currentSubContent.join('\n').trim(),
+          level: 2
+        })
+      }
+    }
+  }
 
   for (const line of lines) {
     const trimmedLine = line.trim()
     if (!trimmedLine) {
-      if (currentContent.length > 0) {
+      if (currentSubContent.length > 0) {
+        currentSubContent.push('')
+      } else if (currentContent.length > 0) {
         currentContent.push('')
       }
       continue
     }
 
-    // 检测是否为章节标题
-    const chapterMatch = trimmedLine.match(/^(第?[一二三四五六七八九十\d]+[章节部])\s*[:：]?\s*(.*)$/)
-    const numberMatch = trimmedLine.match(/^(\d+[.、:])\s*(.+)$/)
-    const hashMatch = trimmedLine.match(/^(#{1,3})\s*(.+)$/)
-
-    if (chapterMatch || numberMatch || hashMatch) {
-      // 保存上一个章节
-      if (currentSection && currentContent.length > 0) {
-        sections.push({
-          title: currentSection,
-          content: currentContent.join('\n').trim(),
-          level: getSectionLevel(currentSection)
-        })
-      }
-
-      // 开始新章节
-      const title = chapterMatch ? chapterMatch[2] || chapterMatch[1] :
-                    numberMatch ? numberMatch[2] || numberMatch[1] :
-                    hashMatch[2] || trimmedLine
-      currentSection = title
+    if (isMainChapter(trimmedLine)) {
+      saveCurrentSection()
+      currentSection = extractMainTitle(trimmedLine)
+      currentSubSection = null
       currentContent = []
+      currentSubContent = []
+    } else if (isSubChapter(trimmedLine) && !isSubSubChapter(trimmedLine)) {
+      if (currentSubSection) {
+        saveSubSection()
+      }
+      currentSubSection = extractSubTitle(trimmedLine)
+      currentSubContent = []
+    } else if (currentSubSection) {
+      currentSubContent.push(trimmedLine)
     } else if (currentSection) {
       currentContent.push(trimmedLine)
     } else {
-      // 没有章节标题的内容作为概述
       currentContent.push(trimmedLine)
     }
   }
 
-  // 保存最后一个章节
-  if (currentSection && currentContent.length > 0) {
-    sections.push({
-      title: currentSection,
-      content: currentContent.join('\n').trim(),
-      level: getSectionLevel(currentSection)
-    })
-  }
+  saveCurrentSection()
 
-  // 如果没有提取到章节，尝试按段落分割
   if (sections.length === 0) {
     parseSimpleWorldText(text, sections)
   }

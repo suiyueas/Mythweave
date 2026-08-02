@@ -28,6 +28,10 @@ public class AuthService {
         user.setPassword(encoder.encode(req.getPassword()));
         user.setNickname(req.getUsername());
         user.setEmail(req.getEmail());
+        // 新用户默认角色为普通用户，VIP=0，空简介、无头像
+        user.setRole("user");
+        user.setVipLevel(0);
+        user.setBio("");
         userMapper.insert(user);
         return user;
     }

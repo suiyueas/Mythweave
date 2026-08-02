@@ -40,55 +40,95 @@ export function parseCharacterText(text) {
  * 解析结构化文本（带编号和标题的格式）
  */
 function parseStructuredText(text, characters) {
-  // 匹配人物块：支持多种格式
-  // 1. "1. 林彻 · 凡骨改写者" 或 "一、林彻"
-  // 2. "【基础信息】" 等标签块
-  // 3. 表格格式 "| 属性 | 内容 |"
-
   const lines = text.split('\n')
   let currentChar = null
   let currentSection = ''
   let currentContent = []
 
-  const sectionPatterns = [
-    /^[#一二三四五六七八九十\d]+[\s.、：:、]+(.+?)(?:\s*[·•]\s*(.+))?$/, // 人物名称行
-    /^第?[一二三四五六七八九十\d]+[章节部]/.test(lines[0]) ? null : null, // 章节标题
+  const sectionTitles = [
+    '基础信息', '人物画像', '外貌', '衣着', '标志物',
+    '性格特征', '核心', '正面', '负面', '反差',
+    '弧光轨迹', '经典台词', '隐藏设定', '特殊能力',
+    '配角群像', '人物关系网络', '人物一句话速记'
   ]
 
-  // 简化处理：按人物名称分割
-  const charBlocks = text.split(/(?=[一二三四五六七八九十\d]+[.、：:]?\s*【?[^\s【】]+)/g)
-    .filter(block => block.trim())
+  function isChapterTitle(line) {
+    return /^[一二三四五六七八九十]+[、:：]\s*[\u4e00-\u9fa5]/.test(line.trim())
+  }
 
-  for (const block of charBlocks) {
-    const trimmedBlock = block.trim()
-    if (!trimmedBlock) continue
+  function isCharacterTitle(line) {
+    const trimmed = line.trim()
+    return /^\d+[.、:：]\s*.+/.test(trimmed) && !line.includes('属性')
+  }
 
-    // 尝试提取人物名称
-    const nameMatch = trimmedBlock.match(/^([一二三四五六七八九十\d]+[.、：:]?\s*)(.+?)(?:\s*[·•·]\s*(.+))?$/)
-    const name = nameMatch
-      ? (nameMatch[3] ? `${nameMatch[2].trim()} · ${nameMatch[3].trim()}` : nameMatch[2].trim())
-      : extractNameFromBlock(trimmedBlock)
+  function extractNameFromTitle(titleLine) {
+    const trimmed = titleLine.trim()
+    const match = trimmed.match(/^\d+[.、:：]\s*(.+?)(?:\s*[·•·、]\s*(.+))?$/)
+    if (match) {
+      const mainName = match[1].trim()
+      const subtitle = match[2] ? match[2].trim() : ''
+      return subtitle ? `${mainName} · ${subtitle}` : mainName
+    }
+    return trimmed
+  }
 
-    if (name && !isSectionTitle(name)) {
-      const char = {
-        name,
-        role: extractRole(trimmedBlock),
-        age: extractField(trimmedBlock, ['年龄', '年龄']),
-        identity: extractField(trimmedBlock, ['身份', 'Identity']),
-        realm: extractField(trimmedBlock, ['境界', '境界']),
-        personality: extractPersonality(trimmedBlock),
-        appearance: extractAppearance(trimBlock),
-        backstory: extractBackstory(trimmedBlock),
-        abilities: extractAbilities(trimmedBlock),
-        quotes: extractQuotes(trimmedBlock),
-        hiddenSettings: extractHiddenSettings(trimmedBlock),
-        raw: trimmedBlock
+  function isSectionTitle(line) {
+    const trimmed = line.trim()
+    if (!trimmed) return false
+    if (/^属性\s+内容$/.test(trimmed)) return false
+    if (sectionTitles.some(t => trimmed === t || trimmed === `【${t}】`)) return true
+    if (trimmed.length < 10 && trimmed === line.trim()) {
+      const lineIndex = lines.indexOf(line)
+      if (lineIndex < lines.length - 1) {
+        const nextLine = lines[lineIndex + 1].trim()
+        if (nextLine.includes('属性') && nextLine.includes('内容')) return true
       }
-      characters.push(char)
+    }
+    return false
+  }
+
+  function finalizeCharacter() {
+    if (currentChar && currentContent.length > 0) {
+      const fullText = currentContent.join('\n')
+      currentChar.name = currentChar.name || extractNameFromBlock(fullText) || '未命名人物'
+      currentChar.role = extractRole(fullText)
+      currentChar.age = extractField(fullText, ['年龄'])
+      currentChar.identity = extractField(fullText, ['身份'])
+      currentChar.realm = extractField(fullText, ['境界'])
+      currentChar.personality = extractPersonality(fullText)
+      currentChar.appearance = extractAppearance(fullText)
+      currentChar.backstory = extractBackstory(fullText)
+      currentChar.abilities = extractAbilities(fullText)
+      currentChar.quotes = extractQuotes(fullText)
+      currentChar.hiddenSettings = extractHiddenSettings(fullText)
+      currentChar.raw = fullText
+      characters.push(currentChar)
     }
   }
 
-  // 如果没有解析到，尝试按段落分割
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    if (!trimmed) continue
+    if (isChapterTitle(trimmed)) continue
+
+    if (isCharacterTitle(trimmed)) {
+      finalizeCharacter()
+      const name = extractNameFromTitle(trimmed)
+      currentChar = { name }
+      currentContent = [trimmed]
+      currentSection = ''
+      continue
+    }
+
+    if (currentChar) {
+      currentContent.push(line)
+    }
+  }
+
+  finalizeCharacter()
+
   if (characters.length === 0) {
     parseSimpleText(text, characters)
   }

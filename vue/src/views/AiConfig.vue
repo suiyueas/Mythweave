@@ -226,6 +226,12 @@
             </span>
           </div>
         </div>
+
+        <div class="logout-section">
+          <button class="btn btn-logout" @click="showLogoutConfirm = true">
+            🚪 退出登录
+          </button>
+        </div>
       </div>
     </div>
 
@@ -234,6 +240,19 @@
         <div v-if="toast.show" class="toast" :class="`toast-${toast.type}`">
           <span class="toast-icon">{{ toast.type === 'success' ? '✓' : '✕' }}</span>
           <span class="toast-message">{{ toast.message }}</span>
+        </div>
+      </Transition>
+
+      <Transition name="modal-fade">
+        <div v-if="showLogoutConfirm" class="modal-overlay" @click.self="showLogoutConfirm = false">
+          <div class="logout-modal">
+            <h3 class="modal-title">🚪 退出登录</h3>
+            <p class="logout-confirm-text">确定要退出登录吗？退出后需要重新登录才能继续创作。</p>
+            <div class="modal-actions">
+              <button class="btn btn-ghost" @click="showLogoutConfirm = false">取消</button>
+              <button class="btn btn-logout-confirm" @click="handleConfirmLogout">确定退出</button>
+            </div>
+          </div>
         </div>
       </Transition>
 
@@ -298,11 +317,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAiConfigStore } from '@/stores/ai-config'
 import { useNovelStore } from '@/stores/novel'
+import { useUserStore } from '@/stores/user'
 
+const router = useRouter()
 const store = useAiConfigStore()
 const novelStore = useNovelStore()
+const userStore = useUserStore()
 
 const loading = computed(() => store.loading)
 const saving = computed(() => store.saving)
@@ -342,6 +365,7 @@ const presetForm = reactive({ name: '', description: '', temperature: 0.7, topP:
 const activePresetMenu = ref(null)
 const showDeleteConfirm = ref(false)
 const presetToDelete = ref(null)
+const showLogoutConfirm = ref(false)
 
 const placeholders = [
   { key: '{context}', desc: '上下文信息' },
@@ -351,6 +375,15 @@ const placeholders = [
   { key: '{plot}', desc: '当前情节走向' },
   { key: '{tone}', desc: '语气语调' }
 ]
+
+const handleLogout = () => {
+  showLogoutConfirm.value = true
+}
+
+const handleConfirmLogout = () => {
+  userStore.logout()
+  router.push('/login')
+}
 
 const formatNumber = (num) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
@@ -977,6 +1010,62 @@ onUnmounted(() => {
 
 .btn-danger:hover {
   background: #9f1239;
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+}
+
+.btn-logout:hover {
+  background: var(--rose);
+  border-color: var(--rose);
+  color: #fff;
+}
+
+.logout-section {
+  margin-top: 0.5rem;
+}
+
+.logout-modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  min-width: 360px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.logout-modal .modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.logout-confirm-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+
+.btn-logout-confirm {
+  background: var(--rose);
+  color: #fff;
+  border-color: var(--rose);
+}
+
+.btn-logout-confirm:hover {
+  background: #dc2626;
 }
 
 .loading-dot {

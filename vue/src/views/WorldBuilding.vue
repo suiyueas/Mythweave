@@ -23,7 +23,7 @@
 
     <div class="page-content">
       <div class="main-area">
-        <div v-if="!selectedSettingId" class="category-view">
+        <div v-if="!selectedCategoryId && !selectedSettingId" class="category-view">
           <div class="search-bar">
             <div class="search-input-wrap">
               <span class="search-icon">🔍</span>
@@ -76,8 +76,8 @@
                     {{ getStatusIcon(setting.status) }}
                   </span>
                 </div>
-                <div v-if="getCategoryEntryCount(cat.id) > 3" class="entry-more">
-                  还有 {{ getCategoryEntryCount(cat.id) - 3 }} 项...
+                <div v-if="getCategoryEntryCount(cat.id) > 3" class="entry-more" @click.stop="selectCategory(cat.id)">
+                  还有 {{ getCategoryEntryCount(cat.id) - 3 }} 项... 点击查看
                 </div>
                 <div v-if="getCategoryEntryCount(cat.id) === 0" class="entry-empty">
                   暂无设定 ✨
@@ -94,6 +94,38 @@
               </div>
 
 
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="selectedCategoryId && !selectedSettingId" class="category-detail-view">
+          <div class="detail-header">
+            <button class="back-btn" @click="store.clearSelection">
+              ← 返回分类
+            </button>
+            <div class="detail-breadcrumb">
+              <span @click="goBackToWorkspace" class="breadcrumb-item">{{ projectTitle }}</span>
+              <span class="breadcrumb-sep">/</span>
+              <span @click="store.clearSelection" class="breadcrumb-item">世界观</span>
+              <span class="breadcrumb-sep">/</span>
+              <span class="breadcrumb-item current">{{ getCategoryName(selectedCategoryId) }}</span>
+            </div>
+          </div>
+          <div class="category-settings-list">
+            <div
+              v-for="setting in getCategoryAllSettings(selectedCategoryId)"
+              :key="setting.id"
+              class="setting-list-item"
+              @click="selectSetting(setting.id)"
+            >
+              <span class="setting-status" :style="{ color: getStatusColor(setting.status) }">
+                {{ getStatusIcon(setting.status) }}
+              </span>
+              <span class="setting-name">{{ setting.name }}</span>
+              <span class="setting-status-text">{{ getStatusLabel(setting.status) }}</span>
+            </div>
+            <div v-if="getCategoryEntryCount(selectedCategoryId) === 0" class="empty-category">
+              暂无设定 ✨
             </div>
           </div>
         </div>
@@ -430,6 +462,10 @@ const getCategoryPreviewSettings = (categoryId) => {
   return store.settingsByCategory[categoryId]?.slice(0, 3) || []
 }
 
+const getCategoryAllSettings = (categoryId) => {
+  return store.settingsByCategory[categoryId] || []
+}
+
 const getCategoryEntryCount = (categoryId) => {
   return store.categoryStats[categoryId]?.total || 0
 }
@@ -445,6 +481,7 @@ const getCategoryStat = (categoryId, stat) => {
 
 const getStatusColor = (status) => STATUS_CONFIG[status]?.color || '#94a3b8'
 const getStatusIcon = (status) => STATUS_CONFIG[status]?.icon || '○'
+const getStatusLabel = (status) => STATUS_CONFIG[status]?.label || status
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
@@ -746,6 +783,14 @@ onMounted(async () => {
 
 .world-building-page.inline-mode .entry-more {
   color: #9c9690;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  border-radius: 6px;
+}
+
+.world-building-page.inline-mode .entry-more:hover {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
 }
 
 .world-building-page.inline-mode .category-footer {
@@ -760,6 +805,49 @@ onMounted(async () => {
 
 .world-building-page.inline-mode .add-entry-btn:hover {
   background: rgba(249, 115, 22, 0.15);
+}
+
+.world-building-page.inline-mode .category-detail-view {
+  background: transparent;
+}
+
+.world-building-page.inline-mode .category-settings-list {
+  gap: 0.4rem;
+}
+
+.world-building-page.inline-mode .setting-list-item {
+  background: #fff;
+  border-color: #e2e8f0;
+}
+
+.world-building-page.inline-mode .setting-list-item:hover {
+  background: #faf8f5;
+  border-color: #d97706;
+  transform: translateX(4px);
+}
+
+.world-building-page.inline-mode .setting-name {
+  color: #1A1A2E;
+}
+
+.world-building-page.inline-mode .setting-status-text {
+  color: #9c9690;
+}
+
+.world-building-page.inline-mode .empty-category {
+  color: #9c9690;
+}
+
+.world-building-page.inline-mode .back-btn {
+  background: #fff;
+  border-color: #e2e8f0;
+  color: #4A4A5A;
+}
+
+.world-building-page.inline-mode .back-btn:hover {
+  background: #faf8f5;
+  border-color: #d97706;
+  color: #d97706;
 }
 
 .top-nav-bar {
@@ -1041,6 +1129,14 @@ onMounted(async () => {
   text-align: center;
   padding: 0.45rem;
   font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  border-radius: 6px;
+}
+
+.entry-more:hover {
+  color: rgba(232, 227, 220, 0.7);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .entry-empty {
@@ -1097,7 +1193,63 @@ onMounted(async () => {
 .stat.draft { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
 .stat.needs-work { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 
+.category-detail-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
+.category-settings-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setting-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.setting-list-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateX(4px);
+}
+
+.setting-status {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.setting-name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(232, 227, 220, 0.85);
+}
+
+.setting-status-text {
+  font-size: 0.72rem;
+  color: rgba(232, 227, 220, 0.4);
+  flex-shrink: 0;
+}
+
+.empty-category {
+  text-align: center;
+  padding: 2rem;
+  color: rgba(232, 227, 220, 0.35);
+  font-size: 0.88rem;
+}
 
 .detail-view {
   flex: 1;

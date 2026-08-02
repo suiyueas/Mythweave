@@ -38,7 +38,29 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     '科技文明': { icon: '🔧', color: '#5D6D7E' },
     '种族设定': { icon: '🧬', color: '#E76F51' },
     '信仰神明': { icon: '🙏', color: '#F4A261' },
-    '生态环境': { icon: '🌿', color: '#14B8A6' }
+    '生态环境': { icon: '🌿', color: '#14B8A6' },
+    '其他': { icon: '📌', color: '#6366F1' },
+    'uniqueRules': { icon: '🔥', color: '#E76F51' },
+    'other': { icon: '📌', color: '#6366F1' }
+  }
+
+  // 英文ID到中文名称的映射
+  const CATEGORY_ID_TO_NAME = {
+    'era': '时代背景',
+    'geography': '地理版图',
+    'history': '历史年表',
+    'powerSystem': '力量体系',
+    'magicSystem': '力量体系',
+    'factions': '政治势力',
+    'factionList': '政治势力',
+    'politics': '政治势力',
+    'uniqueRules': '核心规则',
+    'culture': '文化社会',
+    'technology': '科技文明',
+    'races': '种族设定',
+    'gods': '信仰神明',
+    'ecology': '生态环境',
+    'other': '其他'
   }
 
   // 动态分类：预设分类 + 数据中实际出现的其他分类（AI 生成的中文分类自动生成卡片）
@@ -50,12 +72,17 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     const knownNames = new Set(merged.map(c => c.name))
     for (const s of settings.value) {
       const cat = s.category
-      if (!cat || knownIds.has(cat) || knownNames.has(cat)) continue
+      if (!cat) continue
+      // 如果是英文ID，转换为中文名称
+      const chineseName = CATEGORY_ID_TO_NAME[cat] || cat
+      if (knownIds.has(cat) || knownIds.has(chineseName) || knownNames.has(cat) || knownNames.has(chineseName)) continue
       knownIds.add(cat)
-      const meta = DYNAMIC_CATEGORY_META[cat] || {}
+      knownIds.add(chineseName)
+      knownNames.add(chineseName)
+      const meta = DYNAMIC_CATEGORY_META[cat] || DYNAMIC_CATEGORY_META[chineseName] || {}
       merged.push({
-        id: cat,
-        name: cat,
+        id: chineseName,
+        name: chineseName,
         icon: meta.icon || '📌',
         description: 'AI 生成模块',
         color: meta.color || '#6366F1'
@@ -85,8 +112,11 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     if (selectedCategoryId.value) {
       // 兼容中英文分类：选中预设分类时，用 id 或 name 别名匹配数据
       const cat = categories.value.find(c => c.id === selectedCategoryId.value)
+      const chineseName = CATEGORY_ID_TO_NAME[selectedCategoryId.value] || selectedCategoryId.value
       result = result.filter(s =>
-        s.category === selectedCategoryId.value || (cat && s.category === cat.name)
+        s.category === selectedCategoryId.value ||
+        (cat && s.category === cat.name) ||
+        s.category === chineseName
       )
     }
 
@@ -120,8 +150,9 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     const grouped = {}
     for (const cat of categories.value) {
       // 兼容中英文分类：匹配 id 或 name 别名（如 id='geography' 也能匹配 category='地理版图'）
+      const chineseName = CATEGORY_ID_TO_NAME[cat.id] || cat.id
       grouped[cat.id] = settings.value
-        .filter(s => s.category === cat.id || s.category === cat.name)
+        .filter(s => s.category === cat.id || s.category === cat.name || s.category === chineseName)
         .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
     }
     return grouped
@@ -131,7 +162,8 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     const stats = {}
     for (const cat of categories.value) {
       // 兼容中英文分类：匹配 id 或 name 别名
-      const catSettings = settings.value.filter(s => s.category === cat.id || s.category === cat.name)
+      const chineseName = CATEGORY_ID_TO_NAME[cat.id] || cat.id
+      const catSettings = settings.value.filter(s => s.category === cat.id || s.category === cat.name || s.category === chineseName)
       stats[cat.id] = {
         total: catSettings.length,
         completed: catSettings.filter(s => s.status === 'completed').length,

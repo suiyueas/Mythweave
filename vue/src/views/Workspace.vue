@@ -31,10 +31,10 @@
         <!-- 左下角用户信息 -->
         <div class="flex-shrink-0 px-3 py-2.5 border-t border-[#e8e3dc]">
           <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:linear-gradient(135deg, #0e7490, #7c3aed)">墨</div>
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:linear-gradient(135deg, #0e7490, #7c3aed)">{{ userAvatar }}</div>
             <div class="min-w-0">
-              <div class="text-xs font-semibold text-[#6b6560] truncate">墨染青衫</div>
-              <div class="text-[10px] text-[#9c9690]">签约作者 · LV.8</div>
+              <div class="text-xs font-semibold text-[#6b6560] truncate">{{ userDisplayName }}</div>
+              <div class="text-[10px] text-[#9c9690]">{{ userRoleLabel }} · LV.{{ userLevel }}</div>
             </div>
           </div>
         </div>
@@ -81,6 +81,7 @@
             <span class="text-[#d4cec6] text-xs">|</span>
             <button v-for="tab in ['卡片视图']" :key="tab" class="text-xs px-2.5 py-0.5 rounded-full transition-colors" :class="charTab === tab ? 'bg-[#d97706] text-white' : 'text-[#6b6560] hover:bg-white'" @click="charTab = tab">{{ tab }}</button>
             <div class="flex-1"></div>
+            <button class="text-xs px-2.5 py-1 bg-[#f3efe8] text-[#6b6560] rounded-lg hover:bg-[#e8e3dc] transition-colors" @click="showImportCharactersDialog = true">📥 导入文本</button>
             <button class="text-xs px-2.5 py-1 bg-[#d97706] text-white rounded-lg hover:bg-[#b45309] transition-colors" @click="handleAddCharacter">+ 新建角色</button>
           </div>
           <div class="flex-1 overflow-y-auto px-10 py-8">
@@ -103,6 +104,70 @@
                 </div>
               </div>
             </div>
+
+            <!-- 导入人物文本对话框 -->
+            <Teleport to="body">
+              <div v-if="showImportCharactersDialog" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showImportCharactersDialog = false">
+                <div class="bg-white rounded-xl shadow-2xl w-[600px] max-h-[80vh] flex flex-col">
+                  <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8e3dc]">
+                    <div class="text-base font-semibold text-[#1a1a2e]">📥 导入人物设定文本</div>
+                    <button class="text-[#9c9690] hover:text-[#6b6560] text-lg" @click="showImportCharactersDialog = false">×</button>
+                  </div>
+                  <div class="flex-1 overflow-y-auto p-6">
+                    <div class="mb-4">
+                      <div class="text-xs text-[#6b6560] mb-2">支持格式示例：</div>
+                      <div class="text-[10px] text-[#9c9690] bg-[#faf8f5] rounded-lg p-3 font-mono leading-relaxed">
+                        1. 林彻 · 凡骨改写者<br>
+                        基础信息<br>
+                        年龄 17岁<br>
+                        身份 凡骨镇采石工 → 第七祖魂印载体<br>
+                        性格特征<br>
+                        核心：沉默但不安分...<br>
+                        <br>
+                        2. 苏昭 · 骨殿守护者<br>
+                        基础信息<br>
+                        ...
+                      </div>
+                    </div>
+                    <div class="mb-4">
+                      <div class="text-xs font-semibold text-[#6b6560] mb-2">粘贴人物设定文本</div>
+                      <textarea
+                        v-model="importCharacterText"
+                        class="w-full h-64 px-3 py-2 border border-[#e8e3dc] rounded-lg text-xs font-mono resize-none focus:outline-none focus:border-[#d97706]"
+                        placeholder="请粘贴已整理好的人物设定文本，系统将自动识别每位人物并创建角色卡片..."
+                      ></textarea>
+                    </div>
+                    <div v-if="importPreviewCharacters.length > 0" class="border border-[#e8e3dc] rounded-lg p-4 bg-[#faf8f5]">
+                      <div class="text-xs font-semibold text-[#6b6560] mb-3">✅ 识别到 {{ importPreviewCharacters.length }} 位人物</div>
+                      <div class="grid grid-cols-2 gap-2">
+                        <div v-for="(ch, idx) in importPreviewCharacters" :key="idx" class="bg-white rounded-lg p-2 border border-[#e8e3dc]">
+                          <div class="text-xs font-semibold text-[#6b6560]">{{ ch.name }}</div>
+                          <div class="text-[10px] text-[#9c9690]">{{ ch.role }} | {{ ch.age || '未知年龄' }}</div>
+                          <div v-if="ch.identity" class="text-[10px] text-[#9c9690] truncate">{{ ch.identity }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else-if="importCharacterText.trim().length > 20 && !importParsing" class="text-xs text-[#9c9690] text-center py-4">
+                      点击"开始解析"识别人物...
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between px-6 py-4 border-t border-[#e8e3dc] bg-[#faf8f5]">
+                    <div class="text-xs text-[#9c9690]">
+                      <span v-if="importParsing">正在解析...</span>
+                      <span v-else-if="importPreviewCharacters.length > 0">将创建 {{ importPreviewCharacters.length }} 个角色卡片</span>
+                    </div>
+                    <div class="flex gap-2">
+                      <button class="px-4 py-1.5 text-xs text-[#6b6560] bg-white border border-[#e8e3dc] rounded-lg hover:bg-[#f3efe8] transition-colors" @click="showImportCharactersDialog = false">取消</button>
+                      <button v-if="importPreviewCharacters.length === 0" class="px-4 py-1.5 text-xs text-white bg-[#6366f1] rounded-lg hover:bg-[#4f46e5] transition-colors" :disabled="!importCharacterText.trim() || importParsing" @click="handleParseCharacterText">开始解析</button>
+                      <button v-else class="px-4 py-1.5 text-xs text-white bg-[#d97706] rounded-lg hover:bg-[#b45309] transition-colors" :disabled="importSaving" @click="handleImportCharacters">
+                        <span v-if="importSaving">导入中...</span>
+                        <span v-else>确认导入</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Teleport>
           </div>
         </template>
 
@@ -1538,10 +1603,12 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import OutlinePanel from '@/components/outline/OutlinePanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
+import { useUserStore } from '@/stores/user'
 import { plotApi, inspirationApi, characterApi, aiApi, sentinelApi } from '@/api'
 import { CHARACTER_CATEGORIES, PLOT_CATEGORIES, getCategoryLabel, getCategoryOptions } from '@/config/categories'
 import { formatNumber, formatFileSize, formatActivityTime } from '@/utils/format'
 import { systemApi } from '@/api/system'
+import { parseCharacterText } from '@/utils/characterParser'
 import Editor from '@/views/Editor.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Chapters from '@/views/Chapters.vue'
@@ -1555,9 +1622,20 @@ import * as echarts from 'echarts'
 const route = useRoute()
 const router = useRouter()
 const store = useNovelStore()
+const userStore = useUserStore()
 const project = computed(() => store.currentProject)
 const chapters = computed(() => store.chapters)
 const characters = computed(() => store.characters)
+
+// ─── 用户信息显示 ───
+const userDisplayName = computed(() => userStore.profile.nickname || '未设置昵称')
+const userAvatar = computed(() => userStore.profile.nickname?.charAt(0) || '用')
+const userRoleLabel = computed(() => {
+  if (userStore.isAdmin) return '管理员'
+  if (userStore.isVip) return userStore.vipLevelName
+  return '普通用户'
+})
+const userLevel = computed(() => userStore.stats.level || 1)
 
 // ─── 侧边栏工具导航 ───
 function getToolActiveClass(toolKey) {
@@ -1718,6 +1796,61 @@ if (typeof document !== 'undefined') {
 // ─── 人物 ───
 const charTab = ref('卡片视图')
 const characterList = computed(() => characters.value.map((c, i) => ({ id: c.id, name: c.name || '未命名', role: getCategoryLabel(CHARACTER_CATEGORIES, c.role) || c.role || '👤 配角', avatar: (c.name || '?').charAt(0), color: c.avatarColor || '#d97706', bio: c.description || '暂无简介', tags: (c.tags || '').split(',').filter(Boolean).slice(0, 3), arc: c.arc ?? c.arcProgress ?? [75, 60, 30, 50, 85, 20][i] ?? 0 })))
+
+// ─── 人物导入功能 ───
+const showImportCharactersDialog = ref(false)
+const importCharacterText = ref('')
+const importPreviewCharacters = ref([])
+const importParsing = ref(false)
+const importSaving = ref(false)
+
+function handleParseCharacterText() {
+  if (!importCharacterText.value.trim()) return
+  importParsing.value = true
+  importPreviewCharacters.value = []
+  setTimeout(() => {
+    const result = parseCharacterText(importCharacterText.value)
+    if (result.success && result.characters.length > 0) {
+      importPreviewCharacters.value = result.characters
+    } else {
+      importPreviewCharacters.value = []
+    }
+    importParsing.value = false
+  }, 100)
+}
+
+async function handleImportCharacters() {
+  if (!store.currentProjectId || importPreviewCharacters.value.length === 0) return
+  importSaving.value = true
+  try {
+    for (const ch of importPreviewCharacters.value) {
+      const characterData = {
+        name: ch.name || '未命名人物',
+        role: ch.role || '配角',
+        age: ch.age || '',
+        identity: ch.identity || '',
+        realm: ch.realm || '',
+        description: ch.personality || ch.appearance || '',
+        personality: ch.personality || '',
+        appearance: ch.appearance || '',
+        backstory: ch.backstory || '',
+        abilities: Array.isArray(ch.abilities) ? ch.abilities.join('；') : (ch.abilities || ''),
+        quotes: ch.quotes || '',
+        tags: [],
+        arc: 0
+      }
+      await characterApi.create(store.currentProjectId, characterData)
+    }
+    await store.refreshCharacters(store.currentProjectId)
+    showImportCharactersDialog.value = false
+    importCharacterText.value = ''
+    importPreviewCharacters.value = []
+  } catch (e) {
+    console.error('导入人物失败：', e)
+  } finally {
+    importSaving.value = false
+  }
+}
 
 // ─── 人物详情弹窗 ───
 const showCharacterDetail = ref(false)

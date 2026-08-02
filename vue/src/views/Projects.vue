@@ -775,7 +775,7 @@ async function handleSubmit() {
       plannedCompletionDate: form.plannedCompletionDate || null,
       status: editingId.value ? form.status : 'ongoing'
     }
-    
+
     let projectId
     if (editingId.value) {
       await store.updateProject(editingId.value, data)
@@ -784,10 +784,24 @@ async function handleSubmit() {
       const newProject = await store.createProject(data)
       projectId = newProject.id
     }
-    
+
     await synchronizeParsedData(projectId)
-    
-    projects.value = store.projects
+
+    // 刷新项目列表和当前项目数据
+    await store.fetchProjects()
+
+    // 如果当前有选中的项目且是刚保存的项目，刷新其所有数据
+    if (store.currentProjectId === projectId) {
+      await store.refreshAll(projectId)
+    } else if (!editingId.value) {
+      // 新建项目时，设置为当前项目并刷新数据
+      const freshProjects = store.projects
+      const newProject = freshProjects.find(p => p.id === projectId)
+      if (newProject) {
+        await store.selectProject(newProject)
+      }
+    }
+
     closeModal()
   } catch (e) {
     alert('操作失败：' + (e.message || '请稍后重试'))
@@ -818,31 +832,88 @@ async function synchronizeParsedData(projectId) {
  * 同步人物数据
  */
 async function synchronizeCharacters(projectId) {
-  if (parsedCharacters.value.length === 0) return
-  
+  if (parsedCharacters.value.length === 0) {
+    console.log('同步人物: parsedCharacters 为空，跳过')
+    return
+  }
+
   try {
-    const charactersData = parsedCharacters.value.map(ch => ({
-      name: ch.name || '未命名人物',
-      role: ch.role || '待定',
-      age: ch.age || null,
-      identity: ch.identity || null,
-      realm: ch.realm || null,
-      personality: ch.personality || null,
-      appearance: ch.appearance || null,
-      backstory: ch.backstory || null,
-      abilities: ch.abilities || null,
-      quotes: ch.quotes || null,
-      hiddenSettings: ch.hiddenSettings || null,
-      raw: ch.raw || null
-    }))
-    
+    const existingChars = await characterApi.list(projectId) || []
+    const existingCharMap = new Map()
+    const existingCharNormalizedMap = new Map()
+    existingChars.forEach(c => {
+      existingCharMap.set(c.name, c)
+      existingCharNormalizedMap.set(c.name.trim().toLowerCase(), c)
+    })
+
+    const charactersData = parsedCharacters.value.map(ch => {
+      // 后端 age 字段为 Integer，仅接受纯数字；自然语言年龄（如“17岁→20岁”）合并进描述保留信息
+      const ageText = (ch.age || '').toString().trim()
+      const numericAge = /^\d+$/.test(ageText) ? Number(ageText) : null
+      const descParts = [ch.personality || ch.appearance || '']
+      if (ageText && numericAge === null) descParts.push(`年龄：${ageText}`)
+      const char = {
+        name: ch.name || '未命名人物',
+        role: ch.role || '配角',
+        ...(numericAge !== null ? { age: numericAge } : {}),
+        identity: ch.identity || '',
+        realm: ch.realm || '',
+        description: descParts.filter(Boolean).join('\n'),
+        personality: ch.personality || '',
+        appearance: ch.appearance || '',
+        backstory: ch.backstory || '',
+        abilities: Array.isArray(ch.abilities) ? ch.abilities.join('；') : (ch.abilities || ''),
+        quotes: ch.quotes || '',
+        tags: [],
+        arc: 0
+      }
+      console.log(`准备创建角色:`, char)
+      return char
+    })
+
+    console.log(`开始同步 ${charactersData.length} 个人物到项目 ${projectId}`)
+
+    let createdCount = 0
+    let updatedCount = 0
+    let skippedCount = 0
+
     for (const char of charactersData) {
-      await characterApi.create(projectId, char)
+      try {
+        const normalizedName = char.name.trim().toLowerCase()
+        const existing = existingCharMap.get(char.name) || existingCharNormalizedMap.get(normalizedName)
+        if (existing) {
+          const needsUpdate = 
+            existing.role !== char.role ||
+            existing.description !== char.description ||
+            existing.personality !== char.personality ||
+            existing.appearance !== char.appearance ||
+            existing.backstory !== char.backstory ||
+            existing.abilities !== char.abilities ||
+            (existing.age !== char.age && char.age !== undefined)
+          
+          if (needsUpdate) {
+            await characterApi.update(projectId, existing.id, char)
+            updatedCount++
+            console.log(`✅ 角色 ${char.name} 更新成功`)
+          } else {
+            skippedCount++
+            console.log(`⏭️ 角色 ${char.name} 内容无变化，跳过`)
+          }
+          existingCharMap.delete(existing.name)
+          existingCharNormalizedMap.delete(existing.name.trim().toLowerCase())
+        } else {
+          await characterApi.create(projectId, char)
+          createdCount++
+          console.log(`✅ 角色 ${char.name} 创建成功`)
+        }
+      } catch (e) {
+        console.error(`❌ 角色 ${char.name} 同步失败:`, e.message)
+      }
     }
-    
-    console.log(`✅ 已同步 ${charactersData.length} 个人物到项目 ${projectId}`)
+
+    console.log(`✅ 人物同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`)
   } catch (e) {
-    console.warn('同步人物数据失败:', e.message)
+    console.warn('同步人物数据失败:', e.message, e)
   }
 }
 
@@ -853,16 +924,57 @@ async function synchronizeWorldSettings(projectId) {
   if (parsedWorldSections.value.length === 0) return
   
   try {
-    for (const section of parsedWorldSections.value) {
-      await worldApi.createSetting(projectId, {
-        name: section.title || '未命名设定',
-        category: detectWorldCategory(section.title),
-        content: section.content || '',
-        level: section.level || 1
+    const existingSettings = await worldApi.listSettings(projectId)
+    const existingMap = new Map()
+    const existingNormalizedMap = new Map()
+    if (existingSettings && Array.isArray(existingSettings)) {
+      existingSettings.forEach(s => {
+        existingMap.set(s.name, s)
+        existingNormalizedMap.set(s.name.trim().toLowerCase(), s)
       })
     }
     
-    console.log(`✅ 已同步 ${parsedWorldSections.value.length} 个世界观设定到项目 ${projectId}`)
+    let createdCount = 0
+    let updatedCount = 0
+    let skippedCount = 0
+    
+    for (const section of parsedWorldSections.value) {
+      const name = section.title || '未命名设定'
+      const normalizedName = name.trim().toLowerCase()
+      const category = detectWorldCategory(section.title)
+      const content = section.content || ''
+      const level = section.level || 1
+      
+      const existing = existingMap.get(name) || existingNormalizedMap.get(normalizedName)
+      if (existing) {
+        if (existing.content !== content || existing.category !== category) {
+          await worldApi.updateSetting(projectId, existing.id, {
+            name: existing.name,
+            category,
+            content,
+            level
+          })
+          updatedCount++
+          console.log(`✅ 更新世界观设定: ${name}`)
+        } else {
+          skippedCount++
+          console.log(`⏭️ 世界观设定 ${name} 内容无变化，跳过`)
+        }
+        existingMap.delete(existing.name)
+        existingNormalizedMap.delete(existing.name.trim().toLowerCase())
+      } else {
+        await worldApi.createSetting(projectId, {
+          name,
+          category,
+          content,
+          level
+        })
+        createdCount++
+        console.log(`✅ 创建世界观设定: ${name}`)
+      }
+    }
+    
+    console.log(`✅ 世界观设定同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`)
   } catch (e) {
     console.warn('同步世界观设定失败:', e.message)
   }
@@ -936,16 +1048,59 @@ async function synchronizeCoreSettings(projectId) {
   if (parsedCoreItems.value.length === 0) return
   
   try {
-    for (const item of parsedCoreItems.value) {
-      await worldApi.createSetting(projectId, {
-        name: item.title || '核心设定',
-        category: 'core',
-        content: item.content || '',
-        level: 1
+    const existingSettings = await worldApi.listSettings(projectId)
+    const existingCoreSettings = new Map()
+    const existingCoreNormalizedMap = new Map()
+    if (existingSettings && Array.isArray(existingSettings)) {
+      existingSettings.filter(s => 
+        s.category === 'uniqueRules' || 
+        s.category === '核心规则' ||
+        s.category === 'core'
+      ).forEach(s => {
+        existingCoreSettings.set(s.name, s)
+        existingCoreNormalizedMap.set(s.name.trim().toLowerCase(), s)
       })
     }
     
-    console.log(`✅ 已同步 ${parsedCoreItems.value.length} 个核心设定到项目 ${projectId}`)
+    let createdCount = 0
+    let updatedCount = 0
+    let skippedCount = 0
+    
+    for (const item of parsedCoreItems.value) {
+      const name = item.title || '核心设定'
+      const normalizedName = name.trim().toLowerCase()
+      const content = item.content || ''
+      
+      const existing = existingCoreSettings.get(name) || existingCoreNormalizedMap.get(normalizedName)
+      if (existing) {
+        if (existing.content !== content) {
+          await worldApi.updateSetting(projectId, existing.id, {
+            name: existing.name,
+            category: 'uniqueRules',
+            content,
+            level: 1
+          })
+          updatedCount++
+          console.log(`✅ 更新核心设定: ${name}`)
+        } else {
+          skippedCount++
+          console.log(`⏭️ 核心设定 ${name} 内容无变化，跳过`)
+        }
+        existingCoreSettings.delete(existing.name)
+        existingCoreNormalizedMap.delete(existing.name.trim().toLowerCase())
+      } else {
+        await worldApi.createSetting(projectId, {
+          name,
+          category: 'uniqueRules',
+          content,
+          level: 1
+        })
+        createdCount++
+        console.log(`✅ 创建核心设定: ${name}`)
+      }
+    }
+    
+    console.log(`✅ 核心设定同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`)
   } catch (e) {
     console.warn('同步核心设定失败:', e.message)
   }
@@ -966,7 +1121,6 @@ async function toggleStatus(project) {
   const newStatus = isCompleted ? 'ongoing' : 'completed'
   try {
     await store.updateProject(project.id, { status: newStatus })
-    projects.value = store.projects
   } catch (e) {
     alert('状态切换失败：' + (e.message || '请稍后重试'))
   }
@@ -978,7 +1132,6 @@ async function handleDeleteConfirm() {
   deletingId.value = projectId
   try {
     await store.deleteProject(projectId)
-    projects.value = store.projects
     showDeleteDialog.value = false
     workToDelete.value = null
   } catch (e) {

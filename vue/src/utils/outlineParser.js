@@ -264,13 +264,25 @@ function parseSimpleOutline(text, result) {
  * 解析章节行
  */
 function parseChapterLine(line) {
-  // 匹配 "第1章 凡骨镇" 或 "第1章  凡骨镇  关键事件描述"
-  const match = line.match(/^第?(\d+)章\s*[：:、]?\s*([^\t\n]+?)(?:\s{2,}|$)/)
+  const trimmed = line.trim()
+  if (!trimmed) return null
+
+  // 匹配 "第1章	凡骨镇	林彻在..." 或 "第1章  凡骨镇  描述"
+  // 支持制表符或空格分隔
+  const match = trimmed.match(/^第?(\d+)章[：:、]?\s*([^\t\n]+)(?=\t|\s{2,})/)
   if (match) {
+    const title = match[2].trim()
+    // 提取摘要：找到标题结束位置后的所有内容
+    const titleEndIndex = trimmed.indexOf(title) + title.length
+    let summary = trimmed.slice(titleEndIndex).trim()
+    // 去掉可能的前导分隔符
+    if (summary.startsWith('\t') || summary.startsWith('  ')) {
+      summary = summary.replace(/^[\t ]+/, '').trim()
+    }
     return {
       number: parseInt(match[1]),
-      title: match[2].trim(),
-      summary: line.slice(line.indexOf(match[2]) + match[2].length).trim().slice(0, 150)
+      title: title,
+      summary: summary.slice(0, 150)
     }
   }
   return null
@@ -280,8 +292,9 @@ function parseChapterLine(line) {
  * 解析表格格式章节
  */
 function parseTableChapter(line) {
-  // 匹配 "1  凡骨镇  描述"
-  const parts = line.split(/\s{2,}/)
+  // 匹配 "1  凡骨镇  描述" 或 "1	凡骨镇	描述"（制表符或空格分隔）
+  const trimmed = line.trim()
+  const parts = trimmed.split(/\t|\s{2,}/)
   if (parts.length >= 2) {
     const num = parseInt(parts[0])
     if (!isNaN(num)) {

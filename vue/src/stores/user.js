@@ -12,6 +12,7 @@ export const useUserStore = defineStore('user', () => {
     phone: '',
     bio: '',
     avatar: '',
+    createdAt: null,
     emailVerified: false,
     role: 'user',
     vipLevel: 0,
@@ -67,6 +68,14 @@ export const useUserStore = defineStore('user', () => {
   const isAdmin = computed(() => profile.value.role === 'admin')
 
   function setAuth(data) {
+    // 清除上一登录用户残留的本地缓存（账户页个人信息/头像），防止串号
+    const prevId = profile.value.id
+    localStorage.removeItem('novel-profile')
+    localStorage.removeItem('novel-avatar')
+    if (prevId != null) {
+      localStorage.removeItem(`novel-profile-${prevId}`)
+      localStorage.removeItem(`novel-avatar-${prevId}`)
+    }
     token.value = data.token
     profile.value = {
       id: data.user.id,
@@ -75,6 +84,7 @@ export const useUserStore = defineStore('user', () => {
       phone: '',
       bio: '',
       avatar: data.user.avatar || '',
+      createdAt: data.user.createdAt || null,
       emailVerified: false,
       role: data.user.role || 'user',
       vipLevel: data.user.vipLevel || 0,
@@ -87,6 +97,8 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function clearAuth() {
+    // 先记录旧用户 ID，再清空，确保按用户绑定的缓存能被移除
+    const prevId = profile.value.id
     token.value = null
     profile.value = {
       id: null,
@@ -95,6 +107,7 @@ export const useUserStore = defineStore('user', () => {
       phone: '',
       bio: '',
       avatar: '',
+      createdAt: null,
       emailVerified: false,
       role: 'user',
       vipLevel: 0,
@@ -104,6 +117,12 @@ export const useUserStore = defineStore('user', () => {
     }
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem('novel-profile')
+    localStorage.removeItem('novel-avatar')
+    if (prevId != null) {
+      localStorage.removeItem(`novel-profile-${prevId}`)
+      localStorage.removeItem(`novel-avatar-${prevId}`)
+    }
   }
 
   function loadFromStorage() {
@@ -120,6 +139,7 @@ export const useUserStore = defineStore('user', () => {
           phone: '',
           bio: '',
           avatar: user.avatar || '',
+          createdAt: user.createdAt || null,
           emailVerified: false,
           role: user.role || 'user',
           vipLevel: user.vipLevel || 0,
@@ -169,6 +189,7 @@ export const useUserStore = defineStore('user', () => {
           phone: data.phone || '',
           bio: data.bio || '',
           avatar: data.avatar || profile.value.avatar,
+          createdAt: data.createdAt || profile.value.createdAt,
           emailVerified: data.emailVerified || false,
           role: data.role || profile.value.role,
           vipLevel: data.vipLevel !== undefined ? data.vipLevel : profile.value.vipLevel,

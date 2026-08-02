@@ -28,9 +28,10 @@ public class InspirationService {
     public List<InspirationItem> aiGenerate(String keywords) {
         try {
             String systemPrompt = "你是一位创意写作助手。根据用户提供的关键词，生成3条小说创作灵感，分别是对白灵感、场景描写和细节设定。" +
-                    "以JSON数组格式返回，每条包含type(dialogue/scene/detail)和content字段。" +
+                    "以JSON数组格式返回，每条包含type和content字段。" +
+                    "type的可选值：对白灵感、场景描写、细节设定。" +
                     "要求：内容新颖具体，具有画面感和文学性，每条30-100字。返回格式示例：" +
-                    "[{\"type\":\"dialogue\",\"content\":\"...\"},{\"type\":\"scene\",\"content\":\"...\"},{\"type\":\"detail\",\"content\":\"...\"}]";
+                    "[{\"type\":\"对白灵感\",\"content\":\"...\"},{\"type\":\"场景描写\",\"content\":\"...\"},{\"type\":\"细节设定\",\"content\":\"...\"}]";
 
             String userMessage = "关键词：" + keywords;
             String result = deepSeekClient.chat(systemPrompt, userMessage, 0.8, 1024);
@@ -81,9 +82,9 @@ public class InspirationService {
         String kw2 = kw.length > 2 ? kw[2] : "命运";
 
         String[][] templates = {
-                {"dialogue", String.format("「你以为%s只是%s？不，它背后隐藏着比%s更深的秘密。」他低声说道，眼中闪烁着危险的光芒。", kw0, kw1, kw2)},
-                {"scene", String.format("%s的余晖洒在%s的废墟上，空气中弥漫着%s的气息。远处传来钟声，沉重而悠远，仿佛在宣告什么。", kw0, kw1, kw2)},
-                {"detail", String.format("他的指尖划过%s的纹理，那上面刻着古老的符文——每一个符号都在诉说着与%s有关的%s预言。", kw0, kw1, kw2)}
+                {"对白灵感", String.format("「你以为%s只是%s？不，它背后隐藏着比%s更深的秘密。」他低声说道，眼中闪烁着危险的光芒。", kw0, kw1, kw2)},
+                {"场景描写", String.format("%s的余晖洒在%s的废墟上，空气中弥漫着%s的气息。远处传来钟声，沉重而悠远，仿佛在宣告什么。", kw0, kw1, kw2)},
+                {"细节设定", String.format("他的指尖划过%s的纹理，那上面刻着古老的符文——每一个符号都在诉说着与%s有关的%s预言。", kw0, kw1, kw2)}
         };
 
         // 随机偏移

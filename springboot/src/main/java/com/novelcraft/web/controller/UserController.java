@@ -53,8 +53,8 @@ public class UserController {
     @PostMapping("/avatar")
     public R<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
-            // 获取当前用户ID（暂时使用默认用户ID 1）
-            Long userId = 1L;
+            // 从 token 解析当前用户 ID
+            Long userId = userService.getCurrentUserId();
             
             // 获取当前用户信息
             Map<String, Object> profile = userService.getFullProfile();
@@ -92,7 +92,7 @@ public class UserController {
     @DeleteMapping("/avatar")
     public R<Void> deleteAvatar() {
         try {
-            Long userId = 1L;
+            Long userId = userService.getCurrentUserId();
             
             // 获取当前用户信息
             Map<String, Object> profile = userService.getFullProfile();

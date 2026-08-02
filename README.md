@@ -46,6 +46,13 @@
 - 写作节奏分析
 - 人物出场统计
 
+### 👑 VIP 会员系统
+- AI 功能权限拦截（免费用户限次，VIP 无限畅用）
+- 专属写作模板与续写润色服务
+- 多档位套餐（月度/季度/年度）
+- 微信/支付宝模拟支付
+- VIP 到期续费与状态管理
+
 ### 🔍 全局搜索
 - 基于 Elasticsearch 的全文搜索
 - 语义相似度匹配
@@ -167,6 +174,7 @@ java -jar target/novelcraft-1.0.0-SNAPSHOT.jar
 | `AiChatController` | AI 对话 |
 | `SentinelController` | 智能哨兵 |
 | `SearchController` | 全局搜索 |
+| `UserController` | 用户管理 / VIP 会员 |
 
 ## 📝 License
 

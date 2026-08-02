@@ -7,19 +7,19 @@
         <span class="stat-label">总灵感</span>
       </div>
       <div class="stat-item">
-        <span class="stat-num accent">{{ store.typeCounts.dialogue }}</span>
+        <span class="stat-num accent">{{ store.typeCounts['对白灵感'] }}</span>
         <span class="stat-label">对白</span>
       </div>
       <div class="stat-item">
-        <span class="stat-num green">{{ store.typeCounts.scene }}</span>
+        <span class="stat-num green">{{ store.typeCounts['场景描写'] }}</span>
         <span class="stat-label">场景</span>
       </div>
       <div class="stat-item">
-        <span class="stat-num purple">{{ store.typeCounts.detail }}</span>
+        <span class="stat-num purple">{{ store.typeCounts['细节设定'] }}</span>
         <span class="stat-label">细节</span>
       </div>
       <div class="stat-item">
-        <span class="stat-num gray">{{ store.typeCounts.reference }}</span>
+        <span class="stat-num gray">{{ store.typeCounts['参考资料'] }}</span>
         <span class="stat-label">参考</span>
       </div>
     </div>
@@ -71,7 +71,7 @@
         @click="openActionSheet(item)"
       >
         <!-- 类型徽章 -->
-        <div class="card-type-badge" :class="'type-' + (item.type || 'dialogue')">
+        <div class="card-type-badge" :class="'type-' + (item.type || '对白灵感')">
           {{ typeIcon(item.type) }} {{ typeLabel(item.type) }}
         </div>
 
@@ -98,9 +98,9 @@
     <div v-else class="empty-state">
       <div class="empty-icon-wrap">
         <span v-if="store.filterType === 'all'">💡</span>
-        <span v-else-if="store.filterType === 'dialogue'">💬</span>
-        <span v-else-if="store.filterType === 'scene'">🎬</span>
-        <span v-else-if="store.filterType === 'detail'">🔍</span>
+        <span v-else-if="store.filterType === '对白灵感'">💬</span>
+        <span v-else-if="store.filterType === '场景描写'">🎬</span>
+        <span v-else-if="store.filterType === '细节设定'">🔍</span>
         <span v-else>📚</span>
       </div>
       <p class="empty-text">
@@ -376,28 +376,41 @@ const chapters = computed(() => novelStore.chapters || [])
 
 // ─── 类型配置 ───
 const typeOptions = [
-  { value: 'dialogue', icon: '💬', label: '对白灵感' },
-  { value: 'scene', icon: '🎬', label: '场景描写' },
-  { value: 'detail', icon: '🔍', label: '细节设定' },
-  { value: 'reference', icon: '📚', label: '参考资料' }
+  { value: '对白灵感', icon: '💬', label: '对白灵感' },
+  { value: '场景描写', icon: '🎬', label: '场景描写' },
+  { value: '细节设定', icon: '🔍', label: '细节设定' },
+  { value: '参考资料', icon: '📚', label: '参考资料' }
 ]
 
 const filterTabs = [
   { value: 'all', icon: '📋', label: '全部' },
-  { value: 'dialogue', icon: '💬', label: '对白灵感' },
-  { value: 'scene', icon: '🎬', label: '场景描写' },
-  { value: 'detail', icon: '🔍', label: '细节设定' },
-  { value: 'reference', icon: '📚', label: '参考资料' }
+  { value: '对白灵感', icon: '💬', label: '对白灵感' },
+  { value: '场景描写', icon: '🎬', label: '场景描写' },
+  { value: '细节设定', icon: '🔍', label: '细节设定' },
+  { value: 'ai', icon: '🤖', label: 'AI生成' }
 ]
+
+const TYPE_EN_TO_CN = {
+  'dialogue': '对白灵感',
+  'scene': '场景描写',
+  'detail': '细节设定',
+  'reference': '参考资料'
+}
 
 function typeLabel(type) {
   const found = typeOptions.find(t => t.value === type)
-  return found ? found.label : type
+  if (found) return found.label
+  // 兼容旧数据：英文type转中文
+  return TYPE_EN_TO_CN[type] || type
 }
 
 function typeIcon(type) {
   const found = typeOptions.find(t => t.value === type)
-  return found ? found.icon : '💡'
+  if (found) return found.icon
+  // 兼容旧数据：英文type转中文
+  const chineseType = TYPE_EN_TO_CN[type]
+  const foundCn = typeOptions.find(t => t.value === chineseType)
+  return foundCn ? foundCn.icon : '💡'
 }
 
 function parseTags(tags) {
@@ -439,13 +452,13 @@ const sortModel = ref('time-desc')
 // ─── 空状态 ───
 const emptyText = computed(() => {
   if (store.filterType === 'all') return '暂无灵感素材，点击按钮或使用 AI 生成器创建第一条灵感吧'
-  const map = { dialogue: '暂无对白灵感', scene: '暂无场景描写', detail: '暂无细节设定', reference: '暂无参考资料' }
+  const map = { '对白灵感': '暂无对白灵感', '场景描写': '暂无场景描写', '细节设定': '暂无细节设定', '参考资料': '暂无参考资料' }
   return map[store.filterType] || '暂无数据'
 })
 
 const emptyButtonText = computed(() => {
   if (store.filterType === 'all') return '+ 记录灵感'
-  const map = { dialogue: '+ 新增对白', scene: '+ 新增场景', detail: '+ 新增设定', reference: '+ 新增资料' }
+  const map = { '对白灵感': '+ 新增对白', '场景描写': '+ 新增场景', '细节设定': '+ 新增设定', '参考资料': '+ 新增资料' }
   return map[store.filterType] || '+ 记录灵感'
 })
 
@@ -461,7 +474,7 @@ function openActionSheet(item) {
   showSheet.value = true
   // 设置编辑表单
   editForm.content = item.content || ''
-  editForm.type = item.type || 'dialogue'
+  editForm.type = item.type || '对白灵感'
   editForm.chapterId = item.chapterId || ''
   editForm.isHighlight = !!item.isHighlight
   editForm.tagsArray = [...parseTags(item.tags)]
@@ -479,7 +492,7 @@ function switchToEdit() {
 // ─── 编辑表单 ───
 const editForm = reactive({
   content: '',
-  type: 'dialogue',
+  type: '对白灵感',
   chapterId: '',
   isHighlight: false,
   tagsArray: []
@@ -549,13 +562,13 @@ const createTagInput = ref('')
 
 const createDialogTitle = computed(() => {
   if (createForm.type === 'all') return '记录灵感'
-  const map = { dialogue: '新增对白灵感', scene: '新增场景描写', detail: '新增细节设定', reference: '新增参考资料' }
+  const map = { '对白灵感': '新增对白灵感', '场景描写': '新增场景描写', '细节设定': '新增细节设定', '参考资料': '新增参考资料' }
   return map[createForm.type] || '记录灵感'
 })
 
 function openCreateDialog() {
   // 自动填充当前筛选类型
-  createForm.type = store.filterType !== 'all' ? store.filterType : 'dialogue'
+  createForm.type = store.filterType !== 'all' ? store.filterType : '对白灵感'
   createForm.content = ''
   createForm.chapterId = ''
   createForm.isHighlight = false
@@ -579,7 +592,7 @@ function handleCreate() {
   if (!createForm.content.trim()) return
   const chapter = chapters.value.find(c => c.id === createForm.chapterId)
   store.createInspiration({
-    type: createForm.type !== 'all' ? createForm.type : 'dialogue',
+    type: createForm.type !== 'all' ? createForm.type : '对白灵感',
     content: createForm.content.trim(),
     chapterId: createForm.chapterId || null,
     chapterName: chapter ? (chapter.title || '第' + (chapter.sortOrder || '?') + '章') : '',

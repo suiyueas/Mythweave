@@ -7,8 +7,11 @@ import com.novelcraft.web.mapper.NovelUserMapper;
 import com.novelcraft.web.mapper.NovelUserStatsMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -39,10 +42,25 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
     private static final LocalDateTime ADMIN_VIP_EXPIRE = LocalDateTime.of(2099, 12, 31, 23, 59, 59);
     
     /**
-     * 获取用户信息（默认用户ID=1）
+     * 获取当前登录用户 ID（由 JwtFilter 从 token 解析后写入 request attribute）
+     */
+    public Long getCurrentUserId() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            throw new IllegalStateException("无法获取当前登录用户");
+        }
+        Object userId = attrs.getRequest().getAttribute("userId");
+        if (userId == null) {
+            throw new IllegalStateException("未登录或会话已过期");
+        }
+        return Long.valueOf(userId.toString());
+    }
+
+    /**
+     * 获取当前登录用户信息（按 token 动态查询，不再固定返回 ID=1）
      */
     public NovelUser getProfile() {
-        NovelUser user = getById(1L);
+        NovelUser user = getById(getCurrentUserId());
         ensureAdminVip(user);
         return user;
     }
@@ -81,7 +99,7 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
      */
     @Transactional
     public void updateProfile(NovelUser user) {
-        user.setId(1L);
+        user.setId(getCurrentUserId());
         updateById(user);
     }
     
@@ -89,7 +107,7 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
      * 获取用户统计
      */
     public NovelUserStats getStats() {
-        return userStatsMapper.selectById(1L);
+        return userStatsMapper.selectById(getCurrentUserId());
     }
     
     /**
@@ -106,6 +124,7 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
             result.put("phone", user.getPhone());
             result.put("bio", user.getBio());
             result.put("avatar", user.getAvatar());
+            result.put("createdAt", user.getCreateTime());
             result.put("emailVerified", user.getEmailVerified());
             result.put("role", user.getRole());
             result.put("vipLevel", user.getVipLevel());
@@ -196,15 +215,16 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
      */
     @Transactional
     public boolean changePassword(String oldPassword, String newPassword) {
-        NovelUser user = getById(1L);
+        NovelUser user = getById(getCurrentUserId());
         if (user == null) {
             return false;
         }
-        // 简单密码验证（实际项目应使用加密）
-        if (!user.getPassword().equals(oldPassword)) {
+        // 注册时密码使用 BCrypt 加密，校验需用 matches，不能明文比较
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        if (!encoder.matches(oldPassword, user.getPassword())) {
             return false;
         }
-        user.setPassword(newPassword);
+        user.setPassword(encoder.encode(newPassword));
         return updateById(user);
     }
     
@@ -212,7 +232,7 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
      * 发送邮箱验证（模拟）
      */
     public boolean sendEmailVerification() {
-        NovelUser user = getById(1L);
+        NovelUser user = getById(getCurrentUserId());
         if (user == null || user.getEmail() == null) {
             return false;
         }

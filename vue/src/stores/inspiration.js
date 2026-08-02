@@ -13,7 +13,7 @@ const TYPE_LABELS = {
   reference: '参考资料'
 }
 
-const TYPE_LIST = ['dialogue', 'scene', 'detail', 'reference']
+const TYPE_LIST = ['对白灵感', '场景描写', '细节设定', '参考资料']
 
 function generateId() {
   return 'insp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
@@ -162,7 +162,7 @@ export const useInspirationStore = defineStore('inspiration', () => {
         return {
           id: String(item.id),
           projectId: item.projectId,
-          type: item.type || 'dialogue',
+          type: item.type || '对白灵感',
           content: item.content || '',
           tags: item.tags || '',
           chapterId: item.chapterId || (local ? local.chapterId : null),
@@ -199,7 +199,7 @@ export const useInspirationStore = defineStore('inspiration', () => {
     const now = new Date()
     const item = {
       id: generateId(),
-      type: data.type || 'dialogue',
+      type: data.type || '对白灵感',
       content: data.content || '',
       tags: data.tags || '',
       chapterId: data.chapterId || null,
@@ -296,17 +296,17 @@ export const useInspirationStore = defineStore('inspiration', () => {
 
     const templates = [
       {
-        type: 'dialogue',
+        type: '对白灵感',
         content: `「你以为${k0}只是${k1}？不，它背后隐藏着比${k2}更深的秘密。」他低声说道，眼中闪烁着危险的光芒。`,
         source: 'ai'
       },
       {
-        type: 'scene',
+        type: '场景描写',
         content: `${k0}的余晖洒在${k1}的废墟上，空气中弥漫着${k2}的气息。远处传来钟声，沉重而悠远，仿佛在宣告什么。`,
         source: 'ai'
       },
       {
-        type: 'detail',
+        type: '细节设定',
         content: `他的指尖划过${k0}的纹理，那上面刻着古老的符文——每一个符号都在诉说着与${k1}有关的${k2}预言。`,
         source: 'ai'
       }
