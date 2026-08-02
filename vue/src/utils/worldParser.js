@@ -70,7 +70,7 @@ function parseStructuredWorldText(text, sections) {
   }
 
   function saveCurrentSection() {
-    if (currentSection && currentContent.length > 0) {
+    if (currentSection && (currentContent.length > 0 || currentSubSection)) {
       const sectionData = {
         title: currentSection,
         content: currentContent.join('\n').trim(),
@@ -96,20 +96,25 @@ function parseStructuredWorldText(text, sections) {
 
   function saveSubSection() {
     if (currentSubSection && currentSubContent.length > 0) {
-      const lastSection = sections[sections.length - 1]
-      if (lastSection && lastSection.title === currentSection && lastSection.subSections) {
-        lastSection.subSections.push({
-          title: currentSubSection,
-          content: currentSubContent.join('\n').trim(),
-          level: 2
-        })
-      } else {
-        sections.push({
-          title: currentSubSection,
-          content: currentSubContent.join('\n').trim(),
-          level: 2
-        })
+      if (sections.length > 0) {
+        const lastSection = sections[sections.length - 1]
+        if (lastSection.title === currentSection) {
+          if (!lastSection.subSections) {
+            lastSection.subSections = []
+          }
+          lastSection.subSections.push({
+            title: currentSubSection,
+            content: currentSubContent.join('\n').trim(),
+            level: 2
+          })
+          return
+        }
       }
+      sections.push({
+        title: currentSubSection,
+        content: currentSubContent.join('\n').trim(),
+        level: 2
+      })
     }
   }
 
@@ -133,6 +138,14 @@ function parseStructuredWorldText(text, sections) {
     } else if (isSubChapter(trimmedLine) && !isSubSubChapter(trimmedLine)) {
       if (currentSubSection) {
         saveSubSection()
+      }
+      if (currentSection && !currentSubSection) {
+        sections.push({
+          title: currentSection,
+          content: '',
+          level: 1,
+          subSections: []
+        })
       }
       currentSubSection = extractSubTitle(trimmedLine)
       currentSubContent = []

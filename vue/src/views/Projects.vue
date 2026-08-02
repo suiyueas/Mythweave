@@ -972,6 +972,43 @@ async function synchronizeWorldSettings(projectId) {
         createdCount++
         console.log(`✅ 创建世界观设定: ${name}`)
       }
+      
+      if (section.subSections && section.subSections.length > 0) {
+        for (const subSection of section.subSections) {
+          const subName = subSection.title || '未命名设定'
+          const subNormalizedName = subName.trim().toLowerCase()
+          const subCategory = detectWorldCategory(subSection.title)
+          const subContent = subSection.content || ''
+          const subLevel = subSection.level || 2
+          
+          const subExisting = existingMap.get(subName) || existingNormalizedMap.get(subNormalizedName)
+          if (subExisting) {
+            if (subExisting.content !== subContent || subExisting.category !== subCategory) {
+              await worldApi.updateSetting(projectId, subExisting.id, {
+                name: subExisting.name,
+                category: subCategory,
+                content: subContent,
+                level: subLevel
+              })
+              updatedCount++
+              console.log(`✅ 更新世界观子设定: ${subName}`)
+            } else {
+              skippedCount++
+            }
+            existingMap.delete(subExisting.name)
+            existingNormalizedMap.delete(subExisting.name.trim().toLowerCase())
+          } else {
+            await worldApi.createSetting(projectId, {
+              name: subName,
+              category: subCategory,
+              content: subContent,
+              level: subLevel
+            })
+            createdCount++
+            console.log(`✅ 创建世界观子设定: ${subName}`)
+          }
+        }
+      }
     }
     
     console.log(`✅ 世界观设定同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`)
@@ -986,56 +1023,78 @@ async function synchronizeWorldSettings(projectId) {
 function detectWorldCategory(title) {
   if (!title) return '其他'
   const t = title.toLowerCase()
-  if (t.includes('时代') || t.includes('背景')) return 'era'
-  if (t.includes('地理') || t.includes('版图') || t.includes('山川') || t.includes('城市')) return 'geography'
-  if (t.includes('历史') || t.includes('年表') || t.includes('事件')) return 'history'
-  if (t.includes('力量') || t.includes('体系') || t.includes('修炼') || t.includes('魔法')) return 'magic'
-  if (t.includes('政治') || t.includes('势力') || t.includes('王国') || t.includes('派系')) return 'politics'
-  if (t.includes('文化') || t.includes('社会') || t.includes('民俗')) return 'culture'
-  if (t.includes('科技') || t.includes('技术') || t.includes('器械')) return 'technology'
-  if (t.includes('种族') || t.includes('人种')) return 'races'
-  if (t.includes('信仰') || t.includes('神明') || t.includes('宗教')) return 'religion'
-  if (t.includes('规则') || t.includes('核心')) return 'uniqueRules'
+  if (t.includes('时代') || t.includes('背景') || t.includes('环境') || t.includes('世界概览') || t.includes('世界观设定') || t.includes('世界设定')) return 'era'
+  if (t.includes('地理') || t.includes('版图') || t.includes('山川') || t.includes('城市') || t.includes('地点')) return 'geography'
+  if (t.includes('历史') || t.includes('年表') || t.includes('事件') || t.includes('纪元')) return 'history'
+  if (t.includes('力量') || t.includes('体系') || t.includes('修炼') || t.includes('魔法') || t.includes('等级') || t.includes('境界') || t.includes('功法') || t.includes('神通')) return 'magic'
+  if (t.includes('政治') || t.includes('势力') || t.includes('王国') || t.includes('派系') || t.includes('组织')) return 'politics'
+  if (t.includes('社会') || t.includes('结构') || t.includes('等级') && t.includes('身份')) return 'culture'
+  if (t.includes('文化') || t.includes('传统') || t.includes('民俗') || t.includes('风俗') || t.includes('习惯') || t.includes('日常')) return 'culture'
+  if (t.includes('科技') || t.includes('技术') || t.includes('器械') || t.includes('机械') || t.includes('机关')) return 'technology'
+  if (t.includes('种族') || t.includes('人种') || t.includes('族群') || t.includes('血脉')) return 'races'
+  if (t.includes('信仰') || t.includes('神明') || t.includes('宗教') || t.includes('神祇') || t.includes('教堂') || t.includes('传说') || t.includes('隐秘')) return 'religion'
+  if (t.includes('规则') || t.includes('核心') || t.includes('法则') || t.includes('定律')) return 'uniqueRules'
+  if (t.includes('生态') || t.includes('自然') || t.includes('生物')) return 'ecology'
+  if (t.includes('经济') || t.includes('商业') || t.includes('贸易') || t.includes('货币') || t.includes('金融') || t.includes('消费')) return 'economy'
+  if (t.includes('关键词') || t.includes('术语') || t.includes('速览') || t.includes('词汇')) return 'other'
   return 'other'
 }
 
 /**
  * 同步大纲数据
  */
+let lastSyncedOutline = null
+
 async function synchronizeOutline(projectId) {
   if (!parsedOutline.value || (parsedOutline.value.acts.length === 0 && parsedOutline.value.chapters.length === 0)) return
   
   try {
+    const actKeys = ['first_act', 'second_act', 'third_act', 'fourth_act', 'fifth_act']
+    
+    let actsData
     if (parsedOutline.value.acts.length > 0) {
-      const actsData = parsedOutline.value.acts.map((act, actIndex) => ({
+      actsData = parsedOutline.value.acts.map((act, actIndex) => ({
+        act: actKeys[actIndex] || `act_${actIndex + 1}`,
         title: act.title || `第${actIndex + 1}幕`,
         description: act.description || '',
-        order: actIndex,
-        chapters: (act.chapters || []).map((ch, chIndex) => ({
+        sortOrder: actIndex,
+        nodes: (act.chapters || []).map((ch, chIndex) => ({
           title: ch.title || ch.summary || `第${chIndex + 1}章`,
-          summary: ch.summary || '',
-          order: chIndex,
-          actOrder: actIndex
+          description: ch.summary || '',
+          keyEvent: ch.summary || '',
+          sortOrder: chIndex,
+          type: 'chapter',
+          status: 'draft'
         }))
       }))
-      
-      await outlineApi.saveActs(projectId, actsData)
-      console.log(`✅ 已同步 ${actsData.length} 幕大纲到项目 ${projectId}`)
     } else if (parsedOutline.value.chapters.length > 0) {
-      const chaptersData = parsedOutline.value.chapters.map((ch, index) => ({
-        title: ch.title || ch.summary || `第${index + 1}章`,
-        summary: ch.summary || '',
-        order: index
-      }))
-      
-      await outlineApi.saveActs(projectId, [{
+      actsData = [{
+        act: 'first_act',
         title: '第一幕',
         description: '自动生成的大纲',
-        order: 0,
-        chapters: chaptersData
-      }])
-      console.log(`✅ 已同步 ${chaptersData.length} 个章节大纲到项目 ${projectId}`)
+        sortOrder: 0,
+        nodes: parsedOutline.value.chapters.map((ch, index) => ({
+          title: ch.title || ch.summary || `第${index + 1}章`,
+          description: ch.summary || '',
+          keyEvent: ch.summary || '',
+          sortOrder: index,
+          type: 'chapter',
+          status: 'draft'
+        }))
+      }]
     }
+    
+    if (!actsData || actsData.length === 0) return
+    
+    const currentOutlineJson = JSON.stringify(actsData)
+    if (currentOutlineJson === lastSyncedOutline) {
+      console.log('大纲内容无变化，跳过同步')
+      return
+    }
+    lastSyncedOutline = currentOutlineJson
+    
+    await outlineApi.saveActs(projectId, actsData)
+    console.log(`✅ 已同步 ${actsData.length} 幕大纲到项目 ${projectId}`)
   } catch (e) {
     console.warn('同步大纲数据失败:', e.message)
   }
@@ -1054,8 +1113,7 @@ async function synchronizeCoreSettings(projectId) {
     if (existingSettings && Array.isArray(existingSettings)) {
       existingSettings.filter(s => 
         s.category === 'uniqueRules' || 
-        s.category === '核心规则' ||
-        s.category === 'core'
+        s.category === '核心规则'
       ).forEach(s => {
         existingCoreSettings.set(s.name, s)
         existingCoreNormalizedMap.set(s.name.trim().toLowerCase(), s)

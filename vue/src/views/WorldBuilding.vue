@@ -1030,6 +1030,11 @@ onMounted(async () => {
   /* 左侧色条 */
   border-left: 4px solid var(--cat-color, #6366f1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  /* 统一卡片高度 */
+  min-height: 280px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
 }
 
 .category-card::before {
@@ -1088,8 +1093,11 @@ onMounted(async () => {
   gap: 0.35rem;
   margin-bottom: 0.8rem;
   min-height: 76px;
+  max-height: 120px;
+  overflow-y: auto;
   position: relative;
   z-index: 1;
+  flex: 1;
 }
 
 .entry-preview {
@@ -1157,6 +1165,7 @@ onMounted(async () => {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   z-index: 1;
+  margin-top: auto;
 }
 
 .entry-count {

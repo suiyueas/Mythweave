@@ -509,6 +509,7 @@ onMounted(async () => {
   if (projectId) {
     await store.fetchConfig(projectId)
     await store.fetchUsage(projectId)
+    await store.fetchPresets(projectId)
   }
   document.addEventListener('click', closePresetMenu)
 })

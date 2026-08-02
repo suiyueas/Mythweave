@@ -156,7 +156,7 @@ export const useAiConfigStore = defineStore('ai-config', () => {
     usageLoading.value = true
 
     try {
-      const data = await get(`/api/projects/${projectId}/ai/usage`)
+      const data = await aiConfigApi.getUsage(projectId)
       if (data) {
         usageData.value = {
           totalTokens: data.totalTokens || 0,
@@ -166,14 +166,35 @@ export const useAiConfigStore = defineStore('ai-config', () => {
         }
       }
     } catch (e) {
+      console.warn('获取AI用量失败:', e.message)
       usageData.value = {
-        totalTokens: 124580,
-        estimatedCost: 3.74,
-        apiCalls: 23,
-        cacheHitRate: 89
+        totalTokens: 0,
+        estimatedCost: 0,
+        apiCalls: 0,
+        cacheHitRate: 0
       }
     } finally {
       usageLoading.value = false
+    }
+  }
+
+  async function fetchPresets(projectId) {
+    if (!projectId) return
+    try {
+      const data = await aiConfigApi.getPresets(projectId)
+      if (data && Array.isArray(data)) {
+        presets.value = data.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          temperature: p.temperature,
+          topP: p.topP,
+          maxTokens: p.maxTokens,
+          isDefault: p.isDefault
+        }))
+      }
+    } catch (e) {
+      console.warn('获取预设失败，使用默认预设:', e.message)
     }
   }
 
@@ -188,34 +209,61 @@ export const useAiConfigStore = defineStore('ai-config', () => {
   }
 
   async function createPreset(presetData) {
-    const newPreset = {
-      id: `preset_${Date.now()}`,
-      name: presetData.name,
-      description: presetData.description || '',
-      temperature: presetData.temperature,
-      topP: presetData.topP,
-      maxTokens: presetData.maxTokens,
-      isDefault: false
+    const projectId = currentProjectId.value
+    if (!projectId) return null
+    try {
+      const newPreset = await aiConfigApi.createPreset(projectId, {
+        name: presetData.name,
+        description: presetData.description || '',
+        temperature: presetData.temperature,
+        topP: presetData.topP,
+        maxTokens: presetData.maxTokens
+      })
+      if (newPreset) {
+        presets.value.push({
+          id: newPreset.id,
+          name: newPreset.name,
+          description: newPreset.description,
+          temperature: newPreset.temperature,
+          topP: newPreset.topP,
+          maxTokens: newPreset.maxTokens,
+          isDefault: false
+        })
+      }
+      return newPreset
+    } catch (e) {
+      console.error('创建预设失败:', e.message)
+      throw e
     }
-    presets.value.push(newPreset)
-    return newPreset
   }
 
   async function updatePreset(presetId, updates) {
-    const index = presets.value.findIndex(p => p.id === presetId)
-    if (index !== -1) {
-      presets.value[index] = { ...presets.value[index], ...updates }
+    const projectId = currentProjectId.value
+    if (!projectId) return
+    try {
+      await aiConfigApi.updatePreset(projectId, presetId, updates)
+      const index = presets.value.findIndex(p => p.id === presetId)
+      if (index !== -1) {
+        presets.value[index] = { ...presets.value[index], ...updates }
+      }
+    } catch (e) {
+      console.error('更新预设失败:', e.message)
+      throw e
     }
   }
 
   async function deletePreset(presetId) {
-    const preset = presets.value.find(p => p.id === presetId)
-    if (preset?.isDefault) {
-      throw new Error('默认预设不能删除')
-    }
-    presets.value = presets.value.filter(p => p.id !== presetId)
-    if (currentPresetId.value === presetId) {
-      currentPresetId.value = 'default'
+    const projectId = currentProjectId.value
+    if (!projectId) return
+    try {
+      await aiConfigApi.deletePreset(projectId, presetId)
+      presets.value = presets.value.filter(p => p.id !== presetId)
+      if (currentPresetId.value === presetId) {
+        currentPresetId.value = 'default'
+      }
+    } catch (e) {
+      console.error('删除预设失败:', e.message)
+      throw e
     }
   }
 
@@ -241,6 +289,7 @@ export const useAiConfigStore = defineStore('ai-config', () => {
     fetchConfig,
     saveConfig,
     fetchUsage,
+    fetchPresets,
     selectPreset,
     createPreset,
     updatePreset,

@@ -39,8 +39,11 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     '种族设定': { icon: '🧬', color: '#E76F51' },
     '信仰神明': { icon: '🙏', color: '#F4A261' },
     '生态环境': { icon: '🌿', color: '#14B8A6' },
+    '经济商业': { icon: '💰', color: '#10B981' },
     '其他': { icon: '📌', color: '#6366F1' },
     'uniqueRules': { icon: '🔥', color: '#E76F51' },
+    'core': { icon: '🔥', color: '#E76F51' },
+    'magic': { icon: '⚡', color: '#9B59B6' },
     'other': { icon: '📌', color: '#6366F1' }
   }
 
@@ -51,15 +54,18 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     'history': '历史年表',
     'powerSystem': '力量体系',
     'magicSystem': '力量体系',
+    'magic': '力量体系',
     'factions': '政治势力',
     'factionList': '政治势力',
     'politics': '政治势力',
     'uniqueRules': '核心规则',
+    'core': '核心规则',
     'culture': '文化社会',
     'technology': '科技文明',
     'races': '种族设定',
     'gods': '信仰神明',
     'ecology': '生态环境',
+    'economy': '经济商业',
     'other': '其他'
   }
 

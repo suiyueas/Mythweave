@@ -232,6 +232,44 @@ CREATE TABLE IF NOT EXISTS novel_ai_config (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI配置';
 
 -- =====================================================
+-- 11.1 AI预设
+-- =====================================================
+CREATE TABLE IF NOT EXISTS novel_ai_preset (
+    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
+    project_id      BIGINT          NOT NULL COMMENT '作品ID',
+    name            VARCHAR(100)    NOT NULL COMMENT '预设名称',
+    description     VARCHAR(255)    DEFAULT NULL COMMENT '预设描述',
+    temperature     DOUBLE          DEFAULT 0.7 COMMENT '温度参数',
+    top_p           DOUBLE          DEFAULT 0.9 COMMENT 'Top-P 采样',
+    max_tokens      INT             DEFAULT 4096 COMMENT '最大Token数',
+    is_default      TINYINT(1)      DEFAULT 0 COMMENT '是否默认预设',
+    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
+    PRIMARY KEY (id),
+    INDEX idx_preset_project (project_id),
+    INDEX idx_preset_deleted (deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI预设';
+
+-- =====================================================
+-- 11.2 AI用量统计
+-- =====================================================
+CREATE TABLE IF NOT EXISTS novel_ai_usage (
+    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
+    project_id      BIGINT          NOT NULL COMMENT '作品ID',
+    total_tokens    BIGINT          DEFAULT 0 COMMENT '总Token数',
+    estimated_cost  DECIMAL(10,2)   DEFAULT 0.00 COMMENT '预估费用',
+    api_calls       INT             DEFAULT 0 COMMENT 'API调用次数',
+    cache_hit_rate  INT             DEFAULT 0 COMMENT '缓存命中率(%)',
+    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted         INT             NOT NULL DEFAULT 0 COMMENT '逻辑删除 0-正常 1-已删除',
+    PRIMARY KEY (id),
+    INDEX idx_usage_project (project_id),
+    INDEX idx_usage_deleted (deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI用量统计';
+
+-- =====================================================
 -- 12. AI会话记录（合并原 novel_agent_session）
 -- =====================================================
 CREATE TABLE IF NOT EXISTS novel_ai_session (

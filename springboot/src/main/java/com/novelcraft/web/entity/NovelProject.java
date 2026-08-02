@@ -2,6 +2,7 @@ package com.novelcraft.web.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.novelcraft.web.entity.base.BaseEntity;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -27,6 +28,7 @@ public class NovelProject extends BaseEntity {
     private Integer chapterCount;
     private Integer targetWordCount;
     private String tags;
+    @JsonProperty("startingTime")
     private String startingWorld;
     private LocalDate plannedCompletionDate;
     private String coreSetting;

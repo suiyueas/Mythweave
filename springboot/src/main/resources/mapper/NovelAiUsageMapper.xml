@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.novelcraft.web.mapper.NovelAiUsageMapper">
+
+    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelAiUsage">
+        SELECT * FROM novel_ai_usage
+        WHERE project_id = #{projectId} AND deleted = 0
+        LIMIT 1
+    </select>
+
+</mapper>
