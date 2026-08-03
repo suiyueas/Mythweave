@@ -41,12 +41,14 @@ function parseStructuredWorldText(text, sections) {
   const lines = text.split('\n')
   let currentSection = null
   let currentSubSection = null
-  let currentContent = []
-  let currentSubContent = []
+  let currentContent = []      // 主章节的正文内容
+  let currentSubContent = []    // 子章节的正文内容
+  let subSections = []          // 当前主章节的子章节列表
 
   function isMainChapter(line) {
     const trimmed = line.trim()
     return /^第?[一二三四五六七八九十]+[、:：]\s*[\u4e00-\u9fa5]/.test(trimmed)
+      || /^第?[一二三四五六七八九十]+[、:：]/.test(trimmed)
   }
 
   function isSubChapter(line) {
@@ -60,62 +62,52 @@ function parseStructuredWorldText(text, sections) {
   }
 
   function extractMainTitle(line) {
-    const match = line.trim().match(/^第?[一二三四五六七八九十]+[、:：]\s*(.+)?$/)
-    return match ? (match[1] || line.trim()) : line.trim()
+    const trimmed = line.trim()
+    const match = trimmed.match(/^第?[一二三四五六七八九十]+[、:：]\s*(.+)?$/)
+    if (match && match[1]) {
+      return match[1].trim()
+    }
+    return trimmed
   }
 
   function extractSubTitle(line) {
     const match = line.trim().match(/^\d+\.\d+\s*(.+)$/)
-    return match ? match[1] : line.trim()
+    return match ? match[1].trim() : line.trim()
   }
 
-  function saveCurrentSection() {
-    if (currentSection && (currentContent.length > 0 || currentSubSection)) {
-      const sectionData = {
-        title: currentSection,
-        content: currentContent.join('\n').trim(),
-        level: 1
-      }
-      if (currentSubSection && currentSubContent.length > 0) {
-        sectionData.subSections = sectionData.subSections || []
-        sectionData.subSections.push({
-          title: currentSubSection,
-          content: currentSubContent.join('\n').trim(),
-          level: 2
-        })
-      }
-      sections.push(sectionData)
-    } else if (currentSubSection && currentSubContent.length > 0) {
-      sections.push({
-        title: currentSubSection,
-        content: currentSubContent.join('\n').trim(),
-        level: 2
-      })
-    }
-  }
-
+  // 保存前一个子章节
   function saveSubSection() {
-    if (currentSubSection && currentSubContent.length > 0) {
-      if (sections.length > 0) {
-        const lastSection = sections[sections.length - 1]
-        if (lastSection.title === currentSection) {
-          if (!lastSection.subSections) {
-            lastSection.subSections = []
-          }
-          lastSection.subSections.push({
-            title: currentSubSection,
-            content: currentSubContent.join('\n').trim(),
-            level: 2
-          })
-          return
-        }
-      }
-      sections.push({
+    if (!currentSubSection) return
+    const content = currentSubContent.join('\n').trim()
+    if (content) {
+      subSections.push({
         title: currentSubSection,
-        content: currentSubContent.join('\n').trim(),
+        content: content,
         level: 2
       })
     }
+    currentSubContent = []
+  }
+
+  // 保存当前主章节（及其子章节）
+  function saveCurrentSection() {
+    if (!currentSection) return
+    const content = currentContent.join('\n').trim()
+    // 如果有子章节，先保存最后一个
+    if (currentSubSection) {
+      saveSubSection()
+    }
+    // 只有有内容或子章节时才保存
+    if (content || subSections.length > 0) {
+      sections.push({
+        title: currentSection,
+        content: content,
+        level: 1,
+        subSections: subSections.length > 0 ? subSections : undefined
+      })
+    }
+    currentContent = []
+    subSections = []
   }
 
   for (const line of lines) {
@@ -130,30 +122,25 @@ function parseStructuredWorldText(text, sections) {
     }
 
     if (isMainChapter(trimmedLine)) {
+      // 保存前一个主章节
       saveCurrentSection()
       currentSection = extractMainTitle(trimmedLine)
       currentSubSection = null
       currentContent = []
       currentSubContent = []
     } else if (isSubChapter(trimmedLine) && !isSubSubChapter(trimmedLine)) {
-      if (currentSubSection) {
-        saveSubSection()
-      }
-      if (currentSection && !currentSubSection) {
-        sections.push({
-          title: currentSection,
-          content: '',
-          level: 1,
-          subSections: []
-        })
-      }
+      // 保存前一个子章节
+      saveSubSection()
       currentSubSection = extractSubTitle(trimmedLine)
       currentSubContent = []
     } else if (currentSubSection) {
+      // 子章节下的内容
       currentSubContent.push(trimmedLine)
     } else if (currentSection) {
+      // 主章节下的内容（在没有子章节的情况下）
       currentContent.push(trimmedLine)
     } else {
+      // 最顶层内容
       currentContent.push(trimmedLine)
     }
   }

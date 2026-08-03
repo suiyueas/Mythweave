@@ -63,28 +63,37 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     'culture': '文化社会',
     'technology': '科技文明',
     'races': '种族设定',
+    'religion': '信仰神明',
     'gods': '信仰神明',
     'ecology': '生态环境',
     'economy': '经济商业',
     'other': '其他'
   }
 
+  // 分类归一化：英文 ID → 中文显示名；已是中文原样返回（老数据兼容）
+  function normalizeCategory(cat) {
+    if (!cat) return ''
+    return CATEGORY_ID_TO_NAME[cat] || cat
+  }
+
+  // 分类匹配：数据分类与卡片分类统一转中文后比较，兼容中英文混杂的历史数据
+  function categoryMatches(dataCategory, catId, catName) {
+    const dataCn = normalizeCategory(dataCategory)
+    return dataCn === catId || dataCn === catName || dataCn === normalizeCategory(catId)
+  }
+
   // 动态分类：预设分类 + 数据中实际出现的其他分类（AI 生成的中文分类自动生成卡片）
-  // 注意：若数据分类命中预设分类的 name（如数据 category='地理版图' 对应预设 id='geography'），
-  // 不重复创建卡片，由预设卡片通过 name 别名匹配数据
+  // 去重判断统一转中文后比较：数据 category='era' 与 '时代背景' 视为同一分类，
+  // 命中预设（如 id='geography' 与 name='地理版图'）时不重复创建卡片
   const categories = computed(() => {
     const merged = [...presetCategories.value]
-    const knownIds = new Set(merged.map(c => c.id))
-    const knownNames = new Set(merged.map(c => c.name))
+    const knownCns = new Set(merged.map(c => normalizeCategory(c.id)))
     for (const s of settings.value) {
       const cat = s.category
       if (!cat) continue
-      // 如果是英文ID，转换为中文名称
-      const chineseName = CATEGORY_ID_TO_NAME[cat] || cat
-      if (knownIds.has(cat) || knownIds.has(chineseName) || knownNames.has(cat) || knownNames.has(chineseName)) continue
-      knownIds.add(cat)
-      knownIds.add(chineseName)
-      knownNames.add(chineseName)
+      const chineseName = normalizeCategory(cat)
+      if (knownCns.has(chineseName)) continue
+      knownCns.add(chineseName)
       const meta = DYNAMIC_CATEGORY_META[cat] || DYNAMIC_CATEGORY_META[chineseName] || {}
       merged.push({
         id: chineseName,
@@ -116,14 +125,11 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
     let result = settings.value
 
     if (selectedCategoryId.value) {
-      // 兼容中英文分类：选中预设分类时，用 id 或 name 别名匹配数据
+      // 兼容中英文分类：统一转中文后匹配，历史英文 ID 数据也能正确归类
       const cat = categories.value.find(c => c.id === selectedCategoryId.value)
-      const chineseName = CATEGORY_ID_TO_NAME[selectedCategoryId.value] || selectedCategoryId.value
-      result = result.filter(s =>
-        s.category === selectedCategoryId.value ||
-        (cat && s.category === cat.name) ||
-        s.category === chineseName
-      )
+      const catId = cat?.id || selectedCategoryId.value
+      const catName = cat?.name || selectedCategoryId.value
+      result = result.filter(s => categoryMatches(s.category, catId, catName))
     }
 
     if (searchQuery.value) {
@@ -155,10 +161,9 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
   const settingsByCategory = computed(() => {
     const grouped = {}
     for (const cat of categories.value) {
-      // 兼容中英文分类：匹配 id 或 name 别名（如 id='geography' 也能匹配 category='地理版图'）
-      const chineseName = CATEGORY_ID_TO_NAME[cat.id] || cat.id
+      // 兼容中英文分类：统一转中文后匹配（如 id='geography' 也能匹配 category='地理版图'、'era' 匹配 '时代背景'）
       grouped[cat.id] = settings.value
-        .filter(s => s.category === cat.id || s.category === cat.name || s.category === chineseName)
+        .filter(s => categoryMatches(s.category, cat.id, cat.name))
         .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
     }
     return grouped
@@ -167,9 +172,8 @@ export const useWorldBuildingStore = defineStore('world-building', () => {
   const categoryStats = computed(() => {
     const stats = {}
     for (const cat of categories.value) {
-      // 兼容中英文分类：匹配 id 或 name 别名
-      const chineseName = CATEGORY_ID_TO_NAME[cat.id] || cat.id
-      const catSettings = settings.value.filter(s => s.category === cat.id || s.category === cat.name || s.category === chineseName)
+      // 兼容中英文分类：统一转中文后匹配
+      const catSettings = settings.value.filter(s => categoryMatches(s.category, cat.id, cat.name))
       stats[cat.id] = {
         total: catSettings.length,
         completed: catSettings.filter(s => s.status === 'completed').length,

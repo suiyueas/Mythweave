@@ -22,6 +22,10 @@
         <span class="stat-num gray">{{ store.typeCounts['参考资料'] }}</span>
         <span class="stat-label">参考</span>
       </div>
+      <div class="stat-item" v-if="store.typeCounts['ai'] > 0">
+        <span class="stat-num ai-color">{{ store.typeCounts['ai'] }}</span>
+        <span class="stat-label">AI</span>
+      </div>
     </div>
 
     <!-- ─── 筛选标签栏 ─── -->
@@ -98,6 +102,7 @@
     <div v-else class="empty-state">
       <div class="empty-icon-wrap">
         <span v-if="store.filterType === 'all'">💡</span>
+        <span v-else-if="store.filterType === 'ai'">🤖</span>
         <span v-else-if="store.filterType === '对白灵感'">💬</span>
         <span v-else-if="store.filterType === '场景描写'">🎬</span>
         <span v-else-if="store.filterType === '细节设定'">🔍</span>
@@ -387,6 +392,7 @@ const filterTabs = [
   { value: '对白灵感', icon: '💬', label: '对白灵感' },
   { value: '场景描写', icon: '🎬', label: '场景描写' },
   { value: '细节设定', icon: '🔍', label: '细节设定' },
+  { value: '参考资料', icon: '📚', label: '参考资料' },
   { value: 'ai', icon: '🤖', label: 'AI生成' }
 ]
 
@@ -452,12 +458,14 @@ const sortModel = ref('time-desc')
 // ─── 空状态 ───
 const emptyText = computed(() => {
   if (store.filterType === 'all') return '暂无灵感素材，点击按钮或使用 AI 生成器创建第一条灵感吧'
+  if (store.filterType === 'ai') return '暂无AI生成灵感，点击下方 AI 灵感生成器创作吧'
   const map = { '对白灵感': '暂无对白灵感', '场景描写': '暂无场景描写', '细节设定': '暂无细节设定', '参考资料': '暂无参考资料' }
   return map[store.filterType] || '暂无数据'
 })
 
 const emptyButtonText = computed(() => {
   if (store.filterType === 'all') return '+ 记录灵感'
+  if (store.filterType === 'ai') return '🤖 使用 AI 生成'
   const map = { '对白灵感': '+ 新增对白', '场景描写': '+ 新增场景', '细节设定': '+ 新增设定', '参考资料': '+ 新增资料' }
   return map[store.filterType] || '+ 记录灵感'
 })
@@ -680,6 +688,7 @@ watch(() => props.projectId, (pid) => {
 .stat-num.green { color: #10b981; }
 .stat-num.purple { color: #8b5cf6; }
 .stat-num.gray { color: #6b7280; }
+.stat-num.ai-color { color: #ec4899; }
 
 .stat-label {
   display: block;

@@ -12,6 +12,7 @@ import java.time.Duration;
 public class AiProperties {
     private DeepSeek deepseek = new DeepSeek();
     private Qianwen qianwen = new Qianwen();
+    private Mimo mimo = new Mimo();
 
     @Data
     public static class DeepSeek {
@@ -33,5 +34,18 @@ public class AiProperties {
         private String embeddingEndpoint = "/service/embeddings/text-embedding/text-embedding";
         private String model = "text-embedding-v3";
         private Integer dimensions = 1024;
+    }
+
+    @Data
+    public static class Mimo {
+        private String apiKey;
+        private String baseUrl = "https://api.mimoai.cn/v1";
+        private String model = "mimo-2.5-pro";
+        private Integer maxToken = 4096;
+        private Double temperature = 0.7;
+        private Double topP = 0.9;
+        private Duration streamTimeout = Duration.ofSeconds(120);
+        private Duration connectTimeout = Duration.ofSeconds(10);
+        private Duration readTimeout = Duration.ofSeconds(120);
     }
 }

@@ -112,10 +112,11 @@ export const aiApi = {
     const sessionId = params.sessionId || null
     const temperature = params.temperature || 0.7
     const maxTokens = params.maxTokens || 4096
+    const model = params.model || 'DeepSeek v4 Pro'
 
     return streamPost(
       `/api/projects/${projectId}/ai/stream/chat`,
-      { userMessage, novelTitle, genre, currentChapter, context, agent, sessionId, temperature, maxTokens },
+      { userMessage, novelTitle, genre, currentChapter, context, agent, sessionId, temperature, maxTokens, model },
       onToken,
       onDone,
       onError

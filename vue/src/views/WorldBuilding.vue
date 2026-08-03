@@ -353,7 +353,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useWorldBuildingStore, STATUS_CONFIG } from '@/stores/world-building'
 import { useNovelStore } from '@/stores/novel'
@@ -371,6 +371,20 @@ const novelStore = useNovelStore()
 // ─── 响应式状态（使用 storeToRefs 确保正确追踪 Pinia 响应性） ───
 const { selectedCategoryId, selectedSettingId } = storeToRefs(store)
 const selectedSetting = computed(() => store.selectedSetting)
+
+// ─── 监听 novelStore.worldSettings 变化，同步到本地 store ───
+// 无条件同步（含空数组）：编辑界面保存/删除全部设定后，本地 store 也要清空/更新，
+// 避免旧数据残留导致页面显示与数据库不一致
+watch(() => novelStore.worldSettings, (newSettings) => {
+  if (Array.isArray(newSettings)) {
+    // 当 novelStore.worldSettings 更新时，同步到 worldBuildingStore
+    store.settings.splice(0, store.settings.length, ...newSettings.map(s => ({
+      ...s,
+      status: s.status || 'draft',
+      relatedSettings: s.relatedSettings || []
+    })))
+  }
+}, { deep: true })
 
 // ─── 项目信息与导航 ───
 const projectTitle = computed(() => {

@@ -152,7 +152,8 @@ public class AiChatController {
                             } catch (IOException e) {
                                 log.error("SSE send error", e);
                             }
-                        });
+                        },
+                        request.getModel());
                 saveAssistantReply(projectId, sessionId, agent, fullReply.toString());
                 emitter.complete();
                 log.info("AI流式对话完成, projectId={}, 回复长度={}", projectId, fullReply.length());

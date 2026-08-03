@@ -80,17 +80,35 @@ export const useInspirationStore = defineStore('inspiration', () => {
   const typeCounts = computed(() => {
     const counts = { all: inspirations.value.length }
     TYPE_LIST.forEach(t => {
-      counts[t] = inspirations.value.filter(i => i.type === t).length
+      counts[t] = inspirations.value.filter(i => getTypeKey(i.type) === t).length
     })
+    // AI生成数量
+    counts['ai'] = inspirations.value.filter(i => i.source === 'ai').length
     return counts
   })
+
+  // 类型映射：将英文type转为中文
+  function getTypeKey(type) {
+    const map = {
+      'dialogue': '对白灵感',
+      'scene': '场景描写',
+      'detail': '细节设定',
+      'reference': '参考资料'
+    }
+    return map[type] || type || '对白灵感'
+  }
 
   const filteredInspirations = computed(() => {
     let list = [...inspirations.value]
 
     // 类型筛选
     if (filterType.value !== 'all') {
-      list = list.filter(i => i.type === filterType.value)
+      if (filterType.value === 'ai') {
+        // AI生成筛选：按source字段筛选
+        list = list.filter(i => i.source === 'ai')
+      } else {
+        list = list.filter(i => getTypeKey(i.type) === filterType.value)
+      }
     }
 
     // 搜索
@@ -162,7 +180,7 @@ export const useInspirationStore = defineStore('inspiration', () => {
         return {
           id: String(item.id),
           projectId: item.projectId,
-          type: item.type || '对白灵感',
+          type: getTypeKey(item.type),
           content: item.content || '',
           tags: item.tags || '',
           chapterId: item.chapterId || (local ? local.chapterId : null),
@@ -197,8 +215,9 @@ export const useInspirationStore = defineStore('inspiration', () => {
 
   function createInspiration(data) {
     const now = new Date()
+    const tempId = generateId()
     const item = {
-      id: generateId(),
+      id: tempId,
       type: data.type || '对白灵感',
       content: data.content || '',
       tags: data.tags || '',
@@ -213,6 +232,30 @@ export const useInspirationStore = defineStore('inspiration', () => {
     }
     inspirations.value.unshift(item)
     persist()
+
+    // 同步到后端API
+    if (currentProjectId) {
+      inspirationApi.create(currentProjectId, {
+        type: item.type,
+        content: item.content,
+        tags: item.tags,
+        chapterId: item.chapterId,
+        source: item.source,
+        isHighlight: item.isHighlight
+      }).then(res => {
+        // API返回后用真实ID替换临时ID
+        if (res && res.id) {
+          const idx = inspirations.value.findIndex(i => i.id === tempId)
+          if (idx !== -1) {
+            inspirations.value[idx].id = String(res.id)
+          }
+          persist()
+        }
+      }).catch(e => {
+        console.warn('同步灵感到API失败:', e.message)
+      })
+    }
+
     return item
   }
 
@@ -226,12 +269,33 @@ export const useInspirationStore = defineStore('inspiration', () => {
     })
     inspirations.value[idx] = { ...item }
     persist()
+
+    // 同步到后端API
+    if (currentProjectId && !String(id).startsWith('insp_') && !String(id).startsWith('ai_')) {
+      inspirationApi.update(currentProjectId, id, {
+        type: item.type,
+        content: item.content,
+        tags: item.tags,
+        chapterId: item.chapterId,
+        isHighlight: item.isHighlight,
+        isUsed: item.isUsed
+      }).catch(e => {
+        console.warn('同步更新灵感到API失败:', e.message)
+      })
+    }
     return inspirations.value[idx]
   }
 
   function deleteInspiration(id) {
     inspirations.value = inspirations.value.filter(i => i.id !== id)
     persist()
+
+    // 同步到后端API
+    if (currentProjectId && !String(id).startsWith('insp_') && !String(id).startsWith('ai_')) {
+      inspirationApi.delete(currentProjectId, id).catch(e => {
+        console.warn('同步删除灵感到API失败:', e.message)
+      })
+    }
   }
 
   function toggleUsed(id) {
@@ -241,6 +305,15 @@ export const useInspirationStore = defineStore('inspiration', () => {
     item.usedTime = item.isUsed ? new Date() : null
     item.updateTime = new Date()
     persist()
+
+    // 同步到后端API
+    if (currentProjectId && !String(id).startsWith('insp_') && !String(id).startsWith('ai_')) {
+      inspirationApi.update(currentProjectId, id, {
+        isUsed: item.isUsed
+      }).catch(e => {
+        console.warn('同步更新灵感状态到API失败:', e.message)
+      })
+    }
   }
 
   function setFilter(type) {

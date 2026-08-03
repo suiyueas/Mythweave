@@ -1,5 +1,6 @@
 package com.novelcraft.web.service;
 
+import com.novelcraft.web.client.AiChatClient;
 import com.novelcraft.web.client.DeepSeekClient;
 import com.novelcraft.web.config.AiProperties;
 import com.novelcraft.web.template.PromptTemplates;
@@ -23,6 +24,7 @@ import java.util.function.Consumer;
 public class AiChatService {
 
     private final DeepSeekClient deepSeekClient;
+    private final AiChatClient aiChatClient;
     private final NovelAiSessionMapper sessionMapper;
     private final NovelCharacterMapper characterMapper;
     private final NovelOutlineMapper outlineMapper;
@@ -66,12 +68,21 @@ public class AiChatService {
     }
 
     /**
-     * 流式对话（增强版：应用完整作品上下文）
+     * 流式对话（增强版：应用完整作品上下文，支持多模型）
      */
     public void streamChat(Long projectId, String novelTitle, String genre,
                             String currentChapter, String context, String userMessage,
                             double temperature, int maxTokens, Consumer<String> onToken) throws IOException {
-        log.info("开始构建Chat Prompt, novelTitle={}, genre={}", novelTitle, genre);
+        streamChat(projectId, novelTitle, genre, currentChapter, context, userMessage, temperature, maxTokens, onToken, null);
+    }
+
+    /**
+     * 流式对话（支持指定模型）
+     */
+    public void streamChat(Long projectId, String novelTitle, String genre,
+                            String currentChapter, String context, String userMessage,
+                            double temperature, int maxTokens, Consumer<String> onToken, String model) throws IOException {
+        log.info("开始构建Chat Prompt, novelTitle={}, genre={}, model={}", novelTitle, genre, model);
 
         String worldSettings = buildWorldSettingsContext(projectId);
         String outline = buildOutlineContext(projectId);
@@ -97,8 +108,19 @@ public class AiChatService {
         log.info("Chat prompt构建完成, 长度={}, 前200字={}", prompt.length(),
                 prompt.substring(0, Math.min(200, prompt.length())));
 
-        int tokensUsed = deepSeekClient.chatStream("你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。", prompt, temperature, maxTokens, onToken);
-        log.info("DeepSeek调用完成, tokensUsed={}", tokensUsed);
+        String provider = getProviderFromModel(model);
+        int tokensUsed = aiChatClient.chatStream(provider,
+                "你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。",
+                prompt, temperature, maxTokens, onToken);
+        log.info("{} 调用完成, tokensUsed={}", provider.toUpperCase(), tokensUsed);
+    }
+
+    private String getProviderFromModel(String model) {
+        if (model == null) return "deepseek";
+        String lowerModel = model.toLowerCase();
+        if (lowerModel.contains("mimo")) return "mimo";
+        if (lowerModel.contains("qwen") || lowerModel.contains("tongyi")) return "qwen";
+        return "deepseek";
     }
 
     /**

@@ -290,7 +290,13 @@
               <div class="preview-sections">
                 <div v-for="(sec, idx) in parsedWorldSections" :key="idx" class="preview-sec">
                   <div class="sec-title">{{ sec.title }}</div>
-                  <div class="sec-content">{{ sec.content }}</div>
+                  <div v-if="sec.content" class="sec-content">{{ sec.content }}</div>
+                  <div v-if="sec.subSections && sec.subSections.length > 0" class="sub-sections">
+                    <div v-for="(sub, subIdx) in sec.subSections" :key="subIdx" class="preview-sub-sec">
+                      <div class="sub-title">{{ sub.title }}</div>
+                      <div class="sub-content">{{ sub.content }}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -785,6 +791,17 @@ async function handleSubmit() {
       projectId = newProject.id
     }
 
+    // 强制重新解析 worldSettings 确保同步时数据最新（避免 watch 异步延迟）
+    if (form.worldSettings && form.worldSettings.trim().length > 30) {
+      const result = parseWorldText(form.worldSettings)
+      parsedWorldSections.value = result.sections
+      showWorldPreview.value = result.success
+      console.log(`[保存] 强制重新解析世界观，共 ${result.sections.length} 个设定`)
+    } else {
+      parsedWorldSections.value = []
+      showWorldPreview.value = false
+    }
+
     await synchronizeParsedData(projectId)
 
     // 刷新项目列表和当前项目数据
@@ -815,7 +832,7 @@ async function handleSubmit() {
  */
 async function synchronizeParsedData(projectId) {
   if (!projectId) return
-  
+
   try {
     await Promise.all([
       synchronizeCharacters(projectId),
@@ -920,9 +937,16 @@ async function synchronizeCharacters(projectId) {
 /**
  * 同步世界观设定数据
  */
+// 名称归一化：小写 + 去除空白和常见标点，用于跨次保存的稳定匹配（标题措辞微调不产生新记录）
+function normalizeWorldName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[\s\u3000·•、，。；：:（）()【】\[\]《》"'""''-]/g, '')
+}
+
 async function synchronizeWorldSettings(projectId) {
   if (parsedWorldSections.value.length === 0) return
-  
+
   try {
     const existingSettings = await worldApi.listSettings(projectId)
     const existingMap = new Map()
@@ -930,62 +954,109 @@ async function synchronizeWorldSettings(projectId) {
     if (existingSettings && Array.isArray(existingSettings)) {
       existingSettings.forEach(s => {
         existingMap.set(s.name, s)
-        existingNormalizedMap.set(s.name.trim().toLowerCase(), s)
+        existingNormalizedMap.set(normalizeWorldName(s.name), s)
       })
     }
-    
-    let createdCount = 0
+
     let updatedCount = 0
+    let createdCount = 0
     let skippedCount = 0
-    
+    let cleanedCount = 0
+
+    // 用于追踪已处理的设定名称（归一化），防止重复
+    const processedNames = new Set()
+
+    // 追踪已处理的子章节父标题，防止子章节被重复创建
+    const processedParentTitles = new Set()
+
     for (const section of parsedWorldSections.value) {
-      const name = section.title || '未命名设定'
-      const normalizedName = name.trim().toLowerCase()
+      const name = (section.title || '未命名设定').trim()
+      const normalizedName = normalizeWorldName(name)
       const category = detectWorldCategory(section.title)
-      const content = section.content || ''
+      const content = (section.content || '').trim()
       const level = section.level || 1
-      
-      const existing = existingMap.get(name) || existingNormalizedMap.get(normalizedName)
-      if (existing) {
-        if (existing.content !== content || existing.category !== category) {
-          await worldApi.updateSetting(projectId, existing.id, {
-            name: existing.name,
+      const hasSubSections = section.subSections && section.subSections.length > 0
+
+      // 主章节本身无内容：不创建/更新空记录（避免 WorldBuilding 详情页空白），仅处理子章节；
+      // 旧的空内容主章节记录由末尾清理机制删除
+      if (!content && !hasSubSections) {
+        console.log(`⏭️ 跳过世界观设定（内容为空且无子章节）: ${name}`)
+        skippedCount++
+        continue
+      }
+
+      // 主章节有内容时才创建/更新记录
+      if (content) {
+        // 跳过已处理的同名设定，防止重复
+        if (processedNames.has(normalizedName)) {
+          console.log(`⏭️ 跳过重复世界观设定: ${name}`)
+          skippedCount++
+          continue
+        }
+        processedNames.add(normalizedName)
+
+        const existing = existingMap.get(name) || existingNormalizedMap.get(normalizedName)
+        if (existing) {
+          // 名称/分类/内容任一变化都更新（名称同步为最新解析值，防止措辞微调后下次匹配不上）
+          if (existing.content !== content || existing.category !== category || existing.name !== name) {
+            await worldApi.updateSetting(projectId, existing.id, {
+              name,
+              category,
+              content,
+              level
+            })
+            updatedCount++
+            console.log(`✅ 更新世界观设定: ${name}`)
+          } else {
+            skippedCount++
+            console.log(`⏭️ 世界观设定 ${name} 内容无变化，跳过`)
+          }
+          existingMap.delete(existing.name)
+          existingNormalizedMap.delete(normalizeWorldName(existing.name))
+        } else {
+          await worldApi.createSetting(projectId, {
+            name,
             category,
             content,
             level
           })
-          updatedCount++
-          console.log(`✅ 更新世界观设定: ${name}`)
-        } else {
-          skippedCount++
-          console.log(`⏭️ 世界观设定 ${name} 内容无变化，跳过`)
+          createdCount++
+          console.log(`✅ 创建世界观设定: ${name}`)
         }
-        existingMap.delete(existing.name)
-        existingNormalizedMap.delete(existing.name.trim().toLowerCase())
-      } else {
-        await worldApi.createSetting(projectId, {
-          name,
-          category,
-          content,
-          level
-        })
-        createdCount++
-        console.log(`✅ 创建世界观设定: ${name}`)
       }
-      
-      if (section.subSections && section.subSections.length > 0) {
+
+      // 处理子章节
+      if (hasSubSections) {
+        // 标记此父标题已处理，防止子章节被重复创建
+        processedParentTitles.add(normalizedName)
+
         for (const subSection of section.subSections) {
-          const subName = subSection.title || '未命名设定'
-          const subNormalizedName = subName.trim().toLowerCase()
-          const subCategory = detectWorldCategory(subSection.title)
-          const subContent = subSection.content || ''
+          const subName = (subSection.title || '未命名设定').trim()
+          const subNormalizedName = normalizeWorldName(subName)
+          const subCategory = detectWorldCategory(subSection.title, section.title)  // 传递父标题
+          const subContent = (subSection.content || '').trim()
           const subLevel = subSection.level || 2
-          
+
+          // 跳过内容为空的子设定
+          if (!subContent) {
+            console.log(`⏭️ 跳过世界观子设定（内容为空）: ${subName}`)
+            skippedCount++
+            continue
+          }
+
+          // 跳过已处理的同名子设定
+          if (processedNames.has(subNormalizedName)) {
+            console.log(`⏭️ 跳过重复世界观子设定: ${subName}`)
+            skippedCount++
+            continue
+          }
+          processedNames.add(subNormalizedName)
+
           const subExisting = existingMap.get(subName) || existingNormalizedMap.get(subNormalizedName)
           if (subExisting) {
-            if (subExisting.content !== subContent || subExisting.category !== subCategory) {
+            if (subExisting.content !== subContent || subExisting.category !== subCategory || subExisting.name !== subName) {
               await worldApi.updateSetting(projectId, subExisting.id, {
-                name: subExisting.name,
+                name: subName,
                 category: subCategory,
                 content: subContent,
                 level: subLevel
@@ -996,7 +1067,7 @@ async function synchronizeWorldSettings(projectId) {
               skippedCount++
             }
             existingMap.delete(subExisting.name)
-            existingNormalizedMap.delete(subExisting.name.trim().toLowerCase())
+            existingNormalizedMap.delete(normalizeWorldName(subExisting.name))
           } else {
             await worldApi.createSetting(projectId, {
               name: subName,
@@ -1010,34 +1081,76 @@ async function synchronizeWorldSettings(projectId) {
         }
       }
     }
-    
-    console.log(`✅ 世界观设定同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`)
+
+    // ─── 清理机制：源文本中已移除的旧记录 ───
+    // existingMap 中剩余 = 本次解析未匹配到的记录。仅清理内容为空的无效记录（安全），
+    // 有内容的保留（可能是 AI 生成或手动创建的，避免误删）
+    const remaining = [...new Set([...existingMap.values(), ...existingNormalizedMap.values()])]
+    for (const stale of remaining) {
+      if (!(stale.content || '').trim()) {
+        await worldApi.deleteSetting(projectId, stale.id)
+        cleanedCount++
+        console.log(`🧹 清理无用世界观设定（内容为空）: ${stale.name}`)
+      } else {
+        console.log(`ℹ️ 保留未匹配设定（非本次编辑来源）: ${stale.name}`)
+      }
+    }
+
+    console.log(`✅ 世界观设定同步完成：新建 ${createdCount} 个，更新 ${updatedCount} 个，跳过 ${skippedCount} 个，清理 ${cleanedCount} 个`)
   } catch (e) {
     console.warn('同步世界观设定失败:', e.message)
   }
 }
 
+// 世界观分类：英文 ID → 中文显示名（与后端 WorldSettingService、前端 store 的 CATEGORY_ID_TO_NAME 保持一致）
+const WORLD_CATEGORY_CN = {
+  era: '时代背景',
+  geography: '地理版图',
+  history: '历史年表',
+  magic: '力量体系',
+  politics: '政治势力',
+  culture: '文化社会',
+  technology: '科技文明',
+  races: '种族设定',
+  religion: '信仰神明',
+  uniqueRules: '核心规则',
+  ecology: '生态环境',
+  economy: '经济商业',
+  other: '其他'
+}
+
 /**
- * 根据标题检测世界观分类
+ * 根据标题检测世界观分类（返回中文显示名，保证各写入源分类值统一）
  */
-function detectWorldCategory(title) {
+function detectWorldCategory(title, parentTitle = null) {
   if (!title) return '其他'
   const t = title.toLowerCase()
-  if (t.includes('时代') || t.includes('背景') || t.includes('环境') || t.includes('世界概览') || t.includes('世界观设定') || t.includes('世界设定')) return 'era'
-  if (t.includes('地理') || t.includes('版图') || t.includes('山川') || t.includes('城市') || t.includes('地点')) return 'geography'
-  if (t.includes('历史') || t.includes('年表') || t.includes('事件') || t.includes('纪元')) return 'history'
-  if (t.includes('力量') || t.includes('体系') || t.includes('修炼') || t.includes('魔法') || t.includes('等级') || t.includes('境界') || t.includes('功法') || t.includes('神通')) return 'magic'
-  if (t.includes('政治') || t.includes('势力') || t.includes('王国') || t.includes('派系') || t.includes('组织')) return 'politics'
-  if (t.includes('社会') || t.includes('结构') || t.includes('等级') && t.includes('身份')) return 'culture'
-  if (t.includes('文化') || t.includes('传统') || t.includes('民俗') || t.includes('风俗') || t.includes('习惯') || t.includes('日常')) return 'culture'
-  if (t.includes('科技') || t.includes('技术') || t.includes('器械') || t.includes('机械') || t.includes('机关')) return 'technology'
-  if (t.includes('种族') || t.includes('人种') || t.includes('族群') || t.includes('血脉')) return 'races'
-  if (t.includes('信仰') || t.includes('神明') || t.includes('宗教') || t.includes('神祇') || t.includes('教堂') || t.includes('传说') || t.includes('隐秘')) return 'religion'
-  if (t.includes('规则') || t.includes('核心') || t.includes('法则') || t.includes('定律')) return 'uniqueRules'
-  if (t.includes('生态') || t.includes('自然') || t.includes('生物')) return 'ecology'
-  if (t.includes('经济') || t.includes('商业') || t.includes('贸易') || t.includes('货币') || t.includes('金融') || t.includes('消费')) return 'economy'
-  if (t.includes('关键词') || t.includes('术语') || t.includes('速览') || t.includes('词汇')) return 'other'
-  return 'other'
+  let id = 'other'
+
+  // 先检查标题本身的关键词
+  if (t.includes('时代') || t.includes('背景') || t.includes('环境') || t.includes('世界概览') || t.includes('世界观设定') || t.includes('世界设定')) id = 'era'
+  else if (t.includes('地理') || t.includes('版图') || t.includes('山川') || t.includes('城市') || t.includes('地点')) id = 'geography'
+  else if (t.includes('历史') || t.includes('年表') || t.includes('事件') || t.includes('纪元')) id = 'history'
+  else if (t.includes('力量') || t.includes('体系') || t.includes('修炼') || t.includes('魔法') || t.includes('等级') || t.includes('境界') || t.includes('功法') || t.includes('神通')) id = 'magic'
+  else if (t.includes('政治') || t.includes('势力') || t.includes('王国') || t.includes('派系') || t.includes('组织')) id = 'politics'
+  else if ((t.includes('社会') || t.includes('结构') || t.includes('等级') && t.includes('身份')) || t.includes('文化') || t.includes('传统') || t.includes('民俗') || t.includes('风俗') || t.includes('习惯') || t.includes('日常')) id = 'culture'
+  else if (t.includes('科技') || t.includes('技术') || t.includes('器械') || t.includes('机械') || t.includes('机关')) id = 'technology'
+  else if (t.includes('种族') || t.includes('人种') || t.includes('族群') || t.includes('血脉')) id = 'races'
+  else if (t.includes('信仰') || t.includes('神明') || t.includes('宗教') || t.includes('神祇') || t.includes('教堂') || t.includes('传说') || t.includes('隐秘')) id = 'religion'
+  else if (t.includes('规则') || t.includes('核心') || t.includes('法则') || t.includes('定律')) id = 'uniqueRules'
+  else if (t.includes('生态') || t.includes('自然') || t.includes('生物')) id = 'ecology'
+  else if (t.includes('经济') || t.includes('商业') || t.includes('贸易') || t.includes('货币') || t.includes('金融') || t.includes('消费')) id = 'economy'
+  else if (t.includes('关键词') || t.includes('术语') || t.includes('速览') || t.includes('词汇')) id = 'other'
+
+  // 如果没有匹配，且有父标题，继承父标题的分类
+  if (id === 'other' && parentTitle) {
+    const parentCategory = detectWorldCategory(parentTitle, null)
+    if (parentCategory !== '其他') {
+      return parentCategory
+    }
+  }
+
+  return WORLD_CATEGORY_CN[id] || '其他'
 }
 
 /**
@@ -1112,11 +1225,10 @@ async function synchronizeCoreSettings(projectId) {
     const existingCoreNormalizedMap = new Map()
     if (existingSettings && Array.isArray(existingSettings)) {
       existingSettings.filter(s => 
-        s.category === 'uniqueRules' || 
         s.category === '核心规则'
       ).forEach(s => {
         existingCoreSettings.set(s.name, s)
-        existingCoreNormalizedMap.set(s.name.trim().toLowerCase(), s)
+        existingCoreNormalizedMap.set(normalizeWorldName(s.name), s)
       })
     }
     
@@ -1126,15 +1238,22 @@ async function synchronizeCoreSettings(projectId) {
     
     for (const item of parsedCoreItems.value) {
       const name = item.title || '核心设定'
-      const normalizedName = name.trim().toLowerCase()
-      const content = item.content || ''
-      
+      const normalizedName = normalizeWorldName(name)
+      const content = (item.content || '').trim()
+
+      // 跳过内容为空的核心设定，避免生成空记录
+      if (!content) {
+        skippedCount++
+        console.log(`⏭️ 跳过核心设定（内容为空）: ${name}`)
+        continue
+      }
+
       const existing = existingCoreSettings.get(name) || existingCoreNormalizedMap.get(normalizedName)
       if (existing) {
         if (existing.content !== content) {
           await worldApi.updateSetting(projectId, existing.id, {
-            name: existing.name,
-            category: 'uniqueRules',
+            name,
+            category: '核心规则',
             content,
             level: 1
           })
@@ -1145,11 +1264,11 @@ async function synchronizeCoreSettings(projectId) {
           console.log(`⏭️ 核心设定 ${name} 内容无变化，跳过`)
         }
         existingCoreSettings.delete(existing.name)
-        existingCoreNormalizedMap.delete(existing.name.trim().toLowerCase())
+        existingCoreNormalizedMap.delete(normalizeWorldName(existing.name))
       } else {
         await worldApi.createSetting(projectId, {
           name,
-          category: 'uniqueRules',
+          category: '核心规则',
           content,
           level: 1
         })
@@ -1220,7 +1339,7 @@ const aiGenerated = ref('')
 const outlineResult = ref('')
 
 function aiGenerate(key) {
-  const types = { naming: 'AI 起名', polish: 'AI 润色', setting: 'AI 生成设定', outline: 'AI 生成大纲' }
+  const types = { naming: 'AI 起名', polish: 'AI 润色' }
   // VIP 权限拦截：普通用户弹出升级引导
   if (!requireVip(types[key] || 'AI 生成')) return
   aiLoading.value = key
@@ -1234,13 +1353,6 @@ function aiGenerate(key) {
     } else if (key === 'polish') {
       result = '当帝国的最后一位剑圣在刑场上睁开眼睛，所有人都以为他死了——三年。'
       form.description = result
-    } else if (key === 'setting') {
-      result = `一、世界背景\n时代：灵气复苏后三千年\n地理：九州大陆，中央为人类帝国\n\n二、核心力量体系\n等级：练气→筑基→金丹→元婴→化神`
-      form.coreSetting = result
-    } else if (key === 'outline') {
-      result = `第一幕（起）：少年楚云帆在山中偶得星辰剑诀残卷，踏上修行之路。\n\n第二幕（承）：结识女剑客柳如烟、神秘老者，经历第一次正面对抗。\n\n第三幕（转）：真相揭露，剑诀关系世界存亡，接受命运守护所爱。\n\n第四幕（合）：帝国皇宫之巅决战，建立新秩序。`
-      form.coreSetting = result
-      outlineResult.value = result
     }
     aiLoading.value = ''
     if (result) aiGenerated.value = key
@@ -1955,8 +2067,35 @@ function aiGenerate(key) {
   color: #475569;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
+  -webkit-line-clamp: 8;
+  line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sub-sections {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid #e2e8f0;
+}
+.preview-sub-sec {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+.sub-title {
+  font-weight: 600;
+  color: #334155;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.sub-content {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

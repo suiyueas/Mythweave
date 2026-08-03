@@ -1213,10 +1213,9 @@
                 <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">默认模型</label>
                 <select v-model="editAIModelForm.model" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
                   <option value="DeepSeek v4 Pro">DeepSeek v4 Pro</option>
-                  <option value="GPT-4">GPT-4</option>
-                  <option value="Claude 3">Claude 3</option>
-                  <option value="DeepSeek v3">DeepSeek v3</option>
-                  <option value="Qwen 2.5">Qwen 2.5</option>
+                  <option value="DeepSeek v4 Flash">DeepSeek v4 Flash</option>
+                  <option value="Qwen Max">Qwen Max</option>
+                  <option value="Mimo v2.5 Pro">Mimo v2.5 Pro</option>
                 </select>
               </div>
               <div>
@@ -2499,6 +2498,14 @@ async function saveAIModelConfig() {
       'precise': '精确模式'
     }
     aiModelConfig.styleLabel = styleMap[editAIModelForm.style] || '创意模式'
+
+    localStorage.setItem('ai_model_config', JSON.stringify({
+      model: aiModelConfig.model,
+      style: aiModelConfig.style,
+      temperature: aiModelConfig.temperature,
+      maxTokens: aiModelConfig.maxTokens,
+      styleLabel: aiModelConfig.styleLabel
+    }))
 
     showAIModelDialog.value = false
     showChapterToast('AI 模型偏好已保存', 'success')

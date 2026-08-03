@@ -259,6 +259,18 @@ const sessions = ref([])
 const currentSessionId = ref(null)
 const activeAbortController = ref(null)
 
+function getAiModelConfig() {
+  try {
+    const saved = localStorage.getItem('ai_model_config')
+    if (saved) {
+      return JSON.parse(saved)
+    }
+  } catch (e) {
+    console.warn('读取AI模型配置失败:', e)
+  }
+  return { model: 'DeepSeek v4 Pro', style: 'creative', temperature: 0.7, maxTokens: '2048' }
+}
+
 // 侧边栏抽屉状态（默认收起）
 const sidebarOpen = ref(false)
 // 上下文弹窗显示状态
@@ -546,6 +558,7 @@ async function sendMessage() {
 
   try {
     const proj = store.currentProject
+    const aiConfig = getAiModelConfig()
 
     await chatApi.streamChat(pid, {
         userMessage: userMsg,
@@ -553,7 +566,8 @@ async function sendMessage() {
         sessionId: currentSessionId.value,
         novelTitle: proj?.title || '',
         genre: proj?.genre || '',
-        currentChapter: chapters.value.length ? '第' + chapters.value.length + '章' : ''
+        currentChapter: chapters.value.length ? '第' + chapters.value.length + '章' : '',
+        model: aiConfig.model
       },
       (token) => {
         if (abortController.signal.aborted) return

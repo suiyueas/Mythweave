@@ -10,6 +10,7 @@ public class StreamChatRequest {
     private Long sessionId;
     private Double temperature;
     private Integer maxTokens;
+    private String model;
 
     public String getUserMessage() { return userMessage; }
     public void setUserMessage(String userMessage) { this.userMessage = userMessage; }
@@ -37,4 +38,7 @@ public class StreamChatRequest {
 
     public Integer getMaxTokens() { return maxTokens; }
     public void setMaxTokens(Integer maxTokens) { this.maxTokens = maxTokens; }
+
+    public String getModel() { return model; }
+    public void setModel(String model) { this.model = model; }
 }
