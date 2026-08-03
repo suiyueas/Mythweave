@@ -16,13 +16,29 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.*;
 
 /**
- * 协调者Agent：负责调度4个Agent、聚合结果、生成综合建议
+ * 协调者Agent
+ * 
+ * 负责协调多个专业Agent协作完成复杂分析任务：
+ * - Editor Agent（编辑代理）：分析章节结构、节奏、伏笔运用等
+ * - Character Agent（角色代理）：分析角色发展、性格一致性、角色弧线等
+ * - Style Agent（风格代理）：分析文笔风格、语言表达、描写手法等
+ * - Reader Agent（读者代理）：模拟读者视角，评估阅读体验、情感共鸣等
+ * 
+ * 协作流程：
+ * 1. 构建统一的上下文信息（项目信息、章节内容等）
+ * 2. 并行调度四个Agent进行各自的专业分析
+ * 3. 汇总各Agent的分析结果
+ * 4. 生成综合性的写作建议
+ * 
+ * 采用线程池实现四个Agent的并行执行，提高响应速度
+ * 设置120秒超时机制，防止某个Agent阻塞导致整体无响应
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrchestratorAgent {
 
+    /** 协调者Agent超时时间（秒） */
     private static final long ORCHESTRATOR_TIMEOUT_SECONDS = 120;
 
     private final EditorAgent editorAgent;
@@ -35,10 +51,23 @@ public class OrchestratorAgent {
     private final NovelCharacterMapper characterMapper;
     private final NovelForeshadowingMapper foreshadowingMapper;
 
+    /** 线程池，用于并行执行多个Agent任务 */
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     /**
-     * 执行多Agent协作分析（顺序执行，简单可靠）
+     * 执行多Agent协作分析
+     * 
+     * 四个Agent并行执行：
+     * 1. Editor Agent：分析章节编辑质量
+     * 2. Character Agent：分析角色塑造
+     * 3. Style Agent：分析文风特点
+     * 4. Reader Agent：模拟读者体验
+     * 
+     * 最后汇总各Agent结果，生成综合性建议
+     * 
+     * @param projectId 项目ID
+     * @param request 协调请求（包含章节ID等参数）
+     * @return 协调响应（包含各Agent的分析结果和综合建议）
      */
     public OrchestratorResponse orchestrate(Long projectId, OrchestratorRequest request) {
         long startTime = System.currentTimeMillis();

@@ -61,7 +61,7 @@ public class AiConfigController {
         if (usage == null) {
             usage = new NovelAiUsage();
             usage.setProjectId(projectId);
-            usage.setTotalTokens(0);
+            usage.setTotalTokens(0L);
             usage.setEstimatedCost(0.0);
             usage.setApiCalls(0);
             usage.setCacheHitRate(0);

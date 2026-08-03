@@ -11,11 +11,40 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JWT认证过滤器
+ * 
+ * 职责：
+ * - 验证请求中的JWT token有效性
+ * - 将有效token中的用户ID解析出来，设置到请求属性中
+ * - 对需要认证的接口进行拦截，未登录或token无效时返回401错误
+ * 
+ * 放行的路径：
+ * - OPTIONS请求（CORS预检请求）
+ * - /api/auth/login（登录接口）
+ * - /api/auth/register（注册接口）
+ * 
+ * 工作流程：
+ * 1. 检查是否为OPTIONS请求，是则直接放行
+ * 2. 检查是否为登录/注册接口，是则直接放行
+ * 3. 从Authorization header中提取Bearer token
+ * 4. 验证token有效性
+ * 5. token有效则将用户ID设置到request属性中，继续处理
+ * 6. token无效或缺失则返回401未授权错误
+ */
 @Component
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
+    
     private final JwtUtil jwtUtil;
 
+    /**
+     * 过滤器的核心处理方法
+     * 
+     * @param request HTTP请求
+     * @param response HTTP响应
+     * @param chain 过滤器链
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {

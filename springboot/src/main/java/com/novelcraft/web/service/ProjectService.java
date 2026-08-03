@@ -19,6 +19,17 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 作品项目管理服务层
+ * 
+ * 核心功能：
+ * - 作品的创建、更新、删除、查询操作
+ * - 作品删除时的级联处理（关联章节、角色、世界观等数据的统一删除）
+ * - 作品统计数据同步（章节数、总字数）
+ * - 写作日志自动回填（为没有日志的章节自动创建记录）
+ * 
+ * 使用事务管理确保数据一致性，级联删除失败时会回滚整个操作
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,12 +39,24 @@ public class ProjectService {
     private final NovelChapterMapper chapterMapper;
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * 创建新作品
+     * 插入后返回数据库中的完整记录（包含默认状态和时间戳），避免前端获取到空值
+     * @param project 作品信息
+     * @return 创建成功且包含数据库默认值的作品对象
+     */
     public NovelProject create(NovelProject project) {
         projectMapper.insert(project);
         // 返回数据库真实记录（含默认值 status= draft、时间等），避免前端拿到请求体空值误判状态
         return projectMapper.selectById(project.getId());
     }
 
+    /**
+     * 更新作品信息
+     * @param project 更新后的作品信息（需包含作品ID）
+     * @return 更新后的作品对象
+     * @throws BusinessException 当作品不存在时抛出404异常
+     */
     public NovelProject update(NovelProject project) {
         NovelProject exist = projectMapper.selectById(project.getId());
         if (exist == null) {
@@ -43,6 +66,30 @@ public class ProjectService {
         return projectMapper.selectById(project.getId());
     }
 
+    /**
+     * 删除作品（硬删除，包含级联删除关联数据）
+     * 
+     * 级联删除顺序：
+     * 1. 章节版本 (novel_chapter_version)
+     * 2. 章节 (novel_chapter)
+     * 3. 人物 (novel_character)
+     * 4. 世界观 (novel_world_setting)
+     * 5. 大纲 (novel_outline)
+     * 6. 情节线 (novel_plot_thread)
+     * 7. 伏笔 (novel_foreshadowing)
+     * 8. 灵感 (novel_inspiration)
+     * 9. AI配置 (novel_ai_config)
+     * 10. AI会话 (novel_ai_session)
+     * 11. 写作日志 (novel_writing_log)
+     * 12. 哨兵告警 (novel_sentinel_alert)
+     * 13. 哨兵巡查日志 (novel_sentinel_check_log)
+     * 14. 最后删除作品本身 (novel_project)
+     * 
+     * 使用事务管理，任意一步失败都会回滚整个删除操作
+     * @param id 要删除的作品ID
+     * @throws BusinessException 当作品不存在时抛出404异常
+     * @throws RuntimeException 当物理删除失败时抛出异常
+     */
     @Transactional
     public void delete(Long id) {
         NovelProject exist = projectMapper.selectById(id);
@@ -123,8 +170,15 @@ public class ProjectService {
     }
 
     /**
-     * 表存在则按条件删除，表不存在（环境差异）则跳过，避免删除作品失败
-     * whereClause 为完整 WHERE 条件（含占位符），args 为对应参数
+     * 条件删除（表存在性检查）
+     * 
+     * 如果表不存在（环境差异导致），跳过删除操作而不是报错
+     * 这样可以避免因环境差异导致删除作品失败
+     * 
+     * @param table 表名
+     * @param whereClause 完整的WHERE条件（含占位符?）
+     * @param args WHERE条件对应的参数
+     * @return 删除的记录数
      */
     private int deleteIfExists(String table, String whereClause, Object... args) {
         if (!tableExists(table)) {
@@ -134,6 +188,13 @@ public class ProjectService {
         return jdbcTemplate.update("DELETE FROM " + table + " WHERE " + whereClause, args);
     }
 
+    /**
+     * 检查数据库表是否存在
+     * 通过查询 information_schema.tables 实现
+     * 
+     * @param tableName 表名
+     * @return 表存在返回true，否则返回false
+     */
     private boolean tableExists(String tableName) {
         try {
             Integer cnt = jdbcTemplate.queryForObject(
@@ -146,6 +207,12 @@ public class ProjectService {
         }
     }
 
+    /**
+     * 根据ID获取作品详情
+     * @param id 作品ID
+     * @return 作品对象
+     * @throws BusinessException 当作品不存在时抛出404异常
+     */
     public NovelProject getById(Long id) {
         NovelProject project = projectMapper.selectById(id);
         if (project == null) {
@@ -154,18 +221,36 @@ public class ProjectService {
         return project;
     }
 
+    /**
+     * 获取指定用户的所有作品列表
+     * @param userId 用户ID
+     * @return 用户作品列表
+     */
     public List<NovelProject> listByUserId(Long userId) {
         return projectMapper.selectByUserId(userId);
     }
 
+    /**
+     * 分页获取所有作品列表
+     * @param pageNum 页码（从1开始）
+     * @param pageSize 每页记录数
+     * @return 分页结果
+     */
     public IPage<NovelProject> page(int pageNum, int pageSize) {
         Page<NovelProject> page = new Page<>(pageNum, pageSize);
         return projectMapper.selectPage(page, null);
     }
 
     /**
-     * 同步单个作品的字数与章节数统计（从 novel_chapter 实际数据重算）
-     * 使用 JdbcTemplate 直接 SQL，绕过 MyBatis-Plus @TableLogic 干扰
+     * 同步单个作品的统计数据
+     * 
+     * 从 novel_chapter 表中实时统计：
+     * - word_count: 所有章节的总字数
+     * - chapter_count: 有效章节数量
+     * 
+     * 使用 JdbcTemplate 直接执行 SQL，绕过 MyBatis-Plus 的 @TableLogic 逻辑删除干扰
+     * 
+     * @param projectId 作品ID
      */
     public void syncProjectStats(Long projectId) {
         Integer wordCount = chapterMapper.sumWordCountByProject(projectId);
@@ -180,7 +265,12 @@ public class ProjectService {
     }
 
     /**
-     * 同步当前用户所有作品的统计（修复历史数据不一致）
+     * 同步当前用户所有作品的统计数据
+     * 用于修复因历史操作导致的作品统计数据不一致问题
+     * 同时会回填缺失的写作日志
+     * 
+     * @param userId 用户ID
+     * @return 被成功同步统计的项目数量
      */
     public int syncAllProjectStats(Long userId) {
         List<NovelProject> projects = projectMapper.selectByUserId(userId);
@@ -199,8 +289,15 @@ public class ProjectService {
     }
 
     /**
-     * 回填缺失的写作日志（热力图/本周趋势/最近活动的数据源）
-     * 为没有写作日志的章节自动创建一条记录
+     * 回填缺失的写作日志
+     * 
+     * 为有字数但没有对应写作日志的章节自动创建日志记录
+     * 这是为了保证热力图、本周趋势、最近活动等功能的数据完整性
+     * 
+     * 查询逻辑：找出有字数且已创建但没有写作日志的章节
+     * 插入时使用章节创建时间作为写作日期，默认写作时长30分钟
+     * 
+     * @param projectId 作品ID
      */
     private void backfillWritingLogs(Long projectId) {
         try {

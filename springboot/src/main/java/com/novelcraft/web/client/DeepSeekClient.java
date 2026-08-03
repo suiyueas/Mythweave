@@ -13,7 +13,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DeepSeek API 客户端（非流式 + 流式SSE）
+ * DeepSeek API 客户端
+ * 
+ * 提供与DeepSeek大语言模型的交互能力：
+ * - 非流式调用：适用于需要完整返回结果的场景
+ * - 流式SSE调用：适用于需要实时展示生成内容的场景（如AI写作助手）
+ * 
+ * 配置项（从AiProperties读取）：
+ * - baseUrl: DeepSeek API地址
+ * - apiKey: API密钥
+ * - model: 使用的模型名称
+ * - connectTimeout: 连接超时时间
+ * - readTimeout: 读取超时时间
  */
 @Slf4j
 @Component
@@ -34,7 +45,14 @@ public class DeepSeekClient {
     }
 
     /**
-     * 非流式调用（无 stop 序列）
+     * 非流式调用（无停止序列）
+     * 
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户消息
+     * @param temperature 温度参数（控制随机性，0-2，越高越随机）
+     * @param maxTokens 最大生成token数
+     * @return AI生成的完整回复
+     * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens) throws IOException {
         return chat(systemPrompt, userMessage, temperature, maxTokens, null);
@@ -42,7 +60,14 @@ public class DeepSeekClient {
 
     /**
      * 非流式调用
-     * @param stop 停止序列列表（如 ["\n\n"]），命中后提前终止生成，可为 null
+     * 
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户消息
+     * @param temperature 温度参数
+     * @param maxTokens 最大生成token数
+     * @param stop 停止序列列表（如 ["\\n\\n"]），命中后提前终止生成，可为null
+     * @return AI生成的完整回复
+     * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop) throws IOException {
         Map<String, Object> body = new HashMap<>();
@@ -105,7 +130,18 @@ public class DeepSeekClient {
     }
 
     /**
-     * 流式SSE调用，通过回调逐块返回，返回总 token 消耗量
+     * 流式SSE调用，通过回调逐块返回
+     * 
+     * 适用于需要实时展示AI生成内容的场景
+     * 通过回调函数onToken逐个 token 地返回生成内容
+     * 
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户消息
+     * @param temperature 温度参数
+     * @param maxTokens 最大生成token数
+     * @param onToken 令牌回调函数，实时接收生成的token
+     * @return 总token消耗量
+     * @throws IOException 调用失败时抛出
      */
     public int chatStream(String systemPrompt, String userMessage, double temperature,
                            int maxTokens, java.util.function.Consumer<String> onToken) throws IOException {

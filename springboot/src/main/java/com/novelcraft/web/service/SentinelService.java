@@ -28,6 +28,28 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 哨兵服务（智能质量监控）
+ * 
+ * 职责：
+ * - 启动和管理全量巡查任务（四维并行扫描）
+ * - 管理各类哨兵扫描器（Foreshadowing、Logic、Character、Rhythm）
+ * - 处理和存储告警信息（去重、更新、解决）
+ * - 统计哨兵告警数据
+ * - 通过WebSocket实时推送巡查进度和通知
+ * 
+ * 四维扫描维度：
+ * - foreshadowing（伏笔）：检查伏笔的铺设与回收情况
+ * - logic（逻辑）：检查情节逻辑一致性和漏洞
+ * - character（角色）：检查角色行为一致性和塑造问题
+ * - rhythm（节奏）：检查叙事节奏和章节结构
+ * 
+ * 设计特点：
+ * - 异步执行：使用@Async和CompletableFuture实现并行扫描
+ * - 去重机制：相同type+title+unresolved的告警不重复创建
+ * - 进度追踪：使用progressCache缓存各任务进度
+ * - WebSocket通知：实时推送巡查完成通知
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -43,14 +65,27 @@ public class SentinelService {
     private final RhythmScanner rhythmScanner;
     private final WebSocketNotificationService wsNotificationService;
 
+    /** 伏笔过期阈值（天） */
     @Value("${app.sentinel.overdue-threshold:10}")
     private int overdueThreshold;
 
+    /** 进度缓存（taskId -> ScanProgress） */
     private final Map<String, ScanProgress> progressCache = new ConcurrentHashMap<>();
 
     /**
      * 启动全量巡查（异步，四维并行）
-     * @param taskId 外部传入的 taskId，用于追踪巡查进度
+     * 
+     * 并行启动四个维度的扫描任务：
+     * - foreshadowing（伏笔）
+     * - logic（逻辑）
+     * - character（角色）
+     * - rhythm（节奏）
+     * 
+     * 所有维度完成后更新任务状态为completed
+     * 并创建巡查完成通知推送给前端
+     * 
+     * @param projectId 作品ID
+     * @param taskId 外部传入的taskId，用于追踪巡查进度
      */
     @Async("sentinelTaskExecutor")
     public void startFullScan(Long projectId, String taskId) {
@@ -83,6 +118,18 @@ public class SentinelService {
 
     /**
      * 巡查单个维度（异步）
+     * 
+     * 执行流程：
+     * 1. 创建检查日志记录
+     * 2. 更新进度状态为running
+     * 3. 调用对应Scanner进行扫描
+     * 4. 保存告警（去重）
+     * 5. 更新日志记录和进度状态
+     * 
+     * @param projectId 作品ID
+     * @param taskId 任务ID
+     * @param dimension 维度名称
+     * @return CompletableFuture<Void>
      */
     @Async("sentinelTaskExecutor")
     public CompletableFuture<Void> scanDimension(Long projectId, String taskId, String dimension) {
@@ -146,8 +193,10 @@ public class SentinelService {
 
     /**
      * 保存告警（去重）
-     * 规则：
-     * 1. 同 type + title + unresolved 存在时，更新 description 和 updateTime，不新建
+     * 
+     * 去重规则：
+     * 1. 同type + title + unresolved存在时，更新description和updateTime，不新建
+     * 2. 已解决的同类告警不重复创建
      * 2. 已解决的相同告警重新出现时，创建新记录
      * 3. 支持按 description 相似度去重（避免描述略有不同的重复告警）
      */

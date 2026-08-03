@@ -8,22 +8,49 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.concurrent.*;
 
 /**
- * Agent基类，提供通用能力
+ * Agent基类
+ * 
+ * 提供所有专业写作Agent的通用能力：
+ * - 调用DeepSeek API执行AI分析
+ * - 重试机制（最多2次重试）
+ * - 超时控制（120秒，防止推理型模型长时间无响应）
+ * - 执行耗时统计
+ * - 角色档案和伏笔信息的格式化构建
+ * 
+ * 设计模式：模板方法模式
+ * 子类只需实现getAgentKey()、getAgentName()和analyze()方法
+ * 通用执行逻辑由基类提供
+ * 
+ * 重试策略：
+ * - 首次失败后等待1秒再试
+ * - 第二次失败后等待2秒再试
+ * - 两次都失败则返回失败结果
  */
 @Slf4j
 public abstract class BaseAgent implements WritingAgent {
 
+    /** 最大重试次数 */
     private static final int MAX_RETRIES = 2;
-    // 推理型模型在正式输出前可能消耗 20-60 秒推理，30 秒超时必然失败；放宽到 120 秒
+    /** 超时时间（秒）：推理型模型在正式输出前可能消耗20-60秒推理，120秒确保足够 */
     private static final long TIMEOUT_SECONDS = 120;
 
     protected final DeepSeekClient deepSeekClient;
+    /** 线程池用于异步执行AI调用 */
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     protected BaseAgent(DeepSeekClient deepSeekClient) {
         this.deepSeekClient = deepSeekClient;
     }
 
+    /**
+     * 执行AI分析请求
+     * 
+     * @param systemPrompt 系统提示词（定义AI角色）
+     * @param userPrompt 用户提示词（包含需要分析的内容）
+     * @param temperature 温度参数（0-1，越高越有创造性）
+     * @param maxTokens 最大生成令牌数
+     * @return AgentResult 分析结果或失败信息
+     */
     protected AgentResult execute(String systemPrompt, String userPrompt, double temperature, int maxTokens) {
         long startTime = System.currentTimeMillis();
         Exception lastException = null;
@@ -70,6 +97,12 @@ public abstract class BaseAgent implements WritingAgent {
         return AgentResult.failure(getAgentKey(), getAgentName(), "执行失败: " + errorMsg);
     }
 
+    /**
+     * 构建角色档案格式化字符串
+     * 
+     * @param context 包含角色列表的上下文
+     * @return 格式化后的角色档案字符串
+     */
     protected String buildCharacterProfile(AgentContext context) {
         if (context.getCharacters() == null || context.getCharacters().isEmpty()) {
             return "暂无人物档案";
@@ -85,6 +118,12 @@ public abstract class BaseAgent implements WritingAgent {
         return sb.toString();
     }
 
+    /**
+     * 构建伏笔信息格式化字符串
+     * 
+     * @param context 包含伏笔列表的上下文
+     * @return 格式化后的伏笔信息字符串
+     */
     protected String buildForeshadowingInfo(AgentContext context) {
         if (context.getForeshadowings() == null || context.getForeshadowings().isEmpty()) {
             return "暂无伏笔信息";

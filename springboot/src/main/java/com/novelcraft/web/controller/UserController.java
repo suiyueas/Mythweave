@@ -13,6 +13,18 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 用户信息管理控制器
+ * 
+ * 主要功能：
+ * - 用户个人资料查看与更新
+ * - 用户统计数据查询
+ * - 用户头像上传与删除
+ * - 修改密码
+ * - 邮箱验证
+ * 
+ * 所有接口都需要用户登录认证
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/users")
@@ -23,7 +35,8 @@ public class UserController {
     private final AvatarStorageService avatarStorageService;
     
     /**
-     * 获取用户信息
+     * 获取当前登录用户的完整个人信息
+     * @return 用户信息（包含基本信息、VIP状态、统计信息等）
      */
     @GetMapping("/profile")
     public R<Map<String, Object>> getProfile() {
@@ -31,7 +44,9 @@ public class UserController {
     }
     
     /**
-     * 更新用户信息
+     * 更新当前登录用户的信息
+     * @param user 只更新传入的字段，未传入字段保持不变
+     * @return 操作结果
      */
     @PutMapping("/profile")
     public R<Void> updateProfile(@RequestBody NovelUser user) {
@@ -40,7 +55,8 @@ public class UserController {
     }
     
     /**
-     * 获取用户统计
+     * 获取当前登录用户的统计数据
+     * @return 用户统计信息（作品数、字数、VIP等级等）
      */
     @GetMapping("/stats")
     public R<NovelUserStats> getStats() {
@@ -48,7 +64,17 @@ public class UserController {
     }
     
     /**
-     * 上传头像
+     * 上传用户头像
+     * 
+     * 处理流程：
+     * 1. 验证文件格式和大小
+     * 2. 获取当前用户旧头像URL
+     * 3. 删除旧头像文件（如果存在）
+     * 4. 保存新头像文件
+     * 5. 更新数据库中的头像URL
+     * 
+     * @param file 头像图片文件（支持jpg、png、gif格式）
+     * @return 新头像的URL地址
      */
     @PostMapping("/avatar")
     public R<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
@@ -87,7 +113,14 @@ public class UserController {
     }
     
     /**
-     * 删除头像
+     * 删除用户头像
+     * 
+     * 处理流程：
+     * 1. 获取当前用户头像URL
+     * 2. 删除头像文件（如果存在）
+     * 3. 清空数据库中的头像URL
+     * 
+     * @return 操作结果
      */
     @DeleteMapping("/avatar")
     public R<Void> deleteAvatar() {
@@ -120,6 +153,11 @@ public class UserController {
     
     /**
      * 修改密码
+     * 
+     * 需要验证旧密码后才能修改为新密码
+     * 
+     * @param params 包含oldPassword（旧密码）和newPassword（新密码）
+     * @return 操作结果
      */
     @PutMapping("/password")
     public R<Void> changePassword(@RequestBody Map<String, String> params) {
@@ -139,7 +177,11 @@ public class UserController {
     }
     
     /**
-     * 发送邮箱验证
+     * 发送邮箱验证邮件
+     * 
+     * 向用户的邮箱发送验证链接，验证后邮箱状态变为已验证
+     * 
+     * @return 发送结果
      */
     @PostMapping("/email/verify")
     public R<Void> sendEmailVerification() {
