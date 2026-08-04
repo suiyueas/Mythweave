@@ -32,7 +32,10 @@ async function request(url, options = {}) {
   if (json.code === 401) {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    window.location.href = '/login'
+    // 仅在非登录页时整页跳转，避免并发 401 导致页面反复刷新闪烁
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login'
+    }
     throw new Error(json.message || '请先登录')
   }
 

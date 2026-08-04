@@ -44,7 +44,8 @@ public class AuthController {
             authService.register(req);
             return R.ok(Map.of("success", true, "message", "注册成功"));
         } catch (RuntimeException e) {
-            return R.fail(e.getMessage());
+            // 业务校验异常（如用户名已存在）返回 400，避免前端误判为服务器故障
+            return R.badRequest(e.getMessage());
         }
     }
 
@@ -63,7 +64,8 @@ public class AuthController {
         try {
             return R.ok(authService.login(req));
         } catch (RuntimeException e) {
-            return R.fail(e.getMessage());
+            // 业务校验异常（如用户名或密码错误）返回 400，避免前端误判为服务器故障
+            return R.badRequest(e.getMessage());
         }
     }
 }

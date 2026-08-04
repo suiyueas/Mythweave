@@ -89,11 +89,14 @@
               <div v-for="char in characterList" :key="char.id" class="border border-[#e8e3dc] rounded-xl p-4 hover:border-[#d97706] hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-white" :class="{ '!border-[#d97706] !shadow-md ring-2 ring-[#d97706]/20': selectedCharacter?.id === char.id }" @click="viewCharacter(char)">
                 <div class="flex items-center gap-3 mb-3">
                   <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" :style="{ background: char.color }">{{ char.avatar }}</div>
-                  <div class="min-w-0"><div class="text-sm font-semibold text-[#6b6560] truncate">{{ char.name }}</div><div class="text-xs text-[#9c9690]">{{ char.role }}</div></div>
+                  <div class="min-w-0"><div class="text-sm font-semibold text-[#6b6560] truncate">{{ char.name }}</div><div class="text-xs text-[#9c9690] truncate">{{ char.roleLabel }}<template v-if="char.age !== '' && char.age !== null && char.age !== undefined"> · {{ char.age }}岁</template><template v-if="char.type"> · {{ char.type }}</template></div></div>
                 </div>
                 <p class="text-xs text-[#9c9690] leading-relaxed line-clamp-2">{{ char.bio }}</p>
-                <div class="flex gap-1.5 mt-2 flex-wrap">
-                  <span v-for="tag in char.tags" :key="tag" class="px-1.5 py-0.5 rounded-md bg-[#f3efe8] text-[10px] text-[#9c9690]">{{ tag }}</span>
+                <div v-if="char.combat !== '' || char.wisdom !== '' || char.emotion !== '' || char.charm !== ''" class="flex gap-1.5 mt-2 flex-wrap">
+                  <span v-if="char.combat !== '' && char.combat !== null" class="px-1.5 py-0.5 rounded-md bg-red-50 text-[10px] text-red-600">⚔ {{ char.combat }}</span>
+                  <span v-if="char.wisdom !== '' && char.wisdom !== null" class="px-1.5 py-0.5 rounded-md bg-blue-50 text-[10px] text-blue-600">🧠 {{ char.wisdom }}</span>
+                  <span v-if="char.emotion !== '' && char.emotion !== null" class="px-1.5 py-0.5 rounded-md bg-pink-50 text-[10px] text-pink-600">💗 {{ char.emotion }}</span>
+                  <span v-if="char.charm !== '' && char.charm !== null" class="px-1.5 py-0.5 rounded-md bg-amber-50 text-[10px] text-amber-600">✨ {{ char.charm }}</span>
                 </div>
                 <div class="mt-2 pt-2 border-t border-[#f3efe8]">
                   <div class="flex items-center justify-between text-[10px]"><span class="text-[#9c9690]">弧光进度</span><span class="font-semibold text-[#6b6560]">{{ char.arc }}%</span></div>
@@ -1416,7 +1419,7 @@
               <div class="grid grid-cols-3 gap-4 mb-4">
                 <div>
                   <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">人物类型</label>
-                  <input v-model="characterForm.persona" placeholder="如：热血、冷静" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
+                  <input v-model="characterForm.type" placeholder="如：战士、法师" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
                 </div>
                 <div>
                   <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">年龄</label>
@@ -1446,7 +1449,7 @@
               <!-- 第5组：关系描述 -->
               <div class="mb-4">
                 <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">关系描述</label>
-                <input v-model="characterForm.relationships" placeholder="与主角的关系，如：青梅竹马、亦师亦友、宿敌..." class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
+                <textarea v-model="characterForm.relation" placeholder="与主角的关系，如：青梅竹马、亦师亦友、宿敌..." rows="2" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 resize-y transition-all"></textarea>
               </div>
 
               <!-- 第6组：弧光进度 -->
@@ -1462,9 +1465,35 @@
                   <input type="range" v-model.number="characterForm.arcProgress" min="0" max="100" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 </div>
                 <div class="flex justify-between text-[10px] text-[#b8b0a8] mt-1">
-                  <span>起点：沉睡</span>
-                  <span>终点：救世主</span>
+                  <span>起点：{{ characterForm.arcStart || '—' }}</span>
+                  <span>终点：{{ characterForm.arcEnd || '—' }}</span>
                 </div>
+              </div>
+
+              <!-- 第7组：弧光起点/终点 -->
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">弧光起点</label>
+                  <input v-model="characterForm.arcStart" placeholder="如：沉睡的巨人" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">弧光终点</label>
+                  <input v-model="characterForm.arcEnd" placeholder="如：救世主" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
+                </div>
+              </div>
+
+              <!-- 第8组：能力值 -->
+              <div class="grid grid-cols-4 gap-3 mb-4">
+                <div v-for="ab in [{ key: 'combat', label: '战力' }, { key: 'wisdom', label: '智慧' }, { key: 'emotion', label: '情感' }, { key: 'charm', label: '魅力' }]" :key="ab.key">
+                  <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">{{ ab.label }}</label>
+                  <input v-model.number="characterForm[ab.key]" type="number" min="0" max="100" placeholder="0-100" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
+                </div>
+              </div>
+
+              <!-- 第9组：最后登场 -->
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">最后登场</label>
+                <input v-model="characterForm.lastSeen" placeholder="如：第 12 章 决战之前" class="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:border-[#d97706] focus:ring-2 focus:ring-[#d97706]/20 transition-all" />
               </div>
             </div>
 
@@ -1481,37 +1510,60 @@
     <!-- 人物详情弹窗 -->
     <Teleport to="body">
       <div v-if="showCharacterDetail && selectedCharacter" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]" @click.self="showCharacterDetail = false">
-        <div class="bg-white rounded-2xl w-[480px] max-w-[90vw] shadow-xl border border-[#e8e3dc] overflow-hidden">
+        <div class="bg-white rounded-2xl w-[560px] max-w-[92vw] shadow-xl border border-[#e8e3dc] overflow-hidden">
           <!-- 头部 -->
           <div class="flex items-center gap-4 p-5 border-b border-[#f0ece6]">
             <div class="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0" :style="{ background: selectedCharacter.color }">{{ selectedCharacter.avatar }}</div>
             <div class="flex-1 min-w-0">
               <h3 class="text-lg font-bold text-[#1a1a2e] truncate">{{ selectedCharacter.name }}</h3>
-              <span class="inline-block mt-1 text-xs px-2.5 py-0.5 rounded-full" :class="{
-                'bg-amber-100 text-amber-800': selectedCharacter.role?.includes('主角'),
-                'bg-blue-100 text-blue-800': selectedCharacter.role?.includes('配角'),
-                'bg-red-100 text-red-800': selectedCharacter.role?.includes('反派'),
-                'bg-gray-100 text-gray-600': selectedCharacter.role?.includes('次要')
-              }">{{ selectedCharacter.role }}</span>
+              <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span class="inline-block text-xs px-2.5 py-0.5 rounded-full" :class="{
+                  'bg-amber-100 text-amber-800': selectedCharacter.role === 'protagonist',
+                  'bg-blue-100 text-blue-800': selectedCharacter.role === 'supporting' || selectedCharacter.role === 'minor',
+                  'bg-red-100 text-red-800': selectedCharacter.role === 'antagonist',
+                  'bg-gray-100 text-gray-600': !['protagonist', 'supporting', 'antagonist', 'minor'].includes(selectedCharacter.role)
+                }">{{ selectedCharacter.roleLabel }}</span>
+                <span v-if="selectedCharacter.type" class="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">🏷️ {{ selectedCharacter.type }}</span>
+                <span v-if="selectedCharacter.age !== '' && selectedCharacter.age !== null && selectedCharacter.age !== undefined" class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">🎂 {{ selectedCharacter.age }} 岁</span>
+                <span v-if="selectedCharacter.lastSeen" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">📍 {{ selectedCharacter.lastSeen }}</span>
+              </div>
             </div>
             <button class="w-8 h-8 flex items-center justify-center text-[#9c9690] hover:text-[#6b6560] hover:bg-[#f5f3f0] rounded-lg transition-colors text-lg" @click="showCharacterDetail = false">✕</button>
           </div>
 
           <!-- 角色简介 -->
-          <div class="p-5 border-b border-[#f0ece6]">
+          <div class="p-5 border-b border-[#f0ece6] max-h-[220px] overflow-y-auto">
             <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-2">📝 角色简介</h4>
-            <p class="text-sm text-[#6b6560] leading-relaxed">{{ selectedCharacter.bio || '暂无简介' }}</p>
+            <p class="text-sm text-[#6b6560] leading-relaxed whitespace-pre-wrap">{{ selectedCharacter.bio || '暂无简介' }}</p>
           </div>
 
-          <!-- 标签 -->
-          <div v-if="selectedCharacter.tags && selectedCharacter.tags.length" class="px-5 py-3 border-b border-[#f0ece6]">
-            <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-2">🏷️ 标签</h4>
-            <div class="flex gap-1.5 flex-wrap">
-              <span v-for="tag in selectedCharacter.tags" :key="tag" class="px-2 py-1 rounded-lg bg-[#f3efe8] text-xs text-[#6b6560]">{{ tag }}</span>
+          <!-- 性格特征 -->
+          <div v-if="selectedCharacter.personality" class="p-5 border-b border-[#f0ece6]">
+            <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-2">💭 性格特征</h4>
+            <p class="text-sm text-[#6b6560] leading-relaxed whitespace-pre-wrap">{{ selectedCharacter.personality }}</p>
+          </div>
+
+          <!-- 人物关系 -->
+          <div v-if="selectedCharacter.relation" class="p-5 border-b border-[#f0ece6]">
+            <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-2">🕸️ 人物关系</h4>
+            <p class="text-sm text-[#6b6560] leading-relaxed whitespace-pre-wrap">{{ selectedCharacter.relation }}</p>
+          </div>
+
+          <!-- 能力值 -->
+          <div v-if="hasAnyAbility" class="p-5 border-b border-[#f0ece6]">
+            <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-3">⚔️ 能力值</h4>
+            <div class="grid grid-cols-2 gap-x-6 gap-y-2.5">
+              <div v-for="ab in abilityList" :key="ab.key" class="flex items-center gap-2">
+                <span class="text-xs text-[#9c9690] w-8 flex-shrink-0">{{ ab.label }}</span>
+                <div class="flex-1 h-1.5 bg-[#f0ece6] rounded-full overflow-hidden">
+                  <div class="h-full rounded-full" :style="{ width: ab.value + '%', background: ab.color }"></div>
+                </div>
+                <span class="text-xs font-semibold text-[#6b6560] w-6 text-right">{{ ab.value }}</span>
+              </div>
             </div>
           </div>
 
-          <!-- 弧光进度 -->
+          <!-- 弧光 -->
           <div class="p-5 border-b border-[#f0ece6]">
             <h4 class="text-xs font-semibold text-[#b8b0a8] uppercase tracking-wide mb-3">🎯 弧光进度</h4>
             <div class="flex items-center gap-3">
@@ -1520,9 +1572,9 @@
               </div>
               <span class="text-sm font-bold text-[#6b6560] w-12 text-right">{{ selectedCharacter.arc || 0 }}%</span>
             </div>
-            <div class="flex justify-between mt-2 text-xs text-[#b8b0a8]">
-              <span>起点：沉睡</span>
-              <span>终点：救世主</span>
+            <div class="flex justify-between mt-2 text-xs text-[#b8b0a8] gap-3">
+              <span class="truncate">起点：{{ selectedCharacter.arcStart || '—' }}</span>
+              <span class="truncate">终点：{{ selectedCharacter.arcEnd || '—' }}</span>
             </div>
           </div>
 
@@ -1550,25 +1602,62 @@
             <h3 class="text-lg font-bold text-[#1a1a2e]">✏️ 编辑角色</h3>
             <button class="w-8 h-8 flex items-center justify-center text-[#9c9690] hover:text-[#6b6560] hover:bg-[#f5f3f0] rounded-lg transition-colors text-lg" @click="showEditCharacter = false">✕</button>
           </div>
-          <div class="p-5 space-y-4">
-            <div>
-              <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">角色名称 <span class="text-rose-500">*</span></label>
-              <input v-model="editForm.name" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：铁无双" />
+          <div class="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">角色名称 <span class="text-rose-500">*</span></label>
+                <input v-model="editForm.name" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：铁无双" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">角色定位</label>
+                <select v-model="editForm.role" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
+                  <option value="protagonist">⭐ 主角</option>
+                  <option value="supporting">👤 配角</option>
+                  <option value="antagonist">🔥 反派</option>
+                  <option value="minor">📖 次要角色</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">角色定位</label>
-              <select v-model="editForm.role" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors bg-white">
-                <option value="protagonist">⭐ 主角</option>
-                <option value="supporting">👤 配角</option>
-                <option value="antagonist">🔥 反派</option>
-                <option value="minor">📖 次要角色</option>
-              </select>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">人物类型</label>
+                <input v-model="editForm.type" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：战士、法师" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">年龄</label>
+                <input v-model="editForm.age" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：28" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">头像颜色</label>
+                <div class="flex items-center gap-2">
+                  <input type="color" v-model="editForm.avatarColor" class="w-10 h-10 rounded-lg border border-[#e8e3dc] cursor-pointer" />
+                  <span class="text-[10px] text-[#9c9690]">{{ editForm.avatarColor }}</span>
+                </div>
+              </div>
             </div>
             <div>
               <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">角色简介</label>
-              <textarea v-model="editForm.description" rows="4" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors resize-y" placeholder="性格特征、背景故事..."></textarea>
+              <textarea v-model="editForm.description" rows="3" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors resize-y" placeholder="外貌、背景故事..."></textarea>
             </div>
-                        <div>
+            <div>
+              <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">性格特征</label>
+              <textarea v-model="editForm.personality" rows="2" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors resize-y" placeholder="性格关键词，如：外冷内热、重情重义..."></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">人物关系</label>
+              <textarea v-model="editForm.relation" rows="2" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors resize-y" placeholder="与其他角色的关系，如：青梅竹马、宿敌..."></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">弧光起点</label>
+                <input v-model="editForm.arcStart" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：沉睡的巨人" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">弧光终点</label>
+                <input v-model="editForm.arcEnd" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：救世主" />
+              </div>
+            </div>
+            <div>
               <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">弧光进度</label>
               <div class="flex items-center gap-2 mb-2">
                 <input type="range" v-model.number="editForm.arc" min="0" max="100" class="flex-1 accent-[#d97706]" />
@@ -1577,10 +1666,16 @@
               <div class="w-full h-2 bg-[#e2e8f0] rounded-full overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-300 ease-out" :style="{ width: editForm.arc + '%', background: `linear-gradient(90deg, #ff6b35, hsl(${340 - (editForm.arc / 100) * 200}, 85%, 55%))`, boxShadow: `0 0 10px hsla(${340 - (editForm.arc / 100) * 200}, 85%, 55%, 0.4)` }"></div>
               </div>
-              <div class="flex justify-between text-[10px] text-[#b8b0a8] mt-1">
-                <span>起点：沉睡</span>
-                <span>终点：救世主</span>
+            </div>
+            <div class="grid grid-cols-4 gap-3">
+              <div v-for="ab in [{ key: 'combat', label: '战力' }, { key: 'wisdom', label: '智慧' }, { key: 'emotion', label: '情感' }, { key: 'charm', label: '魅力' }]" :key="ab.key">
+                <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">{{ ab.label }}</label>
+                <input v-model.number="editForm[ab.key]" type="number" min="0" max="100" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="0-100" />
               </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-[#6b6560] mb-1.5">最后登场</label>
+              <input v-model="editForm.lastSeen" class="w-full px-3 py-2.5 border border-[#e8e3dc] rounded-xl text-sm outline-none focus:border-[#d97706] transition-colors" placeholder="如：第 12 章 决战之前" />
             </div>
           </div>
           <div class="flex items-center gap-2 p-4 bg-[#faf8f5] border-t border-[#f0ece6]">
@@ -1794,7 +1889,37 @@ if (typeof document !== 'undefined') {
 
 // ─── 人物 ───
 const charTab = ref('卡片视图')
-const characterList = computed(() => characters.value.map((c, i) => ({ id: c.id, name: c.name || '未命名', role: getCategoryLabel(CHARACTER_CATEGORIES, c.role) || c.role || '👤 配角', avatar: (c.name || '?').charAt(0), color: c.avatarColor || '#d97706', bio: c.description || '暂无简介', tags: (c.tags || '').split(',').filter(Boolean).slice(0, 3), arc: c.arc ?? c.arcProgress ?? [75, 60, 30, 50, 85, 20][i] ?? 0 })))
+// 角色定位中文 → 英文枚举（导入解析器输出中文，后端存储英文）
+const ROLE_ENUM_MAP = { '主角': 'protagonist', '男主': 'protagonist', '女主': 'protagonist', '反派': 'antagonist', '对手': 'antagonist', '配角': 'supporting', '导师': 'supporting', '盟友': 'supporting', '守护者': 'supporting', '次要': 'minor', '待定': 'supporting' }
+// 输入转整数（兼容 "17岁" 等文本，空/非法返回 null）
+function toIntOrNull(v) {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(String(v).replace(/[^\d-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+const characterList = computed(() => characters.value.map((c, i) => ({
+  id: c.id,
+  name: c.name || '未命名',
+  role: c.role,
+  roleLabel: getCategoryLabel(CHARACTER_CATEGORIES, c.role) || c.role || '👤 配角',
+  type: c.type || '',
+  age: c.age ?? '',
+  avatarColor: c.avatarColor || '#d97706',
+  avatar: (c.name || '?').charAt(0),
+  color: c.avatarColor || '#d97706',
+  bio: c.description || '暂无简介',
+  description: c.description || '',
+  personality: c.personality || '',
+  relation: c.relation || '',
+  arcStart: c.arcStart || '',
+  arcEnd: c.arcEnd || '',
+  arc: c.arcProgress ?? [75, 60, 30, 50, 85, 20][i] ?? 0,
+  combat: c.combat ?? '',
+  wisdom: c.wisdom ?? '',
+  emotion: c.emotion ?? '',
+  charm: c.charm ?? '',
+  lastSeen: c.lastSeen || ''
+})))
 
 // ─── 人物导入功能 ───
 const showImportCharactersDialog = ref(false)
@@ -1823,20 +1948,17 @@ async function handleImportCharacters() {
   importSaving.value = true
   try {
     for (const ch of importPreviewCharacters.value) {
+      // 解析器输出字段 → 后端实体字段映射：
+      // identity/realm → type；appearance/backstory → description；abilities/quotes → relation
       const characterData = {
         name: ch.name || '未命名人物',
-        role: ch.role || '配角',
-        age: ch.age || '',
-        identity: ch.identity || '',
-        realm: ch.realm || '',
-        description: ch.personality || ch.appearance || '',
+        role: ROLE_ENUM_MAP[ch.role] || 'supporting',
+        type: [ch.identity, ch.realm].filter(Boolean).join(' · '),
+        age: toIntOrNull(ch.age),
+        description: [ch.appearance, ch.backstory].filter(Boolean).join('\n'),
         personality: ch.personality || '',
-        appearance: ch.appearance || '',
-        backstory: ch.backstory || '',
-        abilities: Array.isArray(ch.abilities) ? ch.abilities.join('；') : (ch.abilities || ''),
-        quotes: ch.quotes || '',
-        tags: [],
-        arc: 0
+        relation: [ch.abilities, ch.quotes].filter(Boolean).join('\n'),
+        arcProgress: 0
       }
       await characterApi.create(store.currentProjectId, characterData)
     }
@@ -1854,6 +1976,20 @@ async function handleImportCharacters() {
 // ─── 人物详情弹窗 ───
 const showCharacterDetail = ref(false)
 const selectedCharacter = ref(null)
+
+// 能力值列表（仅显示有值的项）
+const abilityList = computed(() => {
+  const sc = selectedCharacter.value
+  if (!sc) return []
+  const items = [
+    { key: 'combat', label: '战力', value: sc.combat, color: '#ef4444' },
+    { key: 'wisdom', label: '智慧', value: sc.wisdom, color: '#3b82f6' },
+    { key: 'emotion', label: '情感', value: sc.emotion, color: '#ec4899' },
+    { key: 'charm', label: '魅力', value: sc.charm, color: '#f59e0b' }
+  ]
+  return items.filter(a => a.value !== '' && a.value !== null && a.value !== undefined)
+})
+const hasAnyAbility = computed(() => abilityList.value.length > 0)
 
 function viewCharacter(char) {
   selectedCharacter.value = char
@@ -1879,19 +2015,42 @@ const editingCharacter = ref(null)
 const editForm = reactive({
   name: '',
   role: 'supporting',
+  type: '',
+  age: '',
+  avatarColor: '#d97706',
   description: '',
-  arc: 0
+  personality: '',
+  relation: '',
+  arcStart: '',
+  arcEnd: '',
+  arc: 0,
+  combat: '',
+  wisdom: '',
+  emotion: '',
+  charm: '',
+  lastSeen: ''
 })
 
 function openEditCharacter() {
   if (!selectedCharacter.value) return
-  editingCharacter.value = selectedCharacter.value
-  editForm.name = selectedCharacter.value.name || ''
-  editForm.role = selectedCharacter.value.role?.includes('主角') ? 'protagonist' :
-                   selectedCharacter.value.role?.includes('反派') ? 'antagonist' :
-                   selectedCharacter.value.role?.includes('次要') ? 'minor' : 'supporting'
-  editForm.description = selectedCharacter.value.bio || ''
-  editForm.arc = selectedCharacter.value.arc || 0
+  const sc = selectedCharacter.value
+  editingCharacter.value = sc
+  editForm.name = sc.name || ''
+  editForm.role = ['protagonist', 'antagonist', 'supporting', 'minor'].includes(sc.role) ? sc.role : 'supporting'
+  editForm.type = sc.type || ''
+  editForm.age = sc.age ?? ''
+  editForm.avatarColor = sc.avatarColor || '#d97706'
+  editForm.description = sc.description || ''
+  editForm.personality = sc.personality || ''
+  editForm.relation = sc.relation || ''
+  editForm.arcStart = sc.arcStart || ''
+  editForm.arcEnd = sc.arcEnd || ''
+  editForm.arc = sc.arc || 0
+  editForm.combat = sc.combat ?? ''
+  editForm.wisdom = sc.wisdom ?? ''
+  editForm.emotion = sc.emotion ?? ''
+  editForm.charm = sc.charm ?? ''
+  editForm.lastSeen = sc.lastSeen || ''
   showEditCharacter.value = true
 }
 
@@ -1902,13 +2061,23 @@ async function saveCharacterEdit() {
     return
   }
   try {
-    const roleMap = { protagonist: '⭐ 主角', supporting: '👤 配角', antagonist: '🔥 反派', minor: '📖 次要角色' }
     await characterApi.update(store.currentProjectId, editingCharacter.value.id, {
       name: editForm.name.trim(),
       role: editForm.role,
+      type: editForm.type.trim(),
+      age: toIntOrNull(editForm.age),
+      avatarColor: editForm.avatarColor,
       description: editForm.description.trim(),
+      personality: editForm.personality.trim(),
+      relation: editForm.relation.trim(),
+      arcStart: editForm.arcStart.trim(),
+      arcEnd: editForm.arcEnd.trim(),
       arcProgress: editForm.arc,
-      tags: ''
+      combat: toIntOrNull(editForm.combat),
+      wisdom: toIntOrNull(editForm.wisdom),
+      emotion: toIntOrNull(editForm.emotion),
+      charm: toIntOrNull(editForm.charm),
+      lastSeen: editForm.lastSeen.trim()
     })
     await store.refreshCharacters(store.currentProjectId)
     showChapterToast('角色已更新', 'success')
@@ -1924,13 +2093,20 @@ const showCharacterDialog = ref(false)
 const characterForm = reactive({
   name: '',
   role: 'supporting',
+  type: '',
   description: '',
-  persona: '',
   age: '',
   avatarColor: '#d97706',
   personality: '',
-  relationships: '',
-  arcProgress: 0
+  relation: '',
+  arcStart: '',
+  arcEnd: '',
+  arcProgress: 0,
+  combat: '',
+  wisdom: '',
+  emotion: '',
+  charm: '',
+  lastSeen: ''
 })
 
 const arcProgressStyle = computed(() => {
@@ -1945,13 +2121,20 @@ const arcProgressStyle = computed(() => {
 function resetCharacterForm() {
   characterForm.name = ''
   characterForm.role = 'supporting'
+  characterForm.type = ''
   characterForm.description = ''
-  characterForm.persona = ''
   characterForm.age = ''
   characterForm.avatarColor = '#d97706'
   characterForm.personality = ''
-  characterForm.relationships = ''
+  characterForm.relation = ''
+  characterForm.arcStart = ''
+  characterForm.arcEnd = ''
   characterForm.arcProgress = 0
+  characterForm.combat = ''
+  characterForm.wisdom = ''
+  characterForm.emotion = ''
+  characterForm.charm = ''
+  characterForm.lastSeen = ''
 }
 
 async function handleCreateCharacter() {
@@ -1964,13 +2147,20 @@ async function handleCreateCharacter() {
     await store.createCharacter(store.currentProjectId, {
       name: characterForm.name.trim(),
       role: characterForm.role,
+      type: characterForm.type.trim(),
       description: characterForm.description.trim(),
-      persona: characterForm.persona.trim(),
-      age: characterForm.age.trim(),
+      age: toIntOrNull(characterForm.age),
       avatarColor: characterForm.avatarColor,
       personality: characterForm.personality.trim(),
-      relationships: characterForm.relationships.trim(),
-      arc: characterForm.arcProgress
+      relation: characterForm.relation.trim(),
+      arcStart: characterForm.arcStart.trim(),
+      arcEnd: characterForm.arcEnd.trim(),
+      arcProgress: characterForm.arcProgress,
+      combat: toIntOrNull(characterForm.combat),
+      wisdom: toIntOrNull(characterForm.wisdom),
+      emotion: toIntOrNull(characterForm.emotion),
+      charm: toIntOrNull(characterForm.charm),
+      lastSeen: characterForm.lastSeen.trim()
     })
     showChapterToast('角色创建成功', 'success')
     showCharacterDialog.value = false

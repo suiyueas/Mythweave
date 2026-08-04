@@ -236,12 +236,21 @@ public class PromptTemplates {
                 {
                   "name": "姓名",
                   "role": "protagonist|supporting|antagonist|minor",
+                  "type": "人物类型（如剑客、法师、医者、匠人、普通人）",
                   "age": 数字,
                   "personality": "性格（3-5关键词）",
+                  "appearance": "外貌特征（服饰、体型、标志物，30-80字）",
                   "background": "身世背景",
                   "motivation": "核心动机",
-                  "arc": "成长弧光（起点→终点）",
+                  "arcStart": "弧光起点（故事开始时的状态，10-20字）",
+                  "arcEnd": "弧光终点（故事结束时的蜕变，10-20字）",
+                  "arc": "成长弧光简述（起点→终点）",
                   "ability": "特殊能力",
+                  "combat": 战斗力(0-100整数),
+                  "wisdom": 智慧(0-100整数),
+                  "emotion": 情感(0-100整数),
+                  "charm": 魅力(0-100整数),
+                  "lastSeen": "预计最后登场章节或场景",
                   "tags": ["标签1", "标签2"],
                   "relationships": [
                     {"targetName": "关联人物名", "type": "师徒|恋人|敌对|盟友|父子|其他"}
@@ -250,7 +259,7 @@ public class PromptTemplates {
               ]
             }
             
-            【约束】：至少1位主角、2位配角、1位反派；性格有冲突与互补；动机合理有深度；标签准确。
+            【约束】：至少1位主角、2位配角、1位反派；性格有冲突与互补；动机合理有深度；标签准确；能力值符合角色定位（主角综合偏高但需有短板）。
             
             【重要】只输出纯JSON，不要任何解释、前缀或后缀。直接以 {{ 开头。
             """;
@@ -313,10 +322,10 @@ public class PromptTemplates {
                 ]
               },
               "subThreads": [
-                {"title": "支线名", "description": "描述", "relatedChapters": [章节号数组], "involves": ["人物名"]}
+                {"title": "支线名", "description": "描述", "relatedChapters": [章节号数组], "involves": ["人物名"], "color": "代表色(hex，如#0d9488)"}
               ],
               "foreshadowing": [
-                {"title": "伏笔名", "buriedAt": 埋下章, "revealAt": 回收章, "hint": "线索提示", "importance": "core|minor"}
+                {"title": "伏笔名", "buriedAt": 埋下章, "revealAt": 回收章, "hint": "线索提示", "importance": "core|minor", "severity": "critical|warning|normal"}
               ],
               "tensionCurve": [
                 {"chapterRange": "1-10", "tension": 1-10, "label": "描述"}
@@ -343,7 +352,7 @@ public class PromptTemplates {
             【输出要求】：请生成至少15条灵感素材，JSON格式：
             {
               "items": [
-                {"category": "dialogue|scene|detail|reference", "content": "素材内容（30-100字）", "relatedTo": ["关联要素"], "usageHint": "使用建议章节或情境"}
+                {"category": "dialogue|scene|detail|reference", "content": "素材内容（30-100字）", "relatedTo": ["关联要素"], "usageHint": "使用建议章节或情境", "highlight": true}
               ]
             }
             

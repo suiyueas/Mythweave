@@ -9,6 +9,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理器
@@ -118,6 +119,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public R<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return R.badRequest("参数 " + e.getName() + " 类型错误");
+    }
+
+    /**
+     * 处理业务运行时异常（如登录密码错误、用户名已存在等）
+     * 这类异常属于可预期的业务校验失败，应返回 400 而非 500，避免前端误判为服务器故障
+     *
+     * @param e 业务运行时异常
+     * @return 错误响应
+     */
+    @ExceptionHandler(RuntimeException.class)
+    public R<Void> handleRuntimeException(RuntimeException e) {
+        log.warn("业务异常: {}", e.getMessage());
+        return R.badRequest(e.getMessage());
+    }
+
+    /**
+     * 处理静态资源不存在（Spring 6.1+ 对未知路径抛出的异常）
+     * 返回 404 而非 500，避免误报服务器错误
+     *
+     * @param e 资源不存在异常
+     * @return 错误响应
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public R<Void> handleNoResource(NoResourceFoundException e) {
+        log.warn("资源不存在: {}", e.getMessage());
+        return R.notFound("接口不存在: " + e.getResourcePath());
     }
 
     /**

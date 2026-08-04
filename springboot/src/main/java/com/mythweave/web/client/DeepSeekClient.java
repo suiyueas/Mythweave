@@ -55,7 +55,7 @@ public class DeepSeekClient {
      * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens) throws IOException {
-        return chat(systemPrompt, userMessage, temperature, maxTokens, null);
+        return chat(systemPrompt, userMessage, temperature, maxTokens, (List<String>) null, (Integer) null);
     }
 
     /**
@@ -70,10 +70,38 @@ public class DeepSeekClient {
      * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop) throws IOException {
+        return chat(systemPrompt, userMessage, temperature, maxTokens, stop, (Integer) null);
+    }
+
+    /**
+     * 非流式调用（带推理 token 上限）
+     * 
+     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
+     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
+     */
+    public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, Integer maxReasoningTokens) throws IOException {
+        return chat(systemPrompt, userMessage, temperature, maxTokens, (List<String>) null, maxReasoningTokens);
+    }
+
+    /**
+     * 非流式调用（完整参数）
+     * 
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户消息
+     * @param temperature 温度参数
+     * @param maxTokens 最大生成token数
+     * @param stop 停止序列列表（如 ["\\n\\n"]），命中后提前终止生成，可为null
+     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
+     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
+     * @return AI生成的完整回复
+     * @throws IOException 调用失败时抛出
+     */
+    public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop, Integer maxReasoningTokens) throws IOException {
         Map<String, Object> body = new HashMap<>();
         body.put("model", aiProperties.getDeepseek().getModel());
         body.put("temperature", temperature);
         body.put("max_tokens", maxTokens);
+        applyMaxReasoningTokens(body, maxReasoningTokens);
         if (stop != null && !stop.isEmpty()) {
             body.put("stop", stop);
         }
@@ -145,16 +173,28 @@ public class DeepSeekClient {
      */
     public int chatStream(String systemPrompt, String userMessage, double temperature,
                            int maxTokens, java.util.function.Consumer<String> onToken) throws IOException {
-        Map<String, Object> body = Map.of(
-                "model", aiProperties.getDeepseek().getModel(),
-                "temperature", temperature,
-                "max_tokens", maxTokens,
-                "stream", true,
-                "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", userMessage)
-                )
-        );
+        return chatStream(systemPrompt, userMessage, temperature, maxTokens, onToken, null);
+    }
+
+    /**
+     * 流式SSE调用（带推理 token 上限）
+     * 
+     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
+     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
+     */
+    public int chatStream(String systemPrompt, String userMessage, double temperature,
+                           int maxTokens, java.util.function.Consumer<String> onToken,
+                           Integer maxReasoningTokens) throws IOException {
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", aiProperties.getDeepseek().getModel());
+        body.put("temperature", temperature);
+        body.put("max_tokens", maxTokens);
+        applyMaxReasoningTokens(body, maxReasoningTokens);
+        body.put("stream", true);
+        body.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userMessage)
+        ));
 
         Request request = new Request.Builder()
                 .url(aiProperties.getDeepseek().getBaseUrl() + "/chat/completions")
@@ -171,6 +211,7 @@ public class DeepSeekClient {
             try (java.io.BufferedReader reader = new java.io.BufferedReader(
                     new java.io.InputStreamReader(response.body().byteStream()))) {
                 int totalTokens = 0;
+                int reasoningTokens = 0;
                 while ((line = reader.readLine()) != null) {
                     if (line.startsWith("data: ") && !line.equals("data: [DONE]")) {
                         String json = line.substring(6);
@@ -181,16 +222,42 @@ public class DeepSeekClient {
                                 onToken.accept(delta.asText());
                             }
                             JsonNode usage = root.path("usage");
-                            if (!usage.isMissingNode() && usage.has("total_tokens")) {
-                                totalTokens = usage.path("total_tokens").asInt();
+                            if (!usage.isMissingNode()) {
+                                if (usage.has("total_tokens")) {
+                                    totalTokens = usage.path("total_tokens").asInt();
+                                }
+                                // 推理 token 统计（deepseek-reasoner 流式响应携带），用于观测推理消耗
+                                JsonNode details = usage.path("completion_tokens_details");
+                                if (details.has("reasoning_tokens")) {
+                                    reasoningTokens = details.path("reasoning_tokens").asInt();
+                                }
                             }
                         } catch (Exception ignored) {
                             // skip parse errors
                         }
                     }
                 }
+                log.info("DeepSeek流式完成: totalTokens={}, reasoningTokens={}", totalTokens, reasoningTokens);
                 return totalTokens;
             }
+        }
+    }
+
+    /**
+     * 为推理模型设置 max_reasoning_tokens：独立限制思维链长度，
+     * 防止推理过长耗尽 max_tokens 预算导致正文（content）被截断或缺失。
+     * 该参数仅 deepseek-reasoner 等推理模型支持，非推理模型传参会报错，故按模型名自动判断。
+     * 显式传入的参数优先，否则回退到配置默认值。
+     */
+    private void applyMaxReasoningTokens(Map<String, Object> body, Integer maxReasoningTokens) {
+        if (maxReasoningTokens == null) {
+            maxReasoningTokens = aiProperties.getDeepseek().getMaxReasoningToken();
+        }
+        String model = aiProperties.getDeepseek().getModel();
+        boolean reasoningModel = model != null && model.toLowerCase().contains("reasoner");
+        if (reasoningModel && maxReasoningTokens != null && maxReasoningTokens > 0) {
+            body.put("max_reasoning_tokens", maxReasoningTokens);
+            log.debug("已设置 max_reasoning_tokens={}（模型={}）", maxReasoningTokens, model);
         }
     }
 }

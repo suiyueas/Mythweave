@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -178,7 +179,7 @@ public class NovelSetupService {
             prompt = prompt + "\n\n【用户额外要求】：" + direction;
         }
 
-        String rawJson = callAI(prompt, 0.8, 4096);
+        String rawJson = callAI(prompt, 0.8, 8192);
         saveCharacters(projectId, rawJson);
 
         Map<String, Object> parsed = parseCharactersForPreview(rawJson);
@@ -240,7 +241,7 @@ public class NovelSetupService {
             prompt = prompt + "\n\n【用户额外要求】：" + direction;
         }
 
-        String rawJson = callAI(prompt, 0.7, 4096);
+        String rawJson = callAI(prompt, 0.7, 8192);
         savePlotEngine(projectId, rawJson);
 
         Map<String, Object> parsed = parsePlotForPreview(rawJson);
@@ -273,8 +274,10 @@ public class NovelSetupService {
             prompt = prompt + "\n\n【用户额外要求】：" + direction;
         }
 
-        String rawJson = callAI(prompt, 0.8, 3072);
+        String rawJson = callAI(prompt, 0.8, 4096);
         saveInspirations(projectId, rawJson);
+        // 分步模式完成全部模块后同样回写项目汇总字段
+        updateProjectSummary(projectId);
 
         Map<String, Object> parsed = parseInspirationsForPreview(rawJson);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -316,7 +319,7 @@ public class NovelSetupService {
                 .replace("{inspiration}", str(ctx, "inspiration"))
                 .replace("{world}", summarize(worldJson, 800))
                 .replace("{style}", str(ctx, "style"));
-            String charJson = callAI(charPrompt, 0.8, 4096);
+            String charJson = callAI(charPrompt, 0.8, 8192);
             ctx.put("charactersRaw", charJson);
             saveCharacters(projectId, charJson);
             updateStep(task, "characters", "completed", "人物群像已生成");
@@ -346,7 +349,7 @@ public class NovelSetupService {
                 .replace("{outline}", summarize(outlineJson, 600))
                 .replace("{characters}", summarize(charJson, 400))
                 .replace("{style}", str(ctx, "style"));
-            String plotJson = callAI(plotPrompt, 0.7, 4096);
+            String plotJson = callAI(plotPrompt, 0.7, 8192);
             ctx.put("plotRaw", plotJson);
             savePlotEngine(projectId, plotJson);
             updateStep(task, "plot", "completed", "情节引擎已生成");
@@ -362,11 +365,14 @@ public class NovelSetupService {
                 .replace("{outline}", summarize(outlineJson, 300))
                 .replace("{plot}", summarize(plotJson, 300))
                 .replace("{style}", str(ctx, "style"));
-            String inspJson = callAI(inspPrompt, 0.8, 3072);
+            String inspJson = callAI(inspPrompt, 0.8, 4096);
             ctx.put("inspirationsRaw", inspJson);
             saveInspirations(projectId, inspJson);
             updateStep(task, "inspirations", "completed", "灵感素材库已生成");
             task.progress = 100;
+
+            // 全部模块生成完毕后，回写项目汇总字段（coreSetting/worldSettings/characters/outlines）
+            updateProjectSummary(projectId);
 
             task.status = "completed";
 
@@ -396,6 +402,7 @@ public class NovelSetupService {
         s.setCategory(category);
         s.setContent(content);
         s.setLevel(level);
+        s.setStatus("active");
         worldSettingMapper.insert(s);
     }
 
@@ -534,9 +541,18 @@ public class NovelSetupService {
     // ════════════════════════════════════
     private String callAI(String prompt, double temp, int maxTokens) throws IOException {
         // 推理型模型会先消耗推理 token 导致 JSON 截断，system prompt 明确禁止推理输出
-        String raw = deepSeekClient.chat("你是一位专业的小说创作助手。严格按要求输出，不要输出任何推理过程、思考或解释。", prompt, temp, maxTokens);
-        log.debug("AI 原始响应（前200字）: {}", raw != null ? raw.substring(0, Math.min(200, raw.length())) : "null");
-        return raw;
+        try {
+            String raw = deepSeekClient.chat("你是一位专业的小说创作助手。严格按要求输出，不要输出任何推理过程、思考或解释。", prompt, temp, maxTokens);
+            log.debug("AI 原始响应（前200字）: {}", raw != null ? raw.substring(0, Math.min(200, raw.length())) : "null");
+            return raw;
+        } catch (IOException e) {
+            // 推理模型可能因推理占用全部预算而无正文（finish_reason=length），
+            // 重试时把预算提升到 16384 并再次强化抑制推理指令
+            log.warn("AI 调用失败（{}），使用更大预算重试...", e.getMessage());
+            return deepSeekClient.chat(
+                    "你是一位专业的小说创作助手。严禁输出任何推理过程、思考、分析或解释，直接输出要求的最终内容。",
+                    prompt, temp, 16384);
+        }
     }
 
     private String str(Map<String, Object> ctx, String key) {
@@ -643,6 +659,7 @@ public class NovelSetupService {
                 ws.setCategory(displayName);
                 ws.setContent(content);
                 ws.setLevel(1);
+                ws.setStatus("active");
                 settings.add(ws);
             }
 
@@ -686,17 +703,73 @@ public class NovelSetupService {
                     ch.setProjectId(projectId);
                     ch.setName(c.path("name").asText(""));
                     ch.setRole(c.path("role").asText(""));
-                    ch.setAge(c.path("age").asInt(0));
+                    // 人物类型（如剑客、法师、医者）
+                    ch.setType(c.path("type").asText(""));
+                    ch.setAge(c.has("age") && c.path("age").canConvertToInt() ? c.path("age").asInt() : null);
+                    // 头像颜色：AI 未指定时按姓名稳定分配色板
+                    ch.setAvatarColor(pickAvatarColor(c.path("name").asText("")));
                     ch.setPersonality(c.path("personality").asText(""));
-                    ch.setDescription(c.path("background").asText(""));
-                    ch.setRelation("动机：" + c.path("motivation").asText("")
-                        + "\n弧光：" + c.path("arc").asText(""));
+                    // 简介 = 外貌 + 身世背景
+                    ch.setDescription(joinNonEmpty("\n", c.path("appearance").asText(""), c.path("background").asText("")));
+                    // 关系 = 动机 + 弧光 + 能力 + 人物关系网络
+                    StringBuilder rel = new StringBuilder();
+                    appendLine(rel, "动机", c.path("motivation").asText(""));
+                    appendLine(rel, "弧光", c.path("arc").asText(""));
+                    appendLine(rel, "能力", c.path("ability").asText(""));
+                    JsonNode rels = c.path("relationships");
+                    if (rels.isArray() && rels.size() > 0) {
+                        List<String> parts = new ArrayList<>();
+                        for (JsonNode r : rels) {
+                            String target = r.path("targetName").asText("");
+                            String type = r.path("type").asText("");
+                            if (!target.isEmpty()) parts.add(target + (type.isEmpty() ? "" : "（" + type + "）"));
+                        }
+                        if (!parts.isEmpty()) appendLine(rel, "关系", String.join("、", parts));
+                    }
+                    ch.setRelation(rel.length() > 0 ? rel.toString() : null);
+                    // 弧光起点/终点/进度
+                    ch.setArcStart(c.path("arcStart").asText(""));
+                    ch.setArcEnd(c.path("arcEnd").asText(""));
+                    ch.setArcProgress(c.has("arcProgress") && c.path("arcProgress").canConvertToInt() ? c.path("arcProgress").asInt() : 0);
+                    // 四项能力值（AI 未输出时保持 NULL）
+                    ch.setCombat(intOrNull(c, "combat"));
+                    ch.setWisdom(intOrNull(c, "wisdom"));
+                    ch.setEmotion(intOrNull(c, "emotion"));
+                    ch.setCharm(intOrNull(c, "charm"));
+                    // 最后登场
+                    ch.setLastSeen(c.path("lastSeen").asText(""));
                     characterMapper.insert(ch);
                 }
             }
         } catch (Exception e) {
             log.warn("保存人物失败，JSON前100字: {}", json != null ? json.substring(0, Math.min(100, json.length())) : "null", e);
         }
+    }
+
+    /** 拼接非空文本块，空值自动跳过 */
+    private String joinNonEmpty(String sep, String... parts) {
+        return Arrays.stream(parts).filter(p -> p != null && !p.isBlank()).collect(Collectors.joining(sep));
+    }
+
+    /** 向 StringBuilder 追加「标签：内容」行，空值跳过 */
+    private void appendLine(StringBuilder sb, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(label).append("：").append(value.trim());
+        }
+    }
+
+    /** 读取 JSON 整数字段，缺失/非法时返回 null */
+    private Integer intOrNull(JsonNode node, String field) {
+        JsonNode v = node.path(field);
+        return v.canConvertToInt() ? v.asInt() : null;
+    }
+
+    /** 按姓名稳定分配头像色板 */
+    private String pickAvatarColor(String name) {
+        if (name == null || name.isEmpty()) return "#d97706";
+        String[] palette = {"#d97706", "#0d9488", "#6366f1", "#db2777", "#16a34a", "#dc2626", "#7c3aed", "#0891b2", "#ca8a04", "#4f46e5"};
+        return palette[Math.floorMod(name.hashCode(), palette.length)];
     }
 
     private void saveOutlines(Long projectId, String json) {
@@ -810,6 +883,8 @@ public class NovelSetupService {
             mainThread.setDescription(main.path("description").asText(""));
             mainThread.setType("main");
             mainThread.setProgress(0);
+            // 主线颜色：AI 指定优先，否则用类型色板
+            mainThread.setColor(main.path("color").asText("#d97706"));
             plotThreadMapper.insert(mainThread);
 
             // 支线
@@ -819,10 +894,23 @@ public class NovelSetupService {
                     NovelPlotThread st = new NovelPlotThread();
                     st.setProjectId(projectId);
                     st.setName(sub.path("title").asText(""));
-                    st.setDescription(sub.path("description").asText(""));
+                    // 描述 = 原描述 + 涉及人物
+                    String desc = sub.path("description").asText("");
+                    JsonNode involves = sub.path("involves");
+                    if (involves.isArray() && involves.size() > 0) {
+                        List<String> names = new ArrayList<>();
+                        involves.forEach(n -> names.add(n.asText("")));
+                        String joined = names.stream().filter(s -> !s.isBlank()).collect(Collectors.joining("、"));
+                        if (!joined.isBlank()) {
+                            desc = desc + (desc.isBlank() ? "" : "\n") + "涉及人物：" + joined;
+                        }
+                    }
+                    st.setDescription(desc);
                     st.setType("sub");
                     st.setProgress(0);
                     st.setChapters(sub.path("relatedChapters").toString());
+                    // 支线颜色：AI 指定优先，否则按顺序取色板
+                    st.setColor(sub.path("color").asText(""));
                     plotThreadMapper.insert(st);
                 }
             }
@@ -838,12 +926,40 @@ public class NovelSetupService {
                     nf.setChapterId(f.path("buriedAt").asLong(0L));
                     nf.setResolvedChapterId(f.path("revealAt").asLong(0L));
                     nf.setStatus("pending");
-                    nf.setSeverity("core".equals(f.path("importance").asText("")) ? "critical" : "normal");
+                    // 严重度：AI 明确指定优先，否则按 importance 映射
+                    String severity = f.path("severity").asText("");
+                    if (severity.isBlank()) {
+                        severity = "core".equals(f.path("importance").asText("")) ? "critical" : "normal";
+                    }
+                    nf.setSeverity(severity);
                     foreshadowingMapper.insert(nf);
                 }
             }
+
+            // 张力曲线：AI 生成但表无对应字段，追加到项目 coreSetting 附段供后续使用
+            JsonNode tension = root.path("tensionCurve");
+            if (tension.isArray() && tension.size() > 0) {
+                saveTensionCurve(projectId, objectMapper.writeValueAsString(tension));
+            }
         } catch (Exception e) {
             log.warn("保存情节引擎失败，JSON前100字: {}", json != null ? json.substring(0, Math.min(100, json.length())) : "null", e);
+        }
+    }
+
+    /** 保存 AI 张力曲线到项目 coreSetting 附段（【张力曲线】标记，供节奏分析使用） */
+    private void saveTensionCurve(Long projectId, String tensionJson) {
+        try {
+            NovelProject project = projectMapper.selectById(projectId);
+            if (project == null) return;
+            String core = project.getCoreSetting() == null ? "" : project.getCoreSetting();
+            // 幂等：移除旧的张力曲线附段再追加
+            core = core.replaceAll("【张力曲线】\\n?[\\s\\S]*?((?=【)|\\z)", "");
+            core = core.trim();
+            if (!core.isEmpty()) core += "\n";
+            project.setCoreSetting(core + "【张力曲线】\n" + tensionJson);
+            projectMapper.updateById(project);
+        } catch (Exception e) {
+            log.warn("保存张力曲线失败: {}", e.getMessage());
         }
     }
 
@@ -862,12 +978,90 @@ public class NovelSetupService {
                     insp.setProjectId(projectId);
                     insp.setType(item.path("category").asText(""));
                     insp.setContent(item.path("content").asText(""));
-                    insp.setTags(item.path("usageHint").asText(""));
+                    // 标签 = 关联要素 + 使用建议
+                    List<String> tagParts = new ArrayList<>();
+                    JsonNode relatedTo = item.path("relatedTo");
+                    if (relatedTo.isArray()) {
+                        relatedTo.forEach(n -> {
+                            String s = n.asText("");
+                            if (!s.isBlank()) tagParts.add(s.trim());
+                        });
+                    }
+                    String usageHint = item.path("usageHint").asText("");
+                    if (!usageHint.isBlank()) tagParts.add("建议：" + usageHint.trim());
+                    insp.setTags(tagParts.isEmpty() ? null : String.join("、", tagParts));
+                    insp.setSource("ai");
+                    insp.setIsHighlight(item.path("highlight").asBoolean(false));
                     inspirationMapper.insert(insp);
                 }
             }
         } catch (Exception e) {
             log.warn("保存灵感素材失败，JSON前100字: {}", json != null ? json.substring(0, Math.min(100, json.length())) : "null", e);
         }
+    }
+
+    /**
+     * 生成完成后回写项目汇总字段（coreSetting/worldSettings/characters/outlines）
+     * 使项目详情与 AI 上下文能读取到完整设定；保留已有张力曲线附段
+     */
+    private void updateProjectSummary(Long projectId) {
+        try {
+            NovelProject project = projectMapper.selectById(projectId);
+            if (project == null) return;
+
+            List<NovelWorldSetting> worlds = worldSettingMapper.selectByProjectId(projectId);
+            List<NovelCharacter> chars = characterMapper.selectByProjectId(projectId);
+            List<NovelOutline> outlines = outlineMapper.selectByProjectId(projectId);
+
+            // 世界观汇总 → coreSetting（保留旧张力曲线附段）
+            StringBuilder core = new StringBuilder();
+            if (worlds != null) {
+                for (NovelWorldSetting w : worlds) {
+                    if (w.getName() != null && !w.getName().isBlank()) {
+                        core.append("【").append(w.getName()).append("】").append(w.getContent()).append("\n");
+                    }
+                }
+            }
+            String coreText = core.toString().trim();
+            String oldCore = project.getCoreSetting() == null ? "" : project.getCoreSetting();
+            int tensionIdx = oldCore.indexOf("【张力曲线】");
+            if (tensionIdx >= 0) {
+                String tensionPart = oldCore.substring(tensionIdx);
+                coreText = coreText + (coreText.isEmpty() ? "" : "\n") + tensionPart;
+            }
+            project.setCoreSetting(coreText.isEmpty() ? null : coreText);
+
+            if (worlds != null) project.setWorldSettings(objectMapper.writeValueAsString(worlds));
+            if (chars != null) {
+                project.setCharacters(objectMapper.writeValueAsString(chars));
+                project.setCharactersFormatted(buildCharactersFormatted(chars));
+            }
+            if (outlines != null) project.setOutlines(objectMapper.writeValueAsString(outlines));
+
+            projectMapper.updateById(project);
+            log.info("📦 项目汇总字段回写完成 projectId={}, 世界观={}, 人物={}, 大纲={}",
+                    projectId, worlds == null ? 0 : worlds.size(), chars == null ? 0 : chars.size(), outlines == null ? 0 : outlines.size());
+        } catch (Exception e) {
+            log.warn("回写项目汇总失败: {}", e.getMessage());
+        }
+    }
+
+    /** 生成格式化人物文本（供 AI 上下文与详情使用） */
+    private String buildCharactersFormatted(List<NovelCharacter> chars) {
+        if (chars == null || chars.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < chars.size(); i++) {
+            NovelCharacter c = chars.get(i);
+            sb.append("【人物").append(i + 1).append("】").append(c.getName() == null ? "" : c.getName());
+            if (c.getRole() != null && !c.getRole().isBlank()) sb.append(" · ").append(c.getRole());
+            sb.append("\n");
+            appendLine(sb, "年龄", c.getAge() == null ? "" : String.valueOf(c.getAge()));
+            appendLine(sb, "类型", c.getType());
+            appendLine(sb, "性格", c.getPersonality());
+            appendLine(sb, "背景", c.getDescription());
+            appendLine(sb, "关系", c.getRelation());
+            if (i < chars.size() - 1) sb.append("\n");
+        }
+        return sb.toString();
     }
 }

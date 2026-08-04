@@ -257,20 +257,20 @@ public class AiChatService {
     /**
      * 非流式对话
      * 推理模型会先消耗大量推理 token 导致回答被截断（finish_reason=length），
-     * 因此：1) system prompt 明确抑制推理输出（治本）；2) maxTokens 提至 8192（保底）；
-     * 3) 失败后轻量重试一次
+     * 因此：1) system prompt 明确抑制推理输出（治本）；2) maxTokens 提至 8192；
+     * 3) maxReasoningTokens 限制思维链上限 4096，剩余预算自动留给正文；4) 失败后轻量重试一次
      */
     public String chat(Long projectId, String userMessage) throws IOException {
         String reply;
         try {
             reply = deepSeekClient.chat(
                     "你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。",
-                    userMessage, 0.7, 8192);
+                    userMessage, 0.7, 8192, 4096);
         } catch (IOException e) {
             log.warn("AI对话首次调用失败（推理耗尽/无正文），轻量重试: {}", e.getMessage());
             reply = deepSeekClient.chat(
                     "你是AI写作助手。立即直接回答用户的问题，禁止任何推理、分析、思考过程或解释。",
-                    userMessage, 0.6, 8192);
+                    userMessage, 0.6, 8192, 4096);
         }
 
         // 保存会话记录
@@ -653,8 +653,9 @@ public class AiChatService {
 
         // maxTokens 8192：推理型模型会先消耗推理 token，4096 常导致 finish_reason=length 截断（正文不足千字）
         // system prompt 明确禁止推理输出，减少推理 token 消耗
+        // maxReasoningTokens 4096：显式划分推理与正文配额，推理上限 4096，剩余预算保证正文完整生成
         int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。",
-                prompt, 0.8, 8192, onToken);
+                prompt, 0.8, 8192, onToken, 4096);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -883,7 +884,7 @@ public class AiChatService {
         prompt.append("7. 【重要】不要添加任何结构标签（如\"开篇场景\"、\"发展\"、\"高潮\"、\"结尾\"等），直接输出正文\n");
         prompt.append("8. 无需输出标题，直接开始写正文内容\n");
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。", prompt.toString(), 0.7, 8192);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。", prompt.toString(), 0.7, 8192, 4096);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -914,7 +915,7 @@ public class AiChatService {
             }
         }
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家。直接输出扩写后的完整文本，不要任何推理过程、思考或解释。", prompt, 0.7, 8192);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接输出扩写后的完整文本，不要任何推理过程、思考或解释。", prompt, 0.7, 8192, 4096);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
