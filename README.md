@@ -35,27 +35,28 @@
 - 势力与派系设定
 
 ### ✍️ 智能写作
-- AI 续写与润色
+- AI 续写与润色（SSE 流式输出，30s 心跳保活 + 断线重连）
 - 多章节并发写作
 - 章节版本管理
-- 上下文记忆（RAG + 向量检索）
+- 上下文记忆（RAG 混合检索：kNN 向量召回 + BM25 关键词融合）
 
 ### 🛡️ 智能哨兵
 - 伏笔遗漏巡查
 - 逻辑矛盾检测
 - 写作节奏分析
 - 人物出场统计
+- WebSocket 实时告警推送
 
 ### 👑 VIP 会员系统
 - AI 功能权限拦截（免费用户限次，VIP 无限畅用）
-- 专属写作模板与续写润色服务
+- 后端二次校验（防止绕过前端直接调接口）
 - 多档位套餐（月度/季度/年度）
 - 微信/支付宝模拟支付
 - VIP 到期续费与状态管理
 
 ### 🔍 全局搜索
 - 基于 Elasticsearch 的全文搜索
-- 语义相似度匹配
+- 语义相似度匹配（千问 Embedding 1024 维向量）
 
 ## 🛠️ 技术栈
 
@@ -63,10 +64,11 @@
 - **框架**：Spring Boot 3.5 + Java 21
 - **ORM**：MyBatis Plus 3.5
 - **数据库**：MySQL 8.x
-- **缓存**：Redis
-- **搜索**：Elasticsearch 8.x
+- **缓存**：Redis（TTL 缓存 + 熔断降级）
+- **搜索**：Elasticsearch 8.x（kNN + BM25 混合检索）
+- **实时通信**：SSE 流式 + WebSocket
 - **API 文档**：Knife4j
-- **AI**：DeepSeek API + 千问 Embedding
+- **AI**：DeepSeek / Mimo / 千问 Embedding（多模型适配层）
 
 ### 前端
 - **框架**：Vue 3.4
@@ -76,23 +78,37 @@
 - **路由**：Vue Router 4
 - **图表**：ECharts 6
 
+## 🧠 核心架构亮点
+
+| 能力 | 说明 |
+|------|------|
+| RAG 混合检索 | 设定数据向量化入库，kNN 向量召回 + BM25 加权融合，相似度阈值过滤保证召回质量 |
+| SSE 流式生成 | 异步流式替代轮询，30s 心跳保活 + 3 次指数退避重连，长文生成不中断 |
+| 推理模型 Token 治理 | 通过 `max_reasoning_tokens` 划分离推理与正文预算，解决思维链过长导致的正文截断 |
+| 多 Agent 协作 | 编辑/人物/风格/读者 4 个职责单一 Agent，协调器流水线并行调度 |
+| 智能巡检 | 规则引擎 + 关键词统计构建 4 类扫描器，规则热更新，WebSocket 秒级告警 |
+| 稳定性治理 | Redis 熔断降级、AI 调用指数退避重试、启动缓存预热 |
+
 ## 📦 项目结构
 
 ```
 AI-novel/
-├── springboot/          # Spring Boot 3.5 后端项目
+├── springboot/                 # Spring Boot 3.5 后端项目
 │   ├── src/
 │   │   ├── main/
-│   │   │   ├── java/    # Java 源代码
+│   │   │   ├── java/           # Java 源代码
 │   │   │   └── resources/
-│   │   │       ├── mapper/      # MyBatis 映射文件
-│   │   │       ├── sql/         # 数据库 SQL 脚本
-│   │   │       └── application*.yml  # 应用配置
-│   │   └── test/       # 测试代码
-│   └── pom.xml         # Maven 依赖配置
-├── .env.example        # 环境变量模板
-├── .gitignore          # Git 忽略配置
-└── README.md           # 项目说明文档
+│   │   │       ├── mapper/     # MyBatis 映射文件
+│   │   │       ├── sql/        # 数据库 SQL 脚本
+│   │   │       ├── application.yml           # 本地配置（不入库，含密钥）
+│   │   │       ├── application.example.yml   # 配置模板（入库存档）
+│   │   │       └── application-prod.yml      # 生产配置（环境变量）
+│   │   └── test/               # 测试代码
+│   └── pom.xml                 # Maven 依赖配置
+├── vue/                        # Vue 3 前端项目
+├── .env.example                # 环境变量模板
+├── .gitignore                  # Git 忽略配置
+└── README.md                   # 项目说明文档
 ```
 
 ## 🚀 快速开始
@@ -108,20 +124,31 @@ AI-novel/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/yourusername/AI-novel.git
-cd AI-novel
+git clone https://github.com/suiyueas/Mythweave.git
+cd Mythweave
 ```
 
-### 2. 配置环境变量
+### 2. 配置环境变量与密钥
 
 ```bash
-# 复制环境变量模板
-copy .env.example .env
-# 编辑 .env 填入你的配置
-
-# 或直接编辑配置文件
-copy springboot/src/main/resources/application.yml springboot/src/main/resources/application-local.yml
+# 复制配置模板为本地配置（模板中密钥均为环境变量占位符）
+copy springboot/src/main/resources/application.example.yml springboot/src/main/resources/application.yml
 ```
+
+编辑 `application.yml`,填入本地数据库密码与 API Key;或设置环境变量后保持占位符不动:
+
+```powershell
+# Windows PowerShell
+$env:DB_PASSWORD="你的数据库密码"
+$env:REDIS_PASSWORD="你的Redis密码"
+$env:ES_PASSWORD="你的ES密码"
+$env:DEEPSEEK_API_KEY="sk-xxx"
+$env:MIMO_API_KEY="sk-xxx"
+$env:QIANWEN_API_KEY="sk-xxx"
+$env:JWT_SECRET="随机64位字符串"
+```
+
+> ⚠️ `application.yml` 已被 `.gitignore` 排除,含密钥的配置永远不会被提交。
 
 ### 3. 创建数据库
 
@@ -142,20 +169,30 @@ mvn package
 java -jar target/mythweave-1.0.0-SNAPSHOT.jar
 ```
 
+### 5. 启动前端
+
+```bash
+cd vue
+npm install
+npm run dev
+# 访问 http://localhost:5173
+```
+
 ## ⚙️ 环境变量说明
 
-| 变量名 | 说明 | 示例 |
-|--------|------|------|
-| `DB_HOST` | MySQL 地址 | `localhost` |
-| `DB_PORT` | MySQL 端口 | `3306` |
-| `DB_NAME` | 数据库名 | `mythweave` |
-| `DB_USERNAME` | 数据库用户名 | `root` |
-| `DB_PASSWORD` | 数据库密码 | `***` |
-| `REDIS_*` | Redis 配置 | - |
-| `ES_*` | Elasticsearch 配置 | - |
-| `JWT_SECRET` | JWT 签名密钥 | 256位随机字符串 |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key | `sk-***` |
-| `QW_API_KEY` | 千问 API Key | `sk-***` |
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | MySQL 地址/端口/库名 | `localhost` / `3306` / `mythweave` |
+| `DB_PASSWORD` | 数据库密码 | 必填 |
+| `REDIS_PASSWORD` | Redis 密码 | 必填 |
+| `ES_PASSWORD` | Elasticsearch 密码 | 必填 |
+| `JWT_SECRET` | JWT 签名密钥（建议 64 位随机串） | 必填 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | 必填 |
+| `DEEPSEEK_MAX_TOKEN` | DeepSeek 生成上限 | `16384` |
+| `DEEPSEEK_MAX_REASONING_TOKEN` | 推理模型思维链上限 | `2048` |
+| `MIMO_API_KEY` | Mimo API Key | 可选 |
+| `QIANWEN_API_KEY` | 千问（通义）API Key | 可选 |
+| `AVATAR_PATH` | 头像存储路径 | `./vue/public/avatar` |
 
 ## 📄 API 文档
 
@@ -171,7 +208,7 @@ java -jar target/mythweave-1.0.0-SNAPSHOT.jar
 | `CharacterController` | 人物管理 |
 | `WorldSettingController` | 世界观管理 |
 | `OutlineController` | 大纲管理 |
-| `AiChatController` | AI 对话 |
+| `AiChatController` | AI 对话（SSE 流式） |
 | `SentinelController` | 智能哨兵 |
 | `SearchController` | 全局搜索 |
 | `UserController` | 用户管理 / VIP 会员 |
