@@ -2,7 +2,7 @@
   <div id="loading-overlay" :class="{ hidden: !visible }">
     <div class="loading-content">
       <div class="loading-icon">📖</div>
-      <div class="loading-title">NovelCraft AI</div>
+      <div class="loading-title">Mythweave AI</div>
       <div class="loading-subtitle">智能写作工作台 · 让AI成为你的副脑</div>
       <div class="loading-bar"><div class="loading-bar-inner"></div></div>
       <div class="loading-features">

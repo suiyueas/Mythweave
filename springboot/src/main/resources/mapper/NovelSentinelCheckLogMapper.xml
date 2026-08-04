@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelSentinelCheckLogMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelSentinelCheckLogMapper">
 
     <!-- ==================== 智能哨兵巡检日志查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelSentinelCheckLog> 巡检日志列表
         说明: 按开始时间倒序，用于展示巡检历史记录
     -->
-    <select id="selectRecent" resultType="com.novelcraft.web.entity.NovelSentinelCheckLog">
+    <select id="selectRecent" resultType="com.mythweave.web.entity.NovelSentinelCheckLog">
         SELECT * FROM novel_sentinel_check_log
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY started_at DESC

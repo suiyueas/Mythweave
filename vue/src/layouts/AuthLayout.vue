@@ -10,7 +10,7 @@
         <div class="brand-icon">
           <span class="brand-icon-mark">✍</span>
         </div>
-        <h1 class="brand-name">NovelCraft</h1>
+        <h1 class="brand-name">Mythweave</h1>
         <p class="brand-tagline">智能小说创作平台</p>
       </div>
       <!-- 卡片 -->

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelChapterVersionMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelChapterVersionMapper">
 
     <!-- ==================== 章节版本历史查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelChapterVersion> 版本历史列表
         说明: 按创建时间倒序，最新版本在前，用于章节版本回溯
     -->
-    <select id="selectByChapterId" resultType="com.novelcraft.web.entity.NovelChapterVersion">
+    <select id="selectByChapterId" resultType="com.mythweave.web.entity.NovelChapterVersion">
         SELECT * FROM novel_chapter_version
         WHERE chapter_id = #{chapterId} AND deleted = 0
         ORDER BY create_time DESC
@@ -23,7 +23,7 @@
         说明: 按 id 倒序（id 自增即创建顺序），可利用 idx_version_chapter 索引倒序扫描，避免 filesort；
               列表仅返回元信息，正文按需走 selectDetailById
     -->
-    <select id="selectSummaryByChapterId" resultType="com.novelcraft.web.entity.NovelChapterVersion">
+    <select id="selectSummaryByChapterId" resultType="com.mythweave.web.entity.NovelChapterVersion">
         SELECT id, chapter_id, word_count, version, change_note, create_time, update_time
         FROM novel_chapter_version
         WHERE chapter_id = #{chapterId} AND deleted = 0
@@ -36,7 +36,7 @@
         参数: id - 版本ID
         返回: NovelChapterVersion 完整版本数据
     -->
-    <select id="selectDetailById" resultType="com.novelcraft.web.entity.NovelChapterVersion">
+    <select id="selectDetailById" resultType="com.mythweave.web.entity.NovelChapterVersion">
         SELECT * FROM novel_chapter_version
         WHERE id = #{id} AND deleted = 0
         LIMIT 1

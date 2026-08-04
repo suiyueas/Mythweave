@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelProjectMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelProjectMapper">
 
     <!-- ==================== 项目查询与删除 ==================== -->
 
@@ -20,7 +20,7 @@
         返回: List<NovelProject> 项目列表
         说明: 按创建时间倒序，展示用户的作品列表
     -->
-    <select id="selectByUserId" resultType="com.novelcraft.web.entity.NovelProject">
+    <select id="selectByUserId" resultType="com.mythweave.web.entity.NovelProject">
         SELECT * FROM novel_project
         WHERE user_id = #{userId} AND deleted = 0
         ORDER BY create_time DESC

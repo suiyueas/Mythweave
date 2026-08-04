@@ -1,7 +1,7 @@
 <template>
   <div class="register-view">
     <h2 class="register-title">创建账号</h2>
-    <p class="register-desc">加入 NovelCraft，开启你的创作之旅</p>
+    <p class="register-desc">加入 Mythweave，开启你的创作之旅</p>
 
     <form @submit.prevent="handleRegister" class="register-form">
       <div class="field-group">

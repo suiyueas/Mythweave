@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelWritingLogMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelWritingLogMapper">
 
     <!-- ==================== 写作日志查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelWritingLog> 写作日志列表
         说明: 用于热力图和写作统计，按日期排序
     -->
-    <select id="selectByDateRange" resultType="com.novelcraft.web.entity.NovelWritingLog">
+    <select id="selectByDateRange" resultType="com.mythweave.web.entity.NovelWritingLog">
         SELECT * FROM novel_writing_log
         WHERE project_id = #{projectId} AND date BETWEEN #{start} AND #{end} AND deleted = 0
         ORDER BY date
@@ -77,7 +77,7 @@
         返回: List<HeatmapData> 每日字数统计
         说明: 按日期聚合，用于前端热力图展示
     -->
-    <select id="getDailyWords" resultType="com.novelcraft.web.model.HeatmapData">
+    <select id="getDailyWords" resultType="com.mythweave.web.model.HeatmapData">
         SELECT date, COALESCE(SUM(word_count), 0) AS count
         FROM novel_writing_log
         WHERE project_id = #{projectId} AND date BETWEEN #{start} AND #{end} AND deleted = 0
@@ -91,7 +91,7 @@
         返回: List<NovelWritingLog> 写作日志列表
         说明: 按更新时间倒序，用于最近写作活动展示
     -->
-    <select id="selectRecentByProject" resultType="com.novelcraft.web.entity.NovelWritingLog">
+    <select id="selectRecentByProject" resultType="com.mythweave.web.entity.NovelWritingLog">
         SELECT * FROM novel_writing_log
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY update_time DESC
@@ -104,7 +104,7 @@
         返回: List<HeatmapData> 每日字数统计（最近7天）
         说明: 从6天前到今天，用于仪表盘本周趋势展示
     -->
-    <select id="getWeeklyTrend" resultType="com.novelcraft.web.model.HeatmapData">
+    <select id="getWeeklyTrend" resultType="com.mythweave.web.model.HeatmapData">
         SELECT date, COALESCE(SUM(word_count), 0) AS count
         FROM novel_writing_log
         WHERE project_id = #{projectId} AND date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND deleted = 0

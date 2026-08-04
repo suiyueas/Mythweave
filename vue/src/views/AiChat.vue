@@ -793,8 +793,8 @@ function closeOrchestrator() {
 onMounted(async () => {
   // 清理 localStorage 中的旧会话数据，避免干扰
   try {
-    localStorage.removeItem('novelcraft_chat_sessions')
-    localStorage.removeItem('novelcraft_current_session')
+    localStorage.removeItem('mythweave_chat_sessions')
+    localStorage.removeItem('mythweave_current_session')
   } catch (_) { /* ignore */ }
 
   const pid = store.currentProjectId

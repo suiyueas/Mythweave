@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.novelcraft</groupId>
-    <artifactId>novelcraft</artifactId>
+    <groupId>com.mythweave</groupId>
+    <artifactId>mythweave</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>NovelCraft AI</name>
+    <name>Mythweave AI</name>
     <description>AI智能小说创作平台后端</description>
 
     <properties>
@@ -214,7 +214,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.novelcraft.web.NovelCraftApplication</mainClass>
+                    <mainClass>com.mythweave.web.MythweaveApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

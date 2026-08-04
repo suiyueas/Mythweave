@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.GlobalSearchMapper">
+<mapper namespace="com.mythweave.web.mapper.GlobalSearchMapper">
 
     <!-- ==================== 全局搜索 - 章节 ==================== -->
 
@@ -13,7 +13,7 @@
             - type='chapter', typeLabel='📑 章节'
             - matchField标识匹配字段（title/content）
     -->
-    <select id="searchChapters" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchChapters" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'chapter' as type,
           '📑 章节' as typeLabel,
@@ -52,7 +52,7 @@
             - type='character', typeLabel='👤 人物'
             - 搜索name、description、personality三个字段
     -->
-    <select id="searchCharacters" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchCharacters" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'character' as type,
           '👤 人物' as typeLabel,
@@ -93,7 +93,7 @@
             - 精确匹配名称优先级最高(1)，模糊名称(2)，模糊内容(4)
             - type='world', typeLabel='🌍 世界观'
     -->
-    <select id="searchWorldSettings" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchWorldSettings" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'world' as type,
           '🌍 世界观' as typeLabel,
@@ -131,7 +131,7 @@
             - 精确匹配标题优先级最高(1)，模糊标题(2)
             - type='outline', typeLabel='📋 大纲'
     -->
-    <select id="searchOutlines" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchOutlines" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'outline' as type,
           '📋 大纲' as typeLabel,
@@ -169,7 +169,7 @@
             - 精确匹配名称优先级最高(1)，模糊名称(2)，模糊描述(4)
             - type='plot', typeLabel='🎯 情节'
     -->
-    <select id="searchPlotThreads" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchPlotThreads" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'plot' as type,
           '🎯 情节' as typeLabel,
@@ -208,7 +208,7 @@
             - type='inspiration', typeLabel='💡 灵感'
             - content同时作为title和description返回
     -->
-    <select id="searchInspirations" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchInspirations" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'inspiration' as type,
           '💡 灵感' as typeLabel,
@@ -240,7 +240,7 @@
             - 精确匹配名称优先级最高(1)，模糊名称(2)，模糊描述(4)
             - type='foreshadowing', typeLabel='🔗 伏笔'
     -->
-    <select id="searchForeshadowings" resultType="com.novelcraft.web.model.SearchResultDTO">
+    <select id="searchForeshadowings" resultType="com.mythweave.web.model.SearchResultDTO">
         SELECT
           'foreshadowing' as type,
           '🔗 伏笔' as typeLabel,

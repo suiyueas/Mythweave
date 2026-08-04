@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelChapterMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelChapterMapper">
 
     <!-- ==================== 章节基础查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelChapter> 章节列表
         说明: 按sort_order排序，返回完整章节内容用于前端展示
     -->
-    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectByProjectId" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY sort_order
@@ -22,7 +22,7 @@
         返回: NovelChapter 章节对象
         说明: 显式指定deleted=0，绕过MyBatis-Plus全局逻辑删除策略
     -->
-    <select id="selectByIdWithDeleted" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectByIdWithDeleted" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE id = #{id} AND deleted = 0
     </select>
@@ -59,7 +59,7 @@
         返回: List<NovelChapter> 章节列表
         说明: 按update_time倒序，用于最近更新展示
     -->
-    <select id="selectRecentByProject" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectRecentByProject" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY update_time DESC
@@ -108,7 +108,7 @@
         返回: NovelChapter 章节对象
         说明: 用于获取上一章内容做衔接续写
     -->
-    <select id="selectBySortOrder" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectBySortOrder" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE project_id = #{projectId} AND sort_order = #{sortOrder} AND deleted = 0
     </select>
@@ -149,7 +149,7 @@
         返回: List<NovelChapter> 章节列表
         说明: 只查询status='COMPLETED'的章节，按sort_order排序
     -->
-    <select id="selectPublishedChapters" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectPublishedChapters" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE project_id = #{projectId} AND deleted = 0 AND status = 'COMPLETED'
         ORDER BY sort_order
@@ -161,7 +161,7 @@
         返回: List<NovelChapter> 章节列表
         说明: 通过novel_chapter_character关联表查询，用于人物出场统计
     -->
-    <select id="selectChaptersMentioningCharacter" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectChaptersMentioningCharacter" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT c.* FROM novel_chapter c
         JOIN novel_chapter_character cc ON c.id = cc.chapter_id
         WHERE c.project_id = #{projectId} AND c.deleted = 0 AND cc.character_id = #{characterId}
@@ -173,7 +173,7 @@
         返回: List<NovelChapter> 章节列表
         说明: 查询currentOrder±range范围内的章节，用于上下文理解和伏笔回收
     -->
-    <select id="selectNearbyChaptersForIncremental" resultType="com.novelcraft.web.entity.NovelChapter">
+    <select id="selectNearbyChaptersForIncremental" resultType="com.mythweave.web.entity.NovelChapter">
         SELECT * FROM novel_chapter
         WHERE project_id = #{projectId} AND deleted = 0
         AND sort_order BETWEEN #{currentOrder} - #{range} AND #{currentOrder} + #{range}

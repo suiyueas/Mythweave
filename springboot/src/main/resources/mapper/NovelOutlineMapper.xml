@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelOutlineMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelOutlineMapper">
 
     <!-- ==================== 大纲节点查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelOutline> 大纲节点列表
         说明: 按sort_order排序，用于大纲树形结构展示
     -->
-    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelOutline">
+    <select id="selectByProjectId" resultType="com.mythweave.web.entity.NovelOutline">
         SELECT * FROM novel_outline
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY sort_order

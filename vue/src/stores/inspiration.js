@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { inspirationApi } from '@/api/inspiration'
 
-const STORAGE_PREFIX = 'novelcraft_inspirations_'
-const FILTER_KEY = 'novelcraft_inspiration_filter'
+const STORAGE_PREFIX = 'mythweave_inspirations_'
+const FILTER_KEY = 'mythweave_inspiration_filter'
 
 // 灵感类型标签的中文映射
 const TYPE_LABELS = {

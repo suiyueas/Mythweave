@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.novelcraft.web.mapper.NovelSentinelAlertMapper">
+<mapper namespace="com.mythweave.web.mapper.NovelSentinelAlertMapper">
 
     <!-- ==================== 哨兵告警查询 ==================== -->
 
@@ -10,7 +10,7 @@
         返回: List<NovelSentinelAlert> 告警列表
         说明: 按创建时间倒序，用于告警历史展示
     -->
-    <select id="selectByProjectId" resultType="com.novelcraft.web.entity.NovelSentinelAlert">
+    <select id="selectByProjectId" resultType="com.mythweave.web.entity.NovelSentinelAlert">
         SELECT * FROM novel_sentinel_alert
         WHERE project_id = #{projectId} AND deleted = 0
         ORDER BY create_time DESC
@@ -66,7 +66,7 @@
         返回: List<NovelSentinelAlert> 未解决告警列表
         说明: 按严重程度和时间排序，高优先级告警在前
     -->
-    <select id="selectUnresolved" resultType="com.novelcraft.web.entity.NovelSentinelAlert">
+    <select id="selectUnresolved" resultType="com.mythweave.web.entity.NovelSentinelAlert">
         SELECT * FROM novel_sentinel_alert
         WHERE project_id = #{projectId} AND resolved = 0 AND deleted = 0
         ORDER BY severity DESC, create_time DESC

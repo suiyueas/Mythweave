@@ -5,7 +5,7 @@
       <router-link to="/" class="sidebar-brand-main">
         <div class="brand-icon">📖</div>
         <div>
-          <div class="brand-text">NovelCraft AI</div>
+          <div class="brand-text">Mythweave AI</div>
           <div class="brand-sub">智能写作工作台</div>
         </div>
       </router-link>

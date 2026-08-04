@@ -1,4 +1,4 @@
-# NovelCraft AI - AI智能小说创作平台
+# Mythweave AI - AI智能小说创作平台
 
 <div align="center">
 
@@ -126,7 +126,7 @@ copy springboot/src/main/resources/application.yml springboot/src/main/resources
 ### 3. 创建数据库
 
 ```bash
-mysql -u root -p < springboot/src/main/resources/sql/novelcraft_complete.sql
+mysql -u root -p < springboot/src/main/resources/sql/mythweave_complete.sql
 ```
 
 ### 4. 启动后端
@@ -139,7 +139,7 @@ mvn spring-boot:run
 
 # 或打包后运行
 mvn package
-java -jar target/novelcraft-1.0.0-SNAPSHOT.jar
+java -jar target/mythweave-1.0.0-SNAPSHOT.jar
 ```
 
 ## ⚙️ 环境变量说明
@@ -148,7 +148,7 @@ java -jar target/novelcraft-1.0.0-SNAPSHOT.jar
 |--------|------|------|
 | `DB_HOST` | MySQL 地址 | `localhost` |
 | `DB_PORT` | MySQL 端口 | `3306` |
-| `DB_NAME` | 数据库名 | `novelcraft` |
+| `DB_NAME` | 数据库名 | `mythweave` |
 | `DB_USERNAME` | 数据库用户名 | `root` |
 | `DB_PASSWORD` | 数据库密码 | `***` |
 | `REDIS_*` | Redis 配置 | - |
