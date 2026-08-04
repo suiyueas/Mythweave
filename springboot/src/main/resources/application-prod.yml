@@ -1,0 +1,195 @@
+# ================================================
+# MythWeave 生产环境配置文件
+# ================================================
+# 重要：所有敏感信息必须通过环境变量注入
+# 示例：export DB_PASSWORD=xxx && java -jar app.jar --spring.profiles.active=prod
+# ================================================
+
+spring:
+  application:
+    name: mythweave
+  profiles:
+    active: prod
+
+  # ==================== 数据源配置 ====================
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:mythweave}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=true&allowPublicKeyRetrieval=true&requireSSL=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: MythWeave-HikariCP
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+
+  # ==================== Redis 配置 ====================
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+  # ==================== Elasticsearch 配置 ====================
+  elasticsearch:
+    uris: ${ES_URI:http://localhost:9200}
+    username: ${ES_USERNAME:}
+    password: ${ES_PASSWORD:}
+
+  # ==================== 文件上传配置 ====================
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+
+  # ==================== Jackson 配置 ====================
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# ==================== MyBatis-Plus 配置 ====================
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+
+# ==================== Knife4j 配置 ====================
+knife4j:
+  enable: false
+
+# ==================== Server 配置 ====================
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  error:
+    include-message: never
+    include-stacktrace: never
+
+# ==================== Actuator 监控配置 ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ==================== 日志配置 ====================
+logging:
+  level:
+    root: INFO
+    com.mythweave.web: INFO
+    com.mythweave.web.mapper: WARN
+    org.springframework.web: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_PATH:/var/log/mythweave}/mythweave.log
+    max-size: 100MB
+    max-history: 30
+
+# ==================== 应用业务配置 ====================
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expiration: ${JWT_EXPIRATION:86400000}
+  upload:
+    avatar-path: ${UPLOAD_AVATAR_PATH:/var/lib/mythweave/avatar}
+  sentinel:
+    chunk-size: ${SENTINEL_CHUNK_SIZE:10}
+    thread-pool-size: ${SENTINEL_THREAD_POOL_SIZE:4}
+    incremental-threshold: 5
+    overdue-threshold: 10
+    auto-check-enabled: ${SENTINEL_AUTO_CHECK:true}
+    character-protagonist-threshold: 5
+    character-supporting-threshold: 10
+    character-arc-stall-threshold: 20
+    logic-min-words: 50
+    logic-consecutive-short: 3
+    rhythm-monotony-threshold: 0.15
+    rhythm-spike-threshold: 0.50
+    rhythm-monotony-window: 3
+    rhythm-long-chapter-multiplier: 1.8
+    rhythm-consecutive-short: 4
+    rhythm-short-word-threshold: 500
+
+# ==================== AI 服务配置 ====================
+mythweave:
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
+      max-token: ${DEEPSEEK_MAX_TOKEN:16384}
+      max-reasoning-token: ${DEEPSEEK_MAX_REASONING_TOKEN:2048}
+      temperature: 0.7
+      top-p: 0.9
+      stream-timeout: 120s
+      connect-timeout: 10s
+      read-timeout: 120s
+    mimo:
+      api-key: ${MIMO_API_KEY:}
+      base-url: ${MIMO_BASE_URL:https://api.mimoai.cn/v1}
+      model: ${MIMO_MODEL:mimo-2.5-pro}
+      max-token: ${MIMO_MAX_TOKEN:4096}
+      temperature: 0.7
+      top-p: 0.9
+      stream-timeout: 120s
+      connect-timeout: 10s
+      read-timeout: 120s
+    qianwen:
+      api-key: ${QIANWEN_API_KEY:}
+      base-url: ${QIANWEN_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
+      embedding-endpoint: /service/embeddings/text-embedding/text-embedding
+      model: text-embedding-v3
+      dimensions: 1024
+
+# ==================== Docker 环境配置 ====================
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:mysql://mysql:3306/${DB_NAME:mythweave}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+  data:
+    redis:
+      host: redis
+  elasticsearch:
+    uris: http://elasticsearch:9200

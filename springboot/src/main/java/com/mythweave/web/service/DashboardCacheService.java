@@ -23,6 +23,11 @@ import java.util.stream.Collectors;
 /**
  * 仪表盘缓存服务
  * 为仪表盘统计数据提供 Redis 缓存，减少数据库查询次数
+ * 
+ * 熔断降级机制：
+ * - 当 Redis 连接失败时，自动降级到数据库查询
+ * - 缓存解析失败时，也降级到数据库查询
+ * - 所有 Redis 操作均有 try-catch 保护，避免异常向上传播
  */
 @Slf4j
 @Service
@@ -44,28 +49,42 @@ public class DashboardCacheService {
     private static final long HEATMAP_TTL = 60;
     private static final long WEEKLY_TTL = 2;
     private static final long RECENT_TTL = 2;
+    
+    private volatile boolean redisAvailable = true;
+    private static final int REDIS_FAILURE_THRESHOLD = 3;
+    private int consecutiveFailures = 0;
 
     // ==================== 缓存读取 ====================
 
     /**
-     * 获取仪表盘统计数据（带缓存）
+     * 获取仪表盘统计数据（带缓存 + 熔断降级）
      */
     public DashboardStats getStats(Long projectId) {
-        String key = String.format(KEY_STATS, projectId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
+        if (redisAvailable) {
             try {
-                DashboardStats stats = objectMapper.readValue(cached, DashboardStats.class);
-                log.debug("仪表盘缓存命中, projectId: {}", projectId);
-                return stats;
+                String key = String.format(KEY_STATS, projectId);
+                String cached = redisTemplate.opsForValue().get(key);
+                if (cached != null) {
+                    try {
+                        DashboardStats stats = objectMapper.readValue(cached, DashboardStats.class);
+                        log.debug("仪表盘缓存命中, projectId: {}", projectId);
+                        resetRedisFailureCount();
+                        return stats;
+                    } catch (Exception e) {
+                        log.warn("仪表盘缓存解析失败, projectId: {}, 降级到数据库", projectId);
+                        incrementRedisFailureCount();
+                    }
+                }
             } catch (Exception e) {
-                log.warn("仪表盘缓存解析失败, projectId: {}", projectId);
+                handleRedisFailure("获取仪表盘缓存", e);
             }
         }
+        
         log.debug("仪表盘缓存未命中, projectId: {}", projectId);
         DashboardStats stats = loadStatsFromDB(projectId);
-        if (stats != null) {
+        if (stats != null && redisAvailable) {
             try {
+                String key = String.format(KEY_STATS, projectId);
                 redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(stats), STATS_TTL, TimeUnit.MINUTES);
             } catch (Exception e) {
                 log.warn("仪表盘缓存写入失败, projectId: {}", projectId);
@@ -75,24 +94,34 @@ public class DashboardCacheService {
     }
 
     /**
-     * 获取热力图数据（带缓存）
+     * 获取热力图数据（带缓存 + 熔断降级）
      */
     public List<HeatmapData> getHeatmap(Long projectId) {
-        String key = String.format(KEY_HEATMAP, projectId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
+        if (redisAvailable) {
             try {
-                List<HeatmapData> data = objectMapper.readValue(cached,
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, HeatmapData.class));
-                log.debug("热力图缓存命中, projectId: {}", projectId);
-                return data;
+                String key = String.format(KEY_HEATMAP, projectId);
+                String cached = redisTemplate.opsForValue().get(key);
+                if (cached != null) {
+                    try {
+                        List<HeatmapData> data = objectMapper.readValue(cached,
+                                objectMapper.getTypeFactory().constructCollectionType(List.class, HeatmapData.class));
+                        log.debug("热力图缓存命中, projectId: {}", projectId);
+                        resetRedisFailureCount();
+                        return data;
+                    } catch (Exception e) {
+                        log.warn("热力图缓存解析失败, projectId: {}, 降级到数据库", projectId);
+                        incrementRedisFailureCount();
+                    }
+                }
             } catch (Exception e) {
-                log.warn("热力图缓存解析失败, projectId: {}", projectId);
+                handleRedisFailure("获取热力图缓存", e);
             }
         }
+        
         List<HeatmapData> data = loadHeatmapFromDB(projectId);
-        if (data != null) {
+        if (data != null && redisAvailable) {
             try {
+                String key = String.format(KEY_HEATMAP, projectId);
                 redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(data), HEATMAP_TTL, TimeUnit.MINUTES);
             } catch (Exception e) {
                 log.warn("热力图缓存写入失败, projectId: {}", projectId);
@@ -102,24 +131,34 @@ public class DashboardCacheService {
     }
 
     /**
-     * 获取本周趋势（带缓存）
+     * 获取本周趋势（带缓存 + 熔断降级）
      */
     public List<HeatmapData> getWeeklyTrend(Long projectId) {
-        String key = String.format(KEY_WEEKLY, projectId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
+        if (redisAvailable) {
             try {
-                List<HeatmapData> data = objectMapper.readValue(cached,
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, HeatmapData.class));
-                log.debug("趋势图缓存命中, projectId: {}", projectId);
-                return data;
+                String key = String.format(KEY_WEEKLY, projectId);
+                String cached = redisTemplate.opsForValue().get(key);
+                if (cached != null) {
+                    try {
+                        List<HeatmapData> data = objectMapper.readValue(cached,
+                                objectMapper.getTypeFactory().constructCollectionType(List.class, HeatmapData.class));
+                        log.debug("趋势图缓存命中, projectId: {}", projectId);
+                        resetRedisFailureCount();
+                        return data;
+                    } catch (Exception e) {
+                        log.warn("趋势图缓存解析失败, projectId: {}, 降级到数据库", projectId);
+                        incrementRedisFailureCount();
+                    }
+                }
             } catch (Exception e) {
-                log.warn("趋势图缓存解析失败, projectId: {}", projectId);
+                handleRedisFailure("获取趋势图缓存", e);
             }
         }
+        
         List<HeatmapData> data = loadWeeklyTrendFromDB(projectId);
-        if (data != null) {
+        if (data != null && redisAvailable) {
             try {
+                String key = String.format(KEY_WEEKLY, projectId);
                 redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(data), WEEKLY_TTL, TimeUnit.MINUTES);
             } catch (Exception e) {
                 log.warn("趋势图缓存写入失败, projectId: {}", projectId);
@@ -129,24 +168,34 @@ public class DashboardCacheService {
     }
 
     /**
-     * 获取最近活动（带缓存）
+     * 获取最近活动（带缓存 + 熔断降级）
      */
     public List<RecentActivity> getRecentActivities(Long projectId, int limit) {
-        String key = String.format(KEY_RECENT, projectId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
+        if (redisAvailable) {
             try {
-                List<RecentActivity> data = objectMapper.readValue(cached,
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, RecentActivity.class));
-                log.debug("活动列表缓存命中, projectId: {}", projectId);
-                return data;
+                String key = String.format(KEY_RECENT, projectId);
+                String cached = redisTemplate.opsForValue().get(key);
+                if (cached != null) {
+                    try {
+                        List<RecentActivity> data = objectMapper.readValue(cached,
+                                objectMapper.getTypeFactory().constructCollectionType(List.class, RecentActivity.class));
+                        log.debug("活动列表缓存命中, projectId: {}", projectId);
+                        resetRedisFailureCount();
+                        return data;
+                    } catch (Exception e) {
+                        log.warn("活动列表缓存解析失败, projectId: {}, 降级到数据库", projectId);
+                        incrementRedisFailureCount();
+                    }
+                }
             } catch (Exception e) {
-                log.warn("活动列表缓存解析失败, projectId: {}", projectId);
+                handleRedisFailure("获取活动列表缓存", e);
             }
         }
+        
         List<RecentActivity> data = loadRecentActivitiesFromDB(projectId, limit);
-        if (data != null) {
+        if (data != null && redisAvailable) {
             try {
+                String key = String.format(KEY_RECENT, projectId);
                 redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(data), RECENT_TTL, TimeUnit.MINUTES);
             } catch (Exception e) {
                 log.warn("活动列表缓存写入失败, projectId: {}", projectId);
@@ -161,14 +210,51 @@ public class DashboardCacheService {
      * 失效项目的所有仪表盘缓存（章节保存、设定更新时调用）
      */
     public void invalidate(Long projectId) {
-        List<String> keys = Arrays.asList(
-                String.format(KEY_STATS, projectId),
-                String.format(KEY_HEATMAP, projectId),
-                String.format(KEY_WEEKLY, projectId),
-                String.format(KEY_RECENT, projectId)
-        );
-        redisTemplate.delete(keys);
-        log.debug("仪表盘缓存已失效, projectId: {}", projectId);
+        if (!redisAvailable) {
+            log.debug("Redis 不可用，跳过缓存失效, projectId: {}", projectId);
+            return;
+        }
+        try {
+            List<String> keys = Arrays.asList(
+                    String.format(KEY_STATS, projectId),
+                    String.format(KEY_HEATMAP, projectId),
+                    String.format(KEY_WEEKLY, projectId),
+                    String.format(KEY_RECENT, projectId)
+            );
+            redisTemplate.delete(keys);
+            log.debug("仪表盘缓存已失效, projectId: {}", projectId);
+        } catch (Exception e) {
+            log.warn("仪表盘缓存失效失败, projectId: {}", projectId);
+        }
+    }
+
+    // ==================== 熔断降级机制 ====================
+
+    private void handleRedisFailure(String operation, Exception e) {
+        consecutiveFailures++;
+        log.error("Redis {} 失败, consecutiveFailures={}: {}", operation, consecutiveFailures, e.getMessage());
+        if (consecutiveFailures >= REDIS_FAILURE_THRESHOLD) {
+            redisAvailable = false;
+            log.warn("Redis 连续失败{}次，触发熔断降级，{}分钟后自动恢复", consecutiveFailures, STATS_TTL);
+        }
+    }
+
+    private void incrementRedisFailureCount() {
+        consecutiveFailures++;
+        if (consecutiveFailures >= REDIS_FAILURE_THRESHOLD) {
+            redisAvailable = false;
+            log.warn("Redis 缓存解析连续失败{}次，触发熔断降级", consecutiveFailures);
+        }
+    }
+
+    private void resetRedisFailureCount() {
+        if (consecutiveFailures > 0) {
+            consecutiveFailures = 0;
+        }
+        if (!redisAvailable) {
+            redisAvailable = true;
+            log.info("Redis 恢复可用");
+        }
     }
 
     // ==================== 数据库加载（兜底） ====================

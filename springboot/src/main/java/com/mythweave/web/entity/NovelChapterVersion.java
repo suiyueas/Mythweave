@@ -15,6 +15,10 @@ public class NovelChapterVersion extends BaseEntity {
     private Long chapterId;
     private String content;
     private Integer wordCount;
+    /**
+     * 版本号（v1、v2...，映射数据库 version 列）
+     * 注：BaseEntity 不提供乐观锁 version，此处为章节历史版本自身的版本号，与乐观锁无关
+     */
     private String version;
     private String changeNote;
 }

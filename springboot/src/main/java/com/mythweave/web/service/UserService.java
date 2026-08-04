@@ -26,6 +26,7 @@ import java.util.Map;
 public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
 
     private final NovelUserStatsMapper userStatsMapper;
+    private final AuditLogService auditLogService;
 
     /** VIP 套餐：planId → 时长（月） */
     private static final Map<String, Integer> VIP_PLAN_MONTHS = Map.of(
@@ -201,6 +202,10 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
         updateById(user);
     
         log.info("VIP 激活成功: userId=" + user.getId() + ", planId=" + planId + ", expireAt=" + expireAt);
+        
+        // 审计日志
+        String ip = getClientIp();
+        auditLogService.logVipActivation(user.getId(), planId, ip, true);
     
         Map<String, Object> vip = new LinkedHashMap<>();
         vip.put("vipLevel", user.getVipLevel());
@@ -238,5 +243,29 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
         }
         // 实际项目应发送验证邮件
         return true;
+    }
+    
+    /**
+     * 获取客户端 IP 地址
+     */
+    private String getClientIp() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) return "unknown";
+            var request = attrs.getRequest();
+            String ip = request.getHeader("X-Forwarded-For");
+            if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+                ip = request.getHeader("X-Real-IP");
+            }
+            if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+                ip = request.getRemoteAddr();
+            }
+            if (ip != null && ip.contains(",")) {
+                ip = ip.split(",")[0].trim();
+            }
+            return ip != null ? ip : "unknown";
+        } catch (Exception e) {
+            return "unknown";
+        }
     }
 }

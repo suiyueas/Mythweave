@@ -8,6 +8,8 @@ import com.mythweave.web.dto.StreamWriteRequest;
 import com.mythweave.web.entity.NovelAiSession;
 import com.mythweave.web.mapper.NovelAiSessionMapper;
 import com.mythweave.web.service.AiChatService;
+import com.mythweave.web.service.UserService;
+import com.mythweave.web.service.VipAccessValidator;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +40,8 @@ public class AiChatController {
 
     private final AiChatService aiChatService;
     private final NovelAiSessionMapper sessionMapper;
+    private final VipAccessValidator vipAccessValidator;
+    private final UserService userService;
     private final ObjectMapper objectMapper;
 
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
@@ -122,6 +126,8 @@ public class AiChatController {
     @PostMapping(value = "/stream/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(@PathVariable Long projectId,
                                   @RequestBody StreamChatRequest request) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
@@ -192,6 +198,8 @@ public class AiChatController {
     @Operation(summary = "AI生成章节标题")
     @PostMapping("/generate-title")
     public R<String> generateTitle(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         try {
             String title = aiChatService.generateTitle(projectId, body);
             if (title == null || title.trim().isEmpty()) {
@@ -212,6 +220,10 @@ public class AiChatController {
     @PostMapping(value = "/stream/content", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamContent(@PathVariable Long projectId,
                                      @Valid @RequestBody ContentGenerateRequest request) {
+        // VIP 权限校验
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
+        
         // 心跳保活：推理型模型在正式输出正文前可能长时间无 content，
         // 前端 20s 无数据会误判断连并自动重连，导致生成中断
         SseEmitter emitter = new SseEmitter(600_000L);
@@ -245,6 +257,8 @@ public class AiChatController {
     @Operation(summary = "AI润色")
     @PostMapping("/polish")
     public R<String> polish(@PathVariable Long projectId, @RequestBody Map<String, String> body) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         try {
             String text = body.getOrDefault("text", "");
             String style = body.getOrDefault("style", "自然流畅");
@@ -263,6 +277,8 @@ public class AiChatController {
     @Operation(summary = "AI扩写")
     @PostMapping("/expand")
     public R<String> expand(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         try {
             String currentContent = body.getOrDefault("currentContent", "") instanceof String
                     ? (String) body.get("currentContent") : "";
@@ -289,6 +305,8 @@ public class AiChatController {
     @PostMapping("/generate-chapter")
     public R<Map<String, Object>> generateChapter(@PathVariable Long projectId,
                                                     @RequestBody Map<String, Object> params) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         try {
             String content = aiChatService.generateChapter(projectId, params);
             Map<String, Object> result = new LinkedHashMap<>();
@@ -307,6 +325,8 @@ public class AiChatController {
     @PostMapping(value = "/stream/generate-chapter", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamGenerateChapter(@PathVariable Long projectId,
                                              @RequestBody Map<String, Object> params) {
+        Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(600_000L);
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {

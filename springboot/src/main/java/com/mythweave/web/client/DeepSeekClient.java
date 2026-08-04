@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * DeepSeek API 客户端
@@ -25,11 +26,18 @@ import java.util.Map;
  * - model: 使用的模型名称
  * - connectTimeout: 连接超时时间
  * - readTimeout: 读取超时时间
+ * 
+ * 重试机制：
+ * - 当遇到 5xx 错误、网络超时、连接问题时自动重试
+ * - 默认重试 3 次，指数退避间隔（1s, 2s, 4s）
  */
 @Slf4j
 @Component
 public class DeepSeekClient {
 
+    private static final int MAX_RETRIES = 3;
+    private static final long INITIAL_RETRY_DELAY_MS = 1000;
+    
     private final AiProperties aiProperties;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -40,6 +48,7 @@ public class DeepSeekClient {
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(config.getConnectTimeout())
                 .readTimeout(config.getReadTimeout())
+                .retryOnConnectionFailure(true)
                 .build();
         this.objectMapper = new ObjectMapper();
     }
@@ -84,7 +93,7 @@ public class DeepSeekClient {
     }
 
     /**
-     * 非流式调用（完整参数）
+     * 非流式调用（完整参数）- 带自动重试
      * 
      * @param systemPrompt 系统提示词
      * @param userMessage 用户消息
@@ -117,44 +126,84 @@ public class DeepSeekClient {
                 .post(RequestBody.create(objectMapper.writeValueAsString(body), MediaType.parse("application/json")))
                 .build();
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            String responseBody = response.body() != null ? response.body().string() : "";
-            if (!response.isSuccessful()) {
-                log.error("DeepSeek API HTTP错误: code={}, message={}, body={}", response.code(), response.message(), responseBody);
-                throw new IOException("DeepSeek API error: " + response.code() + " " + response.message() + ", body: " + responseBody);
-            }
-            JsonNode root = objectMapper.readTree(responseBody);
-            JsonNode choices = root.path("choices");
-            if (choices.isMissingNode() || choices.isEmpty() || choices.get(0) == null) {
-                log.error("DeepSeek API 响应中无choices: {}", responseBody);
-                throw new IOException("DeepSeek API 响应格式错误：无choices");
-            }
-            JsonNode message = choices.get(0).path("message");
-            if (message.isMissingNode()) {
-                log.error("DeepSeek API 响应中无message: {}", responseBody);
-                throw new IOException("DeepSeek API 响应格式错误：无message");
-            }
+        IOException lastException = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try (Response response = httpClient.newCall(request).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
 
-            String content = message.path("content").asText(null);
-            String reasoningContent = message.path("reasoning_content").asText(null);
-            String finishReason = choices.get(0).path("finish_reason").asText();
+                if (!response.isSuccessful()) {
+                    // 5xx 服务器错误或网络问题：可重试
+                    if (response.code() >= 500 || response.code() == 429) {
+                        lastException = new IOException("DeepSeek API HTTP错误: code=" + response.code() + ", message=" + response.message() + ", body=" + responseBody);
+                        if (attempt < MAX_RETRIES) {
+                            long delay = INITIAL_RETRY_DELAY_MS * (1L << attempt);
+                            log.warn("DeepSeek API 请求失败 (attempt {}/{}), {}ms 后重试: code={}, message={}",
+                                    attempt + 1, MAX_RETRIES + 1, delay, response.code(), response.message());
+                            Thread.sleep(delay);
+                            continue;
+                        }
+                        log.error("DeepSeek API HTTP错误 (已重试{}次): code={}, message={}, body={}",
+                                MAX_RETRIES, response.code(), response.message(), responseBody);
+                        throw lastException;
+                    }
+                    // 4xx 客户端错误：不重试
+                    log.error("DeepSeek API HTTP错误: code={}, message={}, body={}", response.code(), response.message(), responseBody);
+                    throw new IOException("DeepSeek API error: " + response.code() + " " + response.message() + ", body: " + responseBody);
+                }
 
-            log.info("DeepSeek响应: finish_reason={}, content={}, reasoning_content长度={}",
-                    finishReason, content != null ? "\"" + content.substring(0, Math.min(50, content.length())) + "...\"" : "null", reasoningContent != null ? reasoningContent.length() : 0);
+                JsonNode root = objectMapper.readTree(responseBody);
+                JsonNode choices = root.path("choices");
+                if (choices.isMissingNode() || choices.isEmpty() || choices.get(0) == null) {
+                    log.error("DeepSeek API 响应中无choices: {}", responseBody);
+                    throw new IOException("DeepSeek API 响应格式错误：无choices");
+                }
+                JsonNode message = choices.get(0).path("message");
+                if (message.isMissingNode()) {
+                    log.error("DeepSeek API 响应中无message: {}", responseBody);
+                    throw new IOException("DeepSeek API 响应格式错误：无message");
+                }
 
-            if (content != null && !content.trim().isEmpty()) {
-                return content.trim();
+                String content = message.path("content").asText(null);
+                String reasoningContent = message.path("reasoning_content").asText(null);
+                String finishReason = choices.get(0).path("finish_reason").asText();
+
+                log.info("DeepSeek响应: finish_reason={}, content={}, reasoning_content长度={}",
+                        finishReason, content != null ? "\"" + content.substring(0, Math.min(50, content.length())) + "...\"" : "null", reasoningContent != null ? reasoningContent.length() : 0);
+
+                if (content != null && !content.trim().isEmpty()) {
+                    return content.trim();
+                }
+                // content 为空：推理过程（reasoning_content）不可作为业务结果，
+                // 明确抛错以触发上层降级/重试，避免把推理文字当作正文使用
+                // 日志用 WARN：多数调用方有降级/重试机制，属可恢复场景，业务层失败时另有 ERROR 日志
+                if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
+                    log.warn("AI 仅返回推理内容（无有效正文），finish_reason={}，已丢弃推理内容", finishReason);
+                    throw new IOException("AI 仅返回推理内容，无有效正文 (finish_reason=" + finishReason + ")");
+                }
+                log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
+                throw new IOException("AI 返回空内容");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("重试被中断", e);
+            } catch (IOException e) {
+                // 网络超时、连接失败等：可重试
+                if (attempt < MAX_RETRIES) {
+                    long delay = INITIAL_RETRY_DELAY_MS * (1L << attempt);
+                    lastException = e;
+                    log.warn("DeepSeek API 请求异常 (attempt {}/{}), {}ms 后重试: {}",
+                            attempt + 1, MAX_RETRIES + 1, delay, e.getMessage());
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("重试被中断", ie);
+                    }
+                } else {
+                    throw e;
+                }
             }
-            // content 为空：推理过程（reasoning_content）不可作为业务结果，
-            // 明确抛错以触发上层降级/重试，避免把推理文字当作正文使用
-            // 日志用 WARN：多数调用方有降级/重试机制，属可恢复场景，业务层失败时另有 ERROR 日志
-            if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
-                log.warn("AI 仅返回推理内容（无有效正文），finish_reason={}，已丢弃推理内容", finishReason);
-                throw new IOException("AI 仅返回推理内容，无有效正文 (finish_reason=" + finishReason + ")");
-            }
-            log.error("DeepSeek API 返回空内容, 完整响应: {}", responseBody);
-            throw new IOException("AI 返回空内容");
         }
+        throw lastException != null ? lastException : new IOException("DeepSeek API 调用失败，已重试 " + MAX_RETRIES + " 次");
     }
 
     /**

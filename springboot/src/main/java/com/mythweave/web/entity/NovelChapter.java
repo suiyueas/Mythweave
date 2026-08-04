@@ -42,7 +42,10 @@ public class NovelChapter extends BaseEntity {
     /** 章节排序顺序（数字越小越靠前） */
     private Integer sortOrder;
     
-    /** 版本号（用于版本控制） */
+    /**
+     * 章节业务版本号（v1、v2...，映射数据库 version 列）
+     * 注：BaseEntity 不提供乐观锁 version，此处为章节自身的版本号，与乐观锁无关
+     */
     private String version;
     
     /** 前一个版本的ID（用于版本历史追溯） */

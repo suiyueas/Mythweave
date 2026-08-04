@@ -23,6 +23,10 @@ import java.io.Serializable;
  * 
  * 使用MyBatis-Plus的逻辑删除功能，调用deleteById时不会真正删除数据
  * 而是设置deleted字段为1，通过selectById查询时会自动过滤已删除记录
+ * 
+ * 注意：不包含乐观锁 version 字段——本项目所有表均无整数版号列，
+ * 仅 novel_chapter / novel_chapter_version 的 version 列为业务版本号（VARCHAR），
+ * 由子类自行声明 String version 字段
  */
 @Data
 public abstract class BaseEntity implements Serializable {
