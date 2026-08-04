@@ -53,6 +53,9 @@ application-local.yml
 application-local.properties
 application-dev.yml
 application-dev.properties
+# 开发主配置含密钥，不入库，请复制 application.example.yml 并设置环境变量
+springboot/src/main/resources/application.yml
+springboot/src/main/resources/application.properties
 springboot/src/main/resources/application-local*.yml
 springboot/src/main/resources/application-local*.properties
 springboot/src/main/resources/application-dev*.yml

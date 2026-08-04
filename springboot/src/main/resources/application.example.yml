@@ -1,0 +1,111 @@
+# =====================================================
+# 配置模板示例（可安全提交到仓库）
+# 使用方式:复制为 application.yml 并填入真实环境变量
+#   开发环境: Windows PowerShell
+#     $env:DB_PASSWORD="你的数据库密码"
+#     $env:REDIS_PASSWORD="你的Redis密码"
+#     $env:ES_PASSWORD="你的ES密码"
+#     $env:DEEPSEEK_API_KEY="sk-xxx"
+#     $env:MIMO_API_KEY="sk-xxx"
+#     $env:QIANWEN_API_KEY="sk-xxx"
+#     $env:JWT_SECRET="随机64位字符串"
+# =====================================================
+spring:
+  application:
+    name: mythweave
+  datasource:
+    url: jdbc:mysql://localhost:3306/mythweave?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      database: 0
+  elasticsearch:
+    uris: http://localhost:9200
+    username: elastic
+    password: ${ES_PASSWORD:}
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+server:
+  port: 8080
+
+# 文件上传 & 哨兵巡查配置
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expiration: 86400000
+  upload:
+    # 头像存储路径（按本机实际路径修改）
+    avatar-path: ${AVATAR_PATH:./vue/public/avatar}
+  sentinel:
+    chunk-size: 10
+    thread-pool-size: 4
+    incremental-threshold: 5
+    overdue-threshold: 10
+    auto-check-enabled: true
+    # 人物巡查
+    character-protagonist-threshold: 5
+    character-supporting-threshold: 10
+    character-arc-stall-threshold: 20
+    # 逻辑巡查
+    logic-min-words: 50
+    logic-consecutive-short: 3
+    # 节奏巡查
+    rhythm-monotony-threshold: 0.15
+    rhythm-spike-threshold: 0.50
+    rhythm-monotony-window: 3
+    rhythm-long-chapter-multiplier: 1.8
+    rhythm-consecutive-short: 4
+    rhythm-short-word-threshold: 500
+
+# DeepSeek AI 配置
+mythweave:
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      model: deepseek-v4-flash
+      max-token: 4096
+      # 推理模型（deepseek-reasoner）思维链 token 上限：防止推理过长耗尽预算导致正文截断；仅推理模型生效，建议为 max-token 的 50%~70%
+      max-reasoning-token: 4096
+      temperature: 0.7
+      top-p: 0.9
+      stream-timeout: 120s
+      connect-timeout: 10s
+      read-timeout: 120s
+    mimo:
+      api-key: ${MIMO_API_KEY:}
+      base-url: https://api.mimoai.cn/v1
+      model: mimo-2.5-pro
+      max-token: 4096
+      temperature: 0.7
+      top-p: 0.9
+      stream-timeout: 120s
+      connect-timeout: 10s
+      read-timeout: 120s
+
+    qianwen:
+      api-key: ${QIANWEN_API_KEY:}
+      base-url: https://dashscope.aliyuncs.com/api/v1
+      embedding-endpoint: /service/embeddings/text-embedding/text-embedding
+      model: text-embedding-v3
+      dimensions: 1024
