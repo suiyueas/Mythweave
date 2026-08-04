@@ -1510,7 +1510,7 @@
     <!-- 人物详情弹窗 -->
     <Teleport to="body">
       <div v-if="showCharacterDetail && selectedCharacter" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]" @click.self="showCharacterDetail = false">
-        <div class="bg-white rounded-2xl w-[560px] max-w-[92vw] shadow-xl border border-[#e8e3dc] overflow-hidden">
+        <div class="bg-white rounded-2xl w-[560px] max-w-[92vw] max-h-[90vh] shadow-xl border border-[#e8e3dc] overflow-y-auto">
           <!-- 头部 -->
           <div class="flex items-center gap-4 p-5 border-b border-[#f0ece6]">
             <div class="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0" :style="{ background: selectedCharacter.color }">{{ selectedCharacter.avatar }}</div>
@@ -1597,7 +1597,7 @@
     <!-- 编辑角色弹窗 -->
     <Teleport to="body">
       <div v-if="showEditCharacter && editingCharacter" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px]" @click.self="showEditCharacter = false">
-        <div class="bg-white rounded-2xl w-[480px] max-w-[90vw] shadow-xl border border-[#e8e3dc] overflow-hidden">
+        <div class="bg-white rounded-2xl w-[480px] max-w-[90vw] max-h-[90vh] shadow-xl border border-[#e8e3dc] overflow-y-auto">
           <div class="flex items-center justify-between p-5 border-b border-[#f0ece6]">
             <h3 class="text-lg font-bold text-[#1a1a2e]">✏️ 编辑角色</h3>
             <button class="w-8 h-8 flex items-center justify-center text-[#9c9690] hover:text-[#6b6560] hover:bg-[#f5f3f0] rounded-lg transition-colors text-lg" @click="showEditCharacter = false">✕</button>

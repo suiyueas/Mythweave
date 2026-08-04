@@ -4,8 +4,10 @@ import com.mythweave.web.common.R;
 import com.mythweave.web.dto.AppendForeshadowRequest;
 import com.mythweave.web.entity.NovelChapter;
 import com.mythweave.web.entity.NovelChapterVersion;
+import com.mythweave.web.entity.NovelProject;
 import com.mythweave.web.service.ChapterService;
 import com.mythweave.web.service.ForeshadowAppendService;
+import com.mythweave.web.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +36,7 @@ public class ChapterController {
 
     private final ChapterService chapterService;
     private final ForeshadowAppendService foreshadowAppendService;
+    private final ProjectService projectService;
 
     // ── 章节 CRUD ──
 
@@ -50,14 +53,24 @@ public class ChapterController {
 
     /**
      * 获取章节详细信息
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @return 章节详情（包含正文内容）
      */
     @Operation(summary = "获取章节详情")
     @GetMapping("/{chapterId}")
-    public R<NovelChapter> getChapter(@PathVariable Long projectId, @PathVariable Long chapterId) {
-        return R.ok(chapterService.getChapter(chapterId));
+    public R<NovelChapter> getChapter(@RequestAttribute("userId") Long userId,
+                                      @PathVariable Long projectId, @PathVariable Long chapterId) {
+        NovelChapter chapter = chapterService.getChapter(chapterId);
+        if (!chapter.getProjectId().equals(projectId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "章节不属于该作品");
+        }
+        NovelProject project = projectService.getById(projectId);
+        if (!project.getUserId().equals(userId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
+        }
+        return R.ok(chapter);
     }
 
     /**
@@ -123,20 +136,24 @@ public class ChapterController {
 
     /**
      * 获取章节的版本历史列表
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @return 版本列表（包含版本号、创建时间等信息，不包含正文）
      */
     @Operation(summary = "获取章节版本历史")
     @GetMapping("/{chapterId}/versions")
-    public R<List<NovelChapterVersion>> listVersions(@PathVariable Long projectId, @PathVariable Long chapterId) {
+    public R<List<NovelChapterVersion>> listVersions(@RequestAttribute("userId") Long userId,
+                                                      @PathVariable Long projectId, @PathVariable Long chapterId) {
+        validateProjectOwnership(userId, projectId);
         return R.ok(chapterService.listVersions(chapterId));
     }
 
     /**
      * 获取章节特定版本的详细信息（包含正文）
      * 用于版本预览或恢复到指定版本
-     * 
+     *
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @param versionId 版本ID
@@ -144,9 +161,18 @@ public class ChapterController {
      */
     @Operation(summary = "获取章节版本详情（含正文，用于预览/恢复）")
     @GetMapping("/{chapterId}/versions/{versionId}")
-    public R<NovelChapterVersion> getVersionDetail(@PathVariable Long projectId, @PathVariable Long chapterId,
+    public R<NovelChapterVersion> getVersionDetail(@RequestAttribute("userId") Long userId,
+                                                    @PathVariable Long projectId, @PathVariable Long chapterId,
                                                     @PathVariable Long versionId) {
+        validateProjectOwnership(userId, projectId);
         return R.ok(chapterService.getVersionDetail(chapterId, versionId));
+    }
+
+    private void validateProjectOwnership(Long userId, Long projectId) {
+        NovelProject project = projectService.getById(projectId);
+        if (!project.getUserId().equals(userId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
+        }
     }
 
     // ── 伏笔追加补写 ──

@@ -1,12 +1,18 @@
 package com.mythweave.web.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 public class ContentGenerateRequest {
     private Integer chapterIndex;
     private String title;
     private String direction;
     private String existingContent;
     private String style;
-    private Integer targetWords;
+
+    @Min(value = 100, message = "目标字数不能少于100字")
+    @Max(value = 50000, message = "目标字数不能超过50000字")
+    private Integer targetWords = 2000;
 
     public Integer getChapterIndex() { return chapterIndex; }
     public void setChapterIndex(Integer chapterIndex) { this.chapterIndex = chapterIndex; }

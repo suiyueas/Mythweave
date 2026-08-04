@@ -651,11 +651,11 @@ public class AiChatService {
         String prompt = foreshadowingContext.isEmpty() ? basePrompt
                 : basePrompt + "\n\n" + foreshadowingContext + "\n请在遵循上述要求的同时，自然地融入伏笔回收。";
 
-        // maxTokens 8192：推理型模型会先消耗推理 token，4096 常导致 finish_reason=length 截断（正文不足千字）
+        // maxTokens 16384：推理型模型需要更多 token 预算，中文 3000 字约需 4000+ tokens
         // system prompt 明确禁止推理输出，减少推理 token 消耗
-        // maxReasoningTokens 4096：显式划分推理与正文配额，推理上限 4096，剩余预算保证正文完整生成
+        // maxReasoningTokens 2048：压缩推理配额保证正文充足，16384 总预算中 2048 推理 + 剩余给正文
         int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。",
-                prompt, 0.8, 8192, onToken, 4096);
+                prompt, 0.8, 16384, onToken, 2048);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -884,7 +884,7 @@ public class AiChatService {
         prompt.append("7. 【重要】不要添加任何结构标签（如\"开篇场景\"、\"发展\"、\"高潮\"、\"结尾\"等），直接输出正文\n");
         prompt.append("8. 无需输出标题，直接开始写正文内容\n");
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。", prompt.toString(), 0.7, 8192, 4096);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。", prompt.toString(), 0.7, 16384, 2048);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -902,8 +902,15 @@ public class AiChatService {
      * AI 扩写
      */
     public String expand(Long projectId, String currentContent, String direction, String style, Integer chapterIndex) throws IOException {
+        if (currentContent == null || currentContent.trim().isEmpty()) {
+            throw new IllegalArgumentException("待扩写内容不能为空");
+        }
+        if (currentContent.length() > 100000) {
+            throw new IllegalArgumentException("待扩写内容不能超过10万字");
+        }
+
         String prompt = PromptTemplates.EXPAND
-                .replace("{currentContent}", currentContent != null ? currentContent : "")
+                .replace("{currentContent}", currentContent)
                 .replace("{direction}", direction != null ? direction : "延续故事主线，丰富细节")
                 .replace("{style}", style != null ? style : "自然流畅");
 
@@ -915,7 +922,7 @@ public class AiChatService {
             }
         }
 
-        String reply = deepSeekClient.chat("你是一位专业小说作家。直接输出扩写后的完整文本，不要任何推理过程、思考或解释。", prompt, 0.7, 8192, 4096);
+        String reply = deepSeekClient.chat("你是一位专业小说作家。直接输出扩写后的完整文本，不要任何推理过程、思考或解释。", prompt, 0.7, 16384, 2048);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();

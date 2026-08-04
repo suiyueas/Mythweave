@@ -74,13 +74,18 @@ public class ProjectController {
 
     /**
      * 获取作品详情
+     * @param userId 当前登录用户ID
      * @param id 作品ID
      * @return 作品详细信息
      */
     @Operation(summary = "获取作品详情")
     @GetMapping("/{id}")
-    public R<NovelProject> getById(@PathVariable Long id) {
-        return R.ok(projectService.getById(id));
+    public R<NovelProject> getById(@RequestAttribute("userId") Long userId, @PathVariable Long id) {
+        NovelProject project = projectService.getById(id);
+        if (!project.getUserId().equals(userId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
+        }
+        return R.ok(project);
     }
 
     /**

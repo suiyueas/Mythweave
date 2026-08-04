@@ -77,7 +77,7 @@ export const aiApi = {
 
   // ─── AI 流式生成章节内容 ───
   generateContentStream(projectId, params, onToken, onDone, onError) {
-    const { chapterIndex, title, direction, existingContent, style } = params
+    const { chapterIndex, title, direction, existingContent, style, targetWords } = params
 
     return streamPost(
       `/api/projects/${projectId}/ai/stream/content`,
@@ -86,7 +86,8 @@ export const aiApi = {
         title: title || '未命名章节',
         direction: direction || '延续故事主线，推动情节发展',
         existingContent: existingContent || '',
-        style: style || '自然流畅'
+        style: style || '自然流畅',
+        targetWords: targetWords || 2000
       },
       (token) => {
         onToken(token)

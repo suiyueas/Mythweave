@@ -11,6 +11,7 @@ import com.mythweave.web.service.AiChatService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -210,7 +211,7 @@ public class AiChatController {
     @Operation(summary = "AI流式生成章节内容")
     @PostMapping(value = "/stream/content", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamContent(@PathVariable Long projectId,
-                                     @RequestBody ContentGenerateRequest request) {
+                                     @Valid @RequestBody ContentGenerateRequest request) {
         // 心跳保活：推理型模型在正式输出正文前可能长时间无 content，
         // 前端 20s 无数据会误判断连并自动重连，导致生成中断
         SseEmitter emitter = new SseEmitter(600_000L);
