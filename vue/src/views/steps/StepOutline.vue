@@ -2,11 +2,21 @@
   <div class="step-outline">
     <div class="step-header">
       <h2>📋 大纲结构</h2>
-      <p class="step-desc">AI 将根据世界观与人物，生成完整的三幕式章节大纲</p>
+      <p class="step-desc">AI 将根据世界观与人物，按所选叙事结构模板生成章节大纲</p>
     </div>
 
     <div v-if="status === 'pending'" class="step-body pending">
       <div class="input-area">
+        <div class="form-group">
+          <label>叙事结构模板</label>
+          <div class="template-options">
+            <label v-for="t in STRUCTURE_TEMPLATES" :key="t.value" class="template-option">
+              <input type="radio" v-model="template" :value="t.value" />
+              <span>{{ t.label }}</span>
+              <span class="template-hint">{{ t.hint }}</span>
+            </label>
+          </div>
+        </div>
         <div class="form-group">
           <label>额外方向（可选）</label>
           <textarea v-model="direction" class="form-textarea"
@@ -28,7 +38,7 @@
         <span>AI 正在搭建故事骨架...</span>
       </div>
       <div class="generating-log">
-        <div class="log-item"><span class="log-icon">📐</span><span>划分三幕结构</span></div>
+        <div class="log-item"><span class="log-icon">📐</span><span>{{ generatingLog }}</span></div>
         <div class="log-item" style="animation-delay:2s"><span class="log-icon">📝</span><span>规划章节序列与关键事件</span></div>
         <div class="log-item" style="animation-delay:4s"><span class="log-icon">🔗</span><span>建立章节因果递进关系</span></div>
       </div>
@@ -42,7 +52,7 @@
         <div class="stat-row">
           <div class="stat-item"><span class="stat-num">{{ preview.totalChapters || '?' }}</span><span class="stat-label">章节</span></div>
           <div class="stat-item"><span class="stat-num">{{ preview.actCount || '?' }}</span><span class="stat-label">幕</span></div>
-          <div class="stat-item"><span class="stat-num">{{ preview.template || 'three-act' }}</span><span class="stat-label">结构</span></div>
+          <div class="stat-item"><span class="stat-num">{{ templateLabel(preview.template) }}</span><span class="stat-label">结构</span></div>
         </div>
       </div>
       <div class="step-actions">
@@ -90,8 +100,32 @@ const emit = defineEmits(['generated', 'skipped', 'next', 'prev'])
 const status = ref(props.generatedData ? 'completed' : 'pending')
 const loading = ref(false)
 const direction = ref('')
+const template = ref('three-act')
 const errorMsg = ref('')
 const localPreview = ref(null)
+
+// 叙事结构模板配置（与后端 PromptTemplates 的三种结构指令对应）
+const STRUCTURE_TEMPLATES = [
+  { value: 'three-act', label: '三幕式', hint: '建置-对抗-解决' },
+  { value: 'hero-journey', label: '英雄之旅', hint: '12阶段' },
+  { value: 'twenty-four', label: '二十四章经', hint: '24节拍' }
+]
+const TEMPLATE_LABELS = {
+  'three-act': '三幕式',
+  'hero-journey': '英雄之旅',
+  'twenty-four': '二十四章经'
+}
+
+function templateLabel(key) {
+  if (!key) return '三幕式'
+  return TEMPLATE_LABELS[key] || key
+}
+
+const generatingLog = computed(() => ({
+  'three-act': '划分三幕结构',
+  'hero-journey': '划分英雄之旅十二阶段',
+  'twenty-four': '划分二十四章经节拍'
+}[template.value]))
 
 const preview = computed(() => {
   if (localPreview.value) return localPreview.value
@@ -108,6 +142,7 @@ async function generate() {
       worldRaw: props.world?.rawText || '',
       charactersRaw: props.characters?.rawText || '',
       targetChapters: String(props.params.targetChapters || 30),
+      template: template.value,
       direction: direction.value
     })
     const data = res?.data || res
@@ -130,6 +165,11 @@ function skip() { emit('skipped'); emit('next') }
 .input-area { max-width: 520px; }
 .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
 .form-group label { font-size: 13px; font-weight: 600; color: #334155; }
+.template-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.template-option { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; cursor: pointer; background: #fafbfc; font-size: 14px; color: #334155; transition: all 0.2s; }
+.template-option:has(input:checked) { border-color: #818cf8; background: #eef2ff; color: #4f46e5; font-weight: 600; }
+.template-option input { accent-color: #6366f1; }
+.template-hint { font-size: 11px; color: #94a3b8; font-weight: 400; }
 .form-textarea { width: 100%; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: #fafbfc; outline: none; font-family: inherit; resize: vertical; box-sizing: border-box; transition: border-color 0.2s; }
 .form-textarea:focus { border-color: #818cf8; background: #fff; }
 .btn-generate { padding: 12px 32px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; box-shadow: 0 2px 12px rgba(99,102,241,0.3); }

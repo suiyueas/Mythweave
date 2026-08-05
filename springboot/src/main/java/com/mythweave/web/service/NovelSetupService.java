@@ -197,6 +197,16 @@ public class NovelSetupService {
 
         String worldText = str(params, "worldRaw");
         String charText = str(params, "charactersRaw");
+        // 叙事结构模板：three-act（三幕式，默认）/ hero-journey（英雄之旅）/ twenty-four（二十四章经）
+        String template = str(params, "template");
+        if (template.isEmpty()) {
+            template = "three-act";
+        }
+        String structureGuide = switch (template) {
+            case "hero-journey" -> PromptTemplates.STRUCTURE_GUIDE_HERO_JOURNEY;
+            case "twenty-four" -> PromptTemplates.STRUCTURE_GUIDE_TWENTY_FOUR;
+            default -> PromptTemplates.STRUCTURE_GUIDE_THREE_ACT;
+        };
         String prompt = PromptTemplates.SETUP_OUTLINE
                 .replace("{title}", str(params, "title"))
                 .replace("{genre}", str(params, "genre"))
@@ -204,7 +214,9 @@ public class NovelSetupService {
                 .replace("{world}", worldText.isEmpty() ? "（暂无世界观数据）" : summarize(worldText, 500))
                 .replace("{characters}", charText.isEmpty() ? "（暂无人物数据）" : summarize(charText, 500))
                 .replace("{style}", str(params, "style"))
-                .replace("{targetChapters}", str(params, "targetChapters"));
+                .replace("{targetChapters}", str(params, "targetChapters"))
+                .replace("{templateKey}", template)
+                .replace("{structureGuide}", structureGuide);
         String direction = str(params, "direction");
         if (!direction.isEmpty()) {
             prompt = prompt + "\n\n【用户额外要求】：" + direction;
