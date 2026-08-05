@@ -10,6 +10,7 @@ import com.mythweave.web.mapper.NovelOutlineMapper;
 import com.mythweave.web.mapper.NovelWorldSettingMapper;
 import com.mythweave.web.service.ContextAssembler;
 import com.mythweave.web.service.EmbeddingService;
+import com.mythweave.web.service.EsConnectionState;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class ContextController {
 
     private final ContextAssembler contextAssembler;
     private final EmbeddingService embeddingService;
+    private final EsConnectionState esState;
     private final NovelCharacterMapper characterMapper;
     private final NovelWorldSettingMapper worldSettingMapper;
     private final NovelOutlineMapper outlineMapper;
@@ -188,8 +190,9 @@ public class ContextController {
     @GetMapping("/health")
     public R<Map<String, Object>> health(@PathVariable Long projectId) {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", "unknown");
-        result.put("elasticsearch", "not_configured");
+        result.put("status", esState.isAvailable() ? "healthy" : "unavailable");
+        result.put("elasticsearch", esState.isAvailable() ? "connected" : "not_configured");
+        result.put("esMessage", esState.isAvailable() ? "" : esState.getLastError());
         result.put("indexCount", 0);
         result.put("lastCheckTime", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
         return R.ok(result);

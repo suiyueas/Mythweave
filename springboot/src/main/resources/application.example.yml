@@ -24,10 +24,13 @@ spring:
       port: 6379
       password: ${REDIS_PASSWORD:}
       database: 0
-  elasticsearch:
-    uris: http://localhost:9200
-    username: elastic
-    password: ${ES_PASSWORD:}
+    elasticsearch:
+      uris: http://localhost:9200
+      username: elastic
+      password: ${ES_PASSWORD:}
+      # 无 ES 环境下快速失败并触发熔断，避免调用长时间挂起
+      connection-timeout: 3s
+      socket-timeout: 10s
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
@@ -79,6 +82,11 @@ app:
 
 # DeepSeek AI 配置
 mythweave:
+  # Elasticsearch 向量检索：本地无 ES 时可置 false 完全禁用，AI 创作功能不受影响
+  es:
+    enabled: ${ES_ENABLED:true}
+    # 连接失败后的熔断冷却时间，冷却结束自动重试探测
+    retry-after: 60s
   ai:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY:}

@@ -17,6 +17,7 @@ import java.util.UUID;
 
 /**
  * Embedding 服务：文本切块 → 千问向量化 → ES 索引
+ * ES 不可用时自动跳过索引（含向量化调用），不阻塞章节保存等主流程
  */
 @Slf4j
 @Service
@@ -25,53 +26,73 @@ public class EmbeddingService {
 
     private final QianwenEmbeddingClient embeddingClient;
     private final ElasticsearchOperations esOps;
+    private final EsConnectionState esState;
 
     /**
      * 将章节内容切块、向量化并写入ES
      */
     public void indexChapterContent(Long novelId, Long chapterId, String content) throws IOException {
+        if (!esState.isUsable()) {
+            log.warn("ES 不可用，跳过章节{}内容索引（{}）", chapterId, esState.getLastError());
+            return;
+        }
         List<String> chunks = splitText(content, 500); // 每500字一切块
+        if (chunks.isEmpty()) return;
         List<IndexQuery> queries = new ArrayList<>();
 
-        for (int i = 0; i < chunks.size(); i++) {
-            String chunk = chunks.get(i);
-            double[] embedding = embeddingClient.embed(chunk);
+        try {
+            for (int i = 0; i < chunks.size(); i++) {
+                String chunk = chunks.get(i);
+                double[] embedding = embeddingClient.embed(chunk);
 
-            ContextDocument doc = new ContextDocument();
-            doc.setId(UUID.randomUUID().toString());
-            doc.setNovelId(novelId);
-            doc.setChapterId(chapterId);
-            doc.setChunkType("paragraph");
-            doc.setChunkText(chunk);
-            doc.setEmbedding(embedding);
-            doc.setChunkSeq(i);
-            doc.setCreatedAt(LocalDateTime.now());
+                ContextDocument doc = new ContextDocument();
+                doc.setId(UUID.randomUUID().toString());
+                doc.setNovelId(novelId);
+                doc.setChapterId(chapterId);
+                doc.setChunkType("paragraph");
+                doc.setChunkText(chunk);
+                doc.setEmbedding(embedding);
+                doc.setChunkSeq(i);
+                doc.setCreatedAt(LocalDateTime.now());
 
-            IndexQuery query = new IndexQueryBuilder().withId(doc.getId()).withObject(doc).build();
-            queries.add(query);
+                IndexQuery query = new IndexQueryBuilder().withId(doc.getId()).withObject(doc).build();
+                queries.add(query);
+            }
+
+            esOps.bulkIndex(queries, ContextDocument.class);
+            log.info("章节{}内容已索引: {} 个文本块", chapterId, chunks.size());
+        } catch (Exception e) {
+            esState.markUnavailable(e.getMessage());
+            log.warn("章节{}内容索引失败，已降级跳过: {}", chapterId, e.getMessage());
         }
-
-        esOps.bulkIndex(queries, ContextDocument.class);
-        log.info("章节{}内容已索引: {} 个文本块", chapterId, chunks.size());
     }
 
     /**
      * 索引人物/设定/术语等结构化数据
      */
     public void indexEntity(Long novelId, String chunkType, String text) throws IOException {
-        double[] embedding = embeddingClient.embed(text);
+        if (!esState.isUsable()) {
+            log.warn("ES 不可用，跳过[{}]实体索引（{}）", chunkType, esState.getLastError());
+            return;
+        }
+        try {
+            double[] embedding = embeddingClient.embed(text);
 
-        ContextDocument doc = new ContextDocument();
-        doc.setId(UUID.randomUUID().toString());
-        doc.setNovelId(novelId);
-        doc.setChunkType(chunkType);
-        doc.setChunkText(text);
-        doc.setEmbedding(embedding);
-        doc.setChunkSeq(0);
-        doc.setCreatedAt(LocalDateTime.now());
+            ContextDocument doc = new ContextDocument();
+            doc.setId(UUID.randomUUID().toString());
+            doc.setNovelId(novelId);
+            doc.setChunkType(chunkType);
+            doc.setChunkText(text);
+            doc.setEmbedding(embedding);
+            doc.setChunkSeq(0);
+            doc.setCreatedAt(LocalDateTime.now());
 
-        IndexQuery query = new IndexQueryBuilder().withId(doc.getId()).withObject(doc).build();
-        esOps.index(query, esOps.getIndexCoordinatesFor(ContextDocument.class));
+            IndexQuery query = new IndexQueryBuilder().withId(doc.getId()).withObject(doc).build();
+            esOps.index(query, esOps.getIndexCoordinatesFor(ContextDocument.class));
+        } catch (Exception e) {
+            esState.markUnavailable(e.getMessage());
+            log.warn("[{}]实体索引失败，已降级跳过: {}", chunkType, e.getMessage());
+        }
     }
 
     /**

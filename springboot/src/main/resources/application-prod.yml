@@ -42,11 +42,14 @@ spring:
           min-idle: 2
           max-wait: 3000ms
 
-  # ==================== Elasticsearch 配置 ====================
-  elasticsearch:
-    uris: ${ES_URI:http://localhost:9200}
-    username: ${ES_USERNAME:}
-    password: ${ES_PASSWORD:}
+    # ==================== Elasticsearch 配置 ====================
+    elasticsearch:
+      uris: ${ES_URI:http://localhost:9200}
+      username: ${ES_USERNAME:}
+      password: ${ES_PASSWORD:}
+      # 无 ES 环境下快速失败并触发熔断，避免调用长时间挂起
+      connection-timeout: 3s
+      socket-timeout: 10s
 
   # ==================== 文件上传配置 ====================
   servlet:
@@ -151,6 +154,11 @@ app:
 
 # ==================== AI 服务配置 ====================
 mythweave:
+  # Elasticsearch 向量检索：无 ES 环境可置 false 完全禁用，AI 创作功能不受影响
+  es:
+    enabled: ${ES_ENABLED:true}
+    # 连接失败后的熔断冷却时间，冷却结束自动重试探测
+    retry-after: 60s
   ai:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY:}
@@ -191,5 +199,7 @@ spring:
   data:
     redis:
       host: redis
-  elasticsearch:
-    uris: http://elasticsearch:9200
+    elasticsearch:
+      uris: http://elasticsearch:9200
+      connection-timeout: 3s
+      socket-timeout: 10s

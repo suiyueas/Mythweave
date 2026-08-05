@@ -2,6 +2,7 @@ package com.mythweave.web.controller;
 
 import com.mythweave.web.common.R;
 import com.mythweave.web.config.AiProperties;
+import com.mythweave.web.service.EsConnectionState;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class SystemController {
     private final AiProperties aiProperties;
     private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
+    private final EsConnectionState esState;
 
     private final OkHttpClient probeClient = new OkHttpClient.Builder()
             .connectTimeout(Duration.ofSeconds(3))
@@ -46,10 +48,22 @@ public class SystemController {
     public R<Map<String, Object>> status() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ai", probeAi());
-        result.put("es", Map.of("status", "not_configured", "message", "未接入 Elasticsearch，向量检索暂不可用"));
+        result.put("es", probeEs());
         result.put("db", probeDb());
         result.put("storage", probeStorage());
         return R.ok(result);
+    }
+
+    /** 探测 ES 连接状态（来自 EsConnectionState 熔断状态） */
+    private Map<String, Object> probeEs() {
+        if (!esState.isEnabled()) {
+            return Map.of("status", "not_configured", "message", "未启用 Elasticsearch，向量检索不可用");
+        }
+        if (esState.isAvailable()) {
+            return Map.of("status", "healthy", "message", "Elasticsearch 连接正常，向量检索可用");
+        }
+        return Map.of("status", "warning", "message",
+                "Elasticsearch 未连接（" + esState.getLastError() + "），向量检索已降级");
     }
 
     /** 探测 AI 服务：调用 DeepSeek /models 接口（不消耗 token），测量真实延迟 */
