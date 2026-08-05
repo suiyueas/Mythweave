@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -35,6 +37,34 @@ public class AiChatService {
     private final NovelForeshadowingMapper foreshadowingMapper;
     private final NovelProjectMapper projectMapper;
     private final AiProperties aiProperties;
+    private final ContentSecurityService contentSecurityService;
+    private final OutputReviewService outputReviewService;
+
+    /**
+     * 安全输出包装器：实时审核 AI 输出，命中违规后停止转发后续 token 并发送一次截断提示。
+     * 软截断：底层流式调用仍会自然跑完，但违规后的 token 不再转发给前端（不侵入客户端层）
+     */
+    private Consumer<String> securityGuard(Consumer<String> onToken) {
+        StringBuilder fullOutput = new StringBuilder();
+        AtomicBoolean truncated = new AtomicBoolean(false);
+        AtomicInteger lastCheck = new AtomicInteger(0);
+        return token -> {
+            if (truncated.get()) return;
+            fullOutput.append(token);
+            // 每 200 字符检查一次，控制审核开销
+            if (fullOutput.length() - lastCheck.get() >= 200) {
+                OutputReviewService.OutputReviewResult result = outputReviewService.reviewOutput(fullOutput.toString());
+                if (result.isTruncated()) {
+                    truncated.set(true);
+                    log.warn("AI 输出被安全截断: {}", result.getReason());
+                    onToken.accept("\n[系统] " + result.getReason());
+                    return;
+                }
+                lastCheck.set(fullOutput.length());
+            }
+            onToken.accept(token);
+        };
+    }
 
     /**
      * 流式续写
@@ -44,7 +74,7 @@ public class AiChatService {
         String prompt = PromptTemplates.CONTINUE_WRITING
                 .replace("{context}", context != null ? context : "")
                 .replace("{existingText}", existingText);
-        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始续写正文，不要输出任何推理过程、思考或解释。", prompt, temperature, maxTokens, onToken);
+        int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始续写正文，不要输出任何推理过程、思考或解释。", prompt, temperature, maxTokens, securityGuard(onToken));
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();
@@ -82,6 +112,13 @@ public class AiChatService {
     public void streamChat(Long projectId, String novelTitle, String genre,
                             String currentChapter, String context, String userMessage,
                             double temperature, int maxTokens, Consumer<String> onToken, String model) throws IOException {
+        // 输入安全检查
+        ContentSecurityService.SecurityCheckResult inputCheck = contentSecurityService.checkInput(userMessage);
+        if (inputCheck.isBlocked()) {
+            log.warn("AI 对话输入被拦截: {}", inputCheck.getReason());
+            onToken.accept("[系统] " + inputCheck.getReason());
+            return;
+        }
         log.info("开始构建Chat Prompt, novelTitle={}, genre={}, model={}", novelTitle, genre, model);
 
         String worldSettings = buildWorldSettingsContext(projectId);
@@ -111,7 +148,7 @@ public class AiChatService {
         String provider = getProviderFromModel(model);
         int tokensUsed = aiChatClient.chatStream(provider,
                 "你是一位AI写作助手。直接给出简洁、准确的回答，不要输出任何推理过程、思考过程或解释。",
-                prompt, temperature, maxTokens, onToken);
+                prompt, temperature, maxTokens, securityGuard(onToken));
         log.info("{} 调用完成, tokensUsed={}", provider.toUpperCase(), tokensUsed);
     }
 
@@ -261,6 +298,12 @@ public class AiChatService {
      * 3) maxReasoningTokens 限制思维链上限 4096，剩余预算自动留给正文；4) 失败后轻量重试一次
      */
     public String chat(Long projectId, String userMessage) throws IOException {
+        // 输入安全检查
+        ContentSecurityService.SecurityCheckResult inputCheck = contentSecurityService.checkInput(userMessage);
+        if (inputCheck.isBlocked()) {
+            log.warn("AI 对话输入被拦截: {}", inputCheck.getReason());
+            return "[系统] " + inputCheck.getReason();
+        }
         String reply;
         try {
             reply = deepSeekClient.chat(
@@ -271,6 +314,13 @@ public class AiChatService {
             reply = deepSeekClient.chat(
                     "你是AI写作助手。立即直接回答用户的问题，禁止任何推理、分析、思考过程或解释。",
                     userMessage, 0.6, 8192, 4096);
+        }
+
+        // 输出二次审核
+        OutputReviewService.OutputReviewResult outputCheck = outputReviewService.reviewOutput(reply);
+        if (outputCheck.isTruncated()) {
+            log.warn("AI 对话输出被拦截: {}", outputCheck.getReason());
+            return "[系统] " + outputCheck.getReason();
         }
 
         // 保存会话记录
@@ -655,7 +705,7 @@ public class AiChatService {
         // system prompt 明确禁止推理输出，减少推理 token 消耗
         // maxReasoningTokens 2048：压缩推理配额保证正文充足，16384 总预算中 2048 推理 + 剩余给正文
         int tokensUsed = deepSeekClient.chatStream("你是一位专业小说作家。直接开始写作正文，不要输出任何推理过程、思考或解释。",
-                prompt, 0.8, 16384, onToken, 2048);
+                prompt, 0.8, 16384, securityGuard(onToken), 2048);
 
         // 保存会话记录
         NovelAiSession session = new NovelAiSession();

@@ -89,6 +89,17 @@ mythweave:
     enabled: ${ES_ENABLED:true}
     # 连接失败后的熔断冷却时间，冷却结束自动重试探测
     retry-after: 60s
+  # AI 安全策略：输入过滤/输出审核/频率限制
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+    # 敏感词库（输入过滤与输出审核共用），按需填写明确违规词汇
+    sensitive-words: []
+    rate-limit:
+      free-limit: 30
+      vip-limit: 120
+      window-seconds: 60
+      violation-threshold: 5
+      cooldown-seconds: 300
   ai:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY:}

@@ -8,6 +8,7 @@ import com.mythweave.web.dto.StreamWriteRequest;
 import com.mythweave.web.entity.NovelAiSession;
 import com.mythweave.web.mapper.NovelAiSessionMapper;
 import com.mythweave.web.service.AiChatService;
+import com.mythweave.web.service.RateLimitService;
 import com.mythweave.web.service.UserService;
 import com.mythweave.web.service.VipAccessValidator;
 
@@ -43,12 +44,43 @@ public class AiChatController {
     private final VipAccessValidator vipAccessValidator;
     private final UserService userService;
     private final ObjectMapper objectMapper;
+    private final RateLimitService rateLimitService;
 
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
     private static final long SSE_TIMEOUT_SECONDS = 180;
 
     private final ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(2);
     private final Map<SseEmitter, Long> activeEmitters = new ConcurrentHashMap<>();
+
+    /**
+     * 是否 VIP 用户（决定限流额度）
+     */
+    private boolean isVip(Long userId) {
+        return "active".equals(vipAccessValidator.getVipStatus(userId));
+    }
+
+    /**
+     * AI 接口频率限制检查（SSE 接口用，拦截时发送提示并结束流）
+     */
+    private boolean rateLimitBlocked(Long userId, SseEmitter emitter) {
+        RateLimitService.RateLimitResult limit = rateLimitService.checkRateLimit(userId, isVip(userId));
+        if (limit.isBlocked()) {
+            try {
+                emitter.send(SseEmitter.event().data("[系统] " + limit.getReason()));
+            } catch (IOException ignored) {}
+            emitter.complete();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * AI 接口频率限制检查（普通接口用，拦截时返回提示）
+     */
+    private String rateLimitReason(Long userId) {
+        RateLimitService.RateLimitResult limit = rateLimitService.checkRateLimit(userId, isVip(userId));
+        return limit.isBlocked() ? limit.getReason() : null;
+    }
 
     private void startHeartbeat(SseEmitter emitter) {
         long emitterId = System.currentTimeMillis();
@@ -91,7 +123,11 @@ public class AiChatController {
     @PostMapping(value = "/stream/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamWrite(@PathVariable Long projectId,
                                    @RequestBody StreamWriteRequest request) {
+        Long userId = userService.getCurrentUserId();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
+        if (rateLimitBlocked(userId, emitter)) {
+            return emitter;
+        }
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
@@ -129,6 +165,9 @@ public class AiChatController {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
+        if (rateLimitBlocked(userId, emitter)) {
+            return emitter;
+        }
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
@@ -184,6 +223,11 @@ public class AiChatController {
     @PostMapping("/chat")
     public R<String> chat(@PathVariable Long projectId, @RequestBody Map<String, String> body) {
         try {
+            Long userId = userService.getCurrentUserId();
+            String limitReason = rateLimitReason(userId);
+            if (limitReason != null) {
+                return R.fail(limitReason);
+            }
             String reply = aiChatService.chat(projectId, body.getOrDefault("message", ""));
             return R.ok(reply);
         } catch (Exception e) {
@@ -200,6 +244,10 @@ public class AiChatController {
     public R<String> generateTitle(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
+        String limitReason = rateLimitReason(userId);
+        if (limitReason != null) {
+            return R.fail(limitReason);
+        }
         try {
             String title = aiChatService.generateTitle(projectId, body);
             if (title == null || title.trim().isEmpty()) {
@@ -227,6 +275,9 @@ public class AiChatController {
         // 心跳保活：推理型模型在正式输出正文前可能长时间无 content，
         // 前端 20s 无数据会误判断连并自动重连，导致生成中断
         SseEmitter emitter = new SseEmitter(600_000L);
+        if (rateLimitBlocked(userId, emitter)) {
+            return emitter;
+        }
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
@@ -259,6 +310,10 @@ public class AiChatController {
     public R<String> polish(@PathVariable Long projectId, @RequestBody Map<String, String> body) {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
+        String limitReason = rateLimitReason(userId);
+        if (limitReason != null) {
+            return R.fail(limitReason);
+        }
         try {
             String text = body.getOrDefault("text", "");
             String style = body.getOrDefault("style", "自然流畅");
@@ -279,6 +334,10 @@ public class AiChatController {
     public R<String> expand(@PathVariable Long projectId, @RequestBody Map<String, Object> body) {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
+        String limitReason = rateLimitReason(userId);
+        if (limitReason != null) {
+            return R.fail(limitReason);
+        }
         try {
             String currentContent = body.getOrDefault("currentContent", "") instanceof String
                     ? (String) body.get("currentContent") : "";
@@ -307,6 +366,10 @@ public class AiChatController {
                                                     @RequestBody Map<String, Object> params) {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
+        String limitReason = rateLimitReason(userId);
+        if (limitReason != null) {
+            return R.fail(limitReason);
+        }
         try {
             String content = aiChatService.generateChapter(projectId, params);
             Map<String, Object> result = new LinkedHashMap<>();
@@ -328,6 +391,9 @@ public class AiChatController {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(600_000L);
+        if (rateLimitBlocked(userId, emitter)) {
+            return emitter;
+        }
         startHeartbeat(emitter);
         CompletableFuture.runAsync(() -> {
             try {
