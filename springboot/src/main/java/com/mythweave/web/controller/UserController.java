@@ -5,6 +5,8 @@ import com.mythweave.web.entity.NovelUser;
 import com.mythweave.web.entity.NovelUserStats;
 import com.mythweave.web.service.AvatarStorageService;
 import com.mythweave.web.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +28,7 @@ import java.util.Map;
  * 所有接口都需要用户登录认证
  */
 @Slf4j
+@Tag(name = "用户管理", description = "用户信息、头像、VIP会员管理")
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class UserController {
      * @return 用户信息（包含基本信息、VIP状态、统计信息等）
      */
     @GetMapping("/profile")
+    @Operation(summary = "获取用户个人资料")
     public R<Map<String, Object>> getProfile() {
         return R.ok(userService.getFullProfile());
     }
@@ -49,6 +53,7 @@ public class UserController {
      * @return 操作结果
      */
     @PutMapping("/profile")
+    @Operation(summary = "更新用户个人资料")
     public R<Void> updateProfile(@RequestBody NovelUser user) {
         userService.updateProfile(user);
         return R.ok();
@@ -59,6 +64,7 @@ public class UserController {
      * @return 用户统计信息（作品数、字数、VIP等级等）
      */
     @GetMapping("/stats")
+    @Operation(summary = "获取用户统计数据")
     public R<NovelUserStats> getStats() {
         return R.ok(userService.getStats());
     }
@@ -77,6 +83,7 @@ public class UserController {
      * @return 新头像的URL地址
      */
     @PostMapping("/avatar")
+    @Operation(summary = "上传用户头像")
     public R<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
             // 从 token 解析当前用户 ID
@@ -123,6 +130,7 @@ public class UserController {
      * @return 操作结果
      */
     @DeleteMapping("/avatar")
+    @Operation(summary = "删除用户头像")
     public R<Void> deleteAvatar() {
         try {
             Long userId = userService.getCurrentUserId();
@@ -160,6 +168,7 @@ public class UserController {
      * @return 操作结果
      */
     @PutMapping("/password")
+    @Operation(summary = "修改密码")
     public R<Void> changePassword(@RequestBody Map<String, String> params) {
         String oldPassword = params.get("oldPassword");
         String newPassword = params.get("newPassword");
@@ -184,6 +193,7 @@ public class UserController {
      * @return 发送结果
      */
     @PostMapping("/email/verify")
+    @Operation(summary = "发送邮箱验证")
     public R<Void> sendEmailVerification() {
         boolean success = userService.sendEmailVerification();
         if (success) {
@@ -197,6 +207,7 @@ public class UserController {
      * 获取 VIP 套餐列表（支付接入前为占位配置）
      */
     @GetMapping("/vip/plans")
+    @Operation(summary = "获取VIP套餐列表")
     public R<List<Map<String, Object>>> getVipPlans() {
         return R.ok(userService.getVipPlans());
     }
@@ -205,6 +216,7 @@ public class UserController {
      * 激活/续费 VIP（模拟支付成功，后续可对接真实支付回调）
      */
     @PostMapping("/vip/activate")
+    @Operation(summary = "激活VIP会员")
     public R<Map<String, Object>> activateVip(@RequestBody Map<String, String> params) {
         String planId = params.get("planId");
         if (planId == null || planId.isBlank()) {

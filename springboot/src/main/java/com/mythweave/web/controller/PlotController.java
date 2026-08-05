@@ -3,6 +3,7 @@ package com.mythweave.web.controller;
 import com.mythweave.web.common.R;
 import com.mythweave.web.entity.*;
 import com.mythweave.web.mapper.*;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,15 +38,19 @@ public class PlotController {
     // ═══ 情节线 CRUD ═══
 
     /** 获取作品的所有情节线 */
+    @Operation(summary = "获取情节线列表")
     @GetMapping("/threads") public R<List<NovelPlotThread>> listThreads(@PathVariable Long projectId) { return R.ok(threadMapper.selectByProjectId(projectId)); }
     
     /** 创建新的情节线 */
+    @Operation(summary = "创建情节线")
     @PostMapping("/threads") public R<NovelPlotThread> createThread(@PathVariable Long projectId, @Valid @RequestBody NovelPlotThread t) { t.setProjectId(projectId); threadMapper.insert(t); return R.ok(t); }
     
     /** 更新情节线信息 */
+    @Operation(summary = "更新情节线")
     @PutMapping("/threads/{id}") public R<NovelPlotThread> updateThread(@PathVariable Long id, @RequestBody NovelPlotThread t) { t.setId(id); threadMapper.updateById(t); return R.ok(threadMapper.selectById(id)); }
     
     /** 删除情节线 */
+    @Operation(summary = "删除情节线")
     @DeleteMapping("/threads/{id}") public R<Void> deleteThread(@PathVariable Long id) { threadMapper.deleteById(id); return R.ok(); }
 
     // ═══ 伏笔管理 ═══
@@ -54,6 +59,7 @@ public class PlotController {
      * 获取作品的所有伏笔列表
      * 自动触发孤儿伏笔自愈回收机制
      */
+    @Operation(summary = "获取伏笔列表")
     @GetMapping("/foreshadowing") public R<List<NovelForeshadowing>> listForeshadowing(@PathVariable Long projectId) {
         healOrphanForeshadowing(projectId);
         return R.ok(foreshadowingMapper.selectByProjectId(projectId));
@@ -66,15 +72,18 @@ public class PlotController {
      * @param currentChapter 当前章节号（伏笔超过此章节未回收会被标记为紧急）
      * @return 紧急伏笔列表
      */
+    @Operation(summary = "获取待回收伏笔")
     @GetMapping("/foreshadowing/urgent") public R<List<NovelForeshadowing>> listUrgentForeshadowing(@PathVariable Long projectId, @RequestParam(defaultValue = "999") Integer currentChapter) {
         healOrphanForeshadowing(projectId);
         return R.ok(foreshadowingMapper.selectUrgentByProject(projectId, currentChapter));
     }
 
     /** 创建新的伏笔 */
+    @Operation(summary = "创建伏笔")
     @PostMapping("/foreshadowing") public R<NovelForeshadowing> createForeshadowing(@PathVariable Long projectId, @Valid @RequestBody NovelForeshadowing f) { f.setProjectId(projectId); foreshadowingMapper.insert(f); return R.ok(f); }
     
     /** 更新伏笔信息 */
+    @Operation(summary = "更新伏笔")
     @PutMapping("/foreshadowing/{id}") public R<NovelForeshadowing> updateForeshadowing(@PathVariable Long id, @RequestBody NovelForeshadowing f) { f.setId(id); foreshadowingMapper.updateById(f); return R.ok(foreshadowingMapper.selectById(id)); }
 
     /**

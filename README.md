@@ -50,6 +50,9 @@
 ### 👑 VIP 会员系统
 - AI 功能权限拦截（免费用户限次，VIP 无限畅用）
 - 后端二次校验（防止绕过前端直接调接口）
+- 输入安全过滤（敏感词 + 越狱检测 + 注入防御）
+- 频率限制与熔断机制（防滥用）
+- 输出内容二次审核（生成内容敏感扫描）
 - 多档位套餐（月度/季度/年度）
 - 微信/支付宝模拟支付
 - VIP 到期续费与状态管理
@@ -57,6 +60,25 @@
 ### 🔍 全局搜索
 - 基于 Elasticsearch 的全文搜索
 - 语义相似度匹配（千问 Embedding 1024 维向量）
+
+### 📊 创作分析
+- 写作进度可视化（字数统计、章节完成率）
+- 写作时长追踪
+- 哨兵问题汇总与趋势分析
+
+### 🎯 情节线管理
+- 多线程情节线创建与管理
+- 伏笔与回收节点追踪
+- 情节线可视化
+
+### 💡 灵感管理
+- 灵感碎片随时记录
+- AI 灵感推荐
+- 灵感与作品的关联管理
+
+### 📤 作品导出
+- 支持导出为 TXT/EPUB/JSON 格式
+- 导出时自动清理敏感内容
 
 ## 🛠️ 技术栈
 
@@ -88,6 +110,20 @@
 | 多 Agent 协作 | 编辑/人物/风格/读者 4 个职责单一 Agent，协调器流水线并行调度 |
 | 智能巡检 | 规则引擎 + 关键词统计构建 4 类扫描器，规则热更新，WebSocket 秒级告警 |
 | 稳定性治理 | Redis 熔断降级、AI 调用指数退避重试、启动缓存预热 |
+
+## 🔐 安全机制
+
+| 层级 | 机制 | 说明 |
+|------|------|------|
+| 输入层 | 敏感词过滤 | 政治/暴力/色情等敏感词实时拦截 |
+| 输入层 | 越狱检测 | 防御 Jailbreak 等对抗性提示词攻击 |
+| 输入层 | 注入攻击防御 | 检测 System Prompt 覆盖尝试 |
+| 请求层 | 频率限制 | 普通用户 30次/分钟，VIP 120次/分钟 |
+| 请求层 | 熔断机制 | 连续违规自动熔断 5 分钟冷却 |
+| 输出层 | 二次审核 | 生成内容实时扫描，违规自动截断 |
+| 输出层 | 循环检测 | 复读攻击自动中断输出 |
+| 权限层 | VIP 后端校验 | 所有 AI 接口后端二次鉴权 |
+| 权限层 | IDOR 防护 | 项目/章节访问需校验归属 |
 
 ## 📦 项目结构
 
@@ -203,15 +239,27 @@ npm run dev
 
 | 模块 | 说明 |
 |------|------|
-| `NovelProjectController` | 作品管理 |
+| `ProjectController` | 作品管理 |
 | `ChapterController` | 章节管理 |
 | `CharacterController` | 人物管理 |
 | `WorldSettingController` | 世界观管理 |
 | `OutlineController` | 大纲管理 |
+| `PlotController` | 情节线与伏笔管理 |
+| `InspirationController` | 灵感管理 |
 | `AiChatController` | AI 对话（SSE 流式） |
-| `SentinelController` | 智能哨兵 |
+| `AiConfigController` | AI 参数配置 |
+| `AgentOrchestratorController` | 智能体编排 |
+| `NovelSetupController` | 作品设定生成 |
+| `SentinelController` | 智能哨兵巡检 |
+| `ContextController` | 上下文检索 |
+| `DashboardController` | 数据仪表盘 |
+| `AnalysisController` | 创作分析 |
 | `SearchController` | 全局搜索 |
+| `ExportController` | 作品导出 |
 | `UserController` | 用户管理 / VIP 会员 |
+| `AuthController` | 注册登录 |
+| `SettingsController` | 系统设置 |
+| `SystemController` | 系统健康检查 |
 
 ## 📝 License
 

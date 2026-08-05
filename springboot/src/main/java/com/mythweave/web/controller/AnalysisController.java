@@ -7,6 +7,8 @@ import com.mythweave.web.entity.NovelAnalysis;
 import com.mythweave.web.service.AgentOrchestratorService;
 import com.mythweave.web.service.AnalysisService;
 import com.mythweave.web.common.R;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Slf4j
+@Tag(name = "创作分析", description = "写作分析、统计数据")
 @RestController
 @RequestMapping("/api/projects/{projectId}/analysis")
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class AnalysisController {
     private final AgentOrchestratorService agentOrchestratorService;
 
     @PostMapping("/orchestrate")
+    @Operation(summary = "AI综合分析编排")
     public R<AnalysisDTO> orchestrateAndSave(@PathVariable Long projectId,
                                              @RequestBody OrchestratorRequest request) {
         log.info("📨 收到综合分析请求, projectId={}, chapterTitle={}",
@@ -52,6 +56,7 @@ public class AnalysisController {
     }
 
     @GetMapping("/history")
+    @Operation(summary = "获取分析历史")
     public R<List<AnalysisDTO>> getHistory(@PathVariable Long projectId) {
         log.info("📋 获取分析历史, projectId={}", projectId);
         List<AnalysisDTO> history = analysisService.getAnalysisHistory(projectId)
@@ -62,6 +67,7 @@ public class AnalysisController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "获取分析详情")
     public R<AnalysisDTO> getById(@PathVariable Long projectId, @PathVariable Long id) {
         log.info("🔍 获取分析详情, id={}", id);
         NovelAnalysis analysis = analysisService.getAnalysisById(id);
@@ -72,6 +78,7 @@ public class AnalysisController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "删除分析记录")
     public R<Void> delete(@PathVariable Long projectId, @PathVariable Long id) {
         log.info("🗑️ 删除分析记录, id={}", id);
         analysisService.deleteAnalysis(id);
