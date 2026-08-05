@@ -82,7 +82,9 @@ app:
 
 # DeepSeek AI 配置
 mythweave:
-  # Elasticsearch 向量检索：本地无 ES 时可置 false 完全禁用，AI 创作功能不受影响
+  # Elasticsearch 向量检索：
+  # - enabled=false 时完全禁用：不加载 ES 自动配置与相关 Bean，本地无 ES 环境可放心关闭
+  # - enabled=true 时启动异步探测，无 ES 仅降级不影响 AI 创作；连接失败自动熔断重试
   es:
     enabled: ${ES_ENABLED:true}
     # 连接失败后的熔断冷却时间，冷却结束自动重试探测

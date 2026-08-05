@@ -1,0 +1,3 @@
+# ES 自动配置动态排除过滤器（mythweave.es.enabled=false 时生效）
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=\
+com.mythweave.web.config.EsAutoConfigurationImportFilter

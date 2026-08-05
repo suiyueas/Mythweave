@@ -4,6 +4,7 @@ import com.mythweave.web.client.QianwenEmbeddingClient;
 import com.mythweave.web.model.ContextDocument;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,9 +21,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContextAssembler {
 
-    private final ESSearchService esSearchService;
+    private final ObjectProvider<ESSearchService> esSearchServiceProvider;
     private final QianwenEmbeddingClient embeddingClient;
     private final EsConnectionState esState;
+
+    /**
+     * 获取 ES 检索服务（mythweave.es.enabled=false 时 Bean 不存在，返回 null）
+     */
+    private ESSearchService esSearchService() {
+        return esSearchServiceProvider.getIfAvailable();
+    }
 
     /**
      * 根据当前写作位置，检索并组装上下文
@@ -33,6 +41,11 @@ public class ContextAssembler {
         }
         if (!esState.isUsable()) {
             log.warn("ES 不可用，上下文装配降级返回空（{}）", esState.getLastError());
+            return "";
+        }
+        ESSearchService esSearchService = esSearchService();
+        if (esSearchService == null) {
+            log.warn("ES 已禁用，上下文装配降级返回空");
             return "";
         }
         try {
@@ -72,6 +85,11 @@ public class ContextAssembler {
     public List<String> semanticSearch(Long novelId, String query, int topK) throws IOException {
         if (!esState.isUsable()) {
             log.warn("ES 不可用，语义搜索降级返回空（{}）", esState.getLastError());
+            return List.of();
+        }
+        ESSearchService esSearchService = esSearchService();
+        if (esSearchService == null) {
+            log.warn("ES 已禁用，语义搜索降级返回空");
             return List.of();
         }
         try {

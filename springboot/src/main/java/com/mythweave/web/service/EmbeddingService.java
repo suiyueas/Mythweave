@@ -4,6 +4,7 @@ import com.mythweave.web.client.QianwenEmbeddingClient;
 import com.mythweave.web.model.ContextDocument;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
 import org.springframework.data.elasticsearch.core.query.IndexQueryBuilder;
@@ -22,6 +23,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "mythweave.es", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EmbeddingService {
 
     private final QianwenEmbeddingClient embeddingClient;

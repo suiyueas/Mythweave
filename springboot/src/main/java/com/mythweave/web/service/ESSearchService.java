@@ -9,6 +9,7 @@ import com.mythweave.web.model.ContextDocument;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -22,6 +23,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "mythweave.es", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ESSearchService {
 
     private final ElasticsearchClient esClient;

@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -30,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ContextController {
 
     private final ContextAssembler contextAssembler;
-    private final EmbeddingService embeddingService;
+    private final ObjectProvider<EmbeddingService> embeddingServiceProvider;
     private final EsConnectionState esState;
     private final NovelCharacterMapper characterMapper;
     private final NovelWorldSettingMapper worldSettingMapper;
@@ -153,6 +154,10 @@ public class ContextController {
     public R<Void> indexChapter(@PathVariable Long projectId,
                                  @RequestBody Map<String, Object> body) {
         try {
+            EmbeddingService embeddingService = embeddingServiceProvider.getIfAvailable();
+            if (embeddingService == null) {
+                return R.fail("Elasticsearch 未启用，索引功能不可用");
+            }
             Long chapterId = Long.valueOf(body.get("chapterId").toString());
             embeddingService.indexChapterContent(projectId, chapterId, body.get("content").toString());
             return R.ok();
