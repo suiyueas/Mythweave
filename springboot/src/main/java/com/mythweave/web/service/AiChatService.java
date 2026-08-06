@@ -142,6 +142,14 @@ public class AiChatService {
         } else {
             prompt = prompt.replace("{context}", ctx);
         }
+
+        // 上下文长度保护：中文约2字符≈1Token，Prompt上限约3000字符
+        int MAX_PROMPT_LENGTH = 3000;
+        if (prompt.length() > MAX_PROMPT_LENGTH) {
+            log.warn("Prompt长度{}超过限制{}，进行截断", prompt.length(), MAX_PROMPT_LENGTH);
+            prompt = prompt.substring(0, MAX_PROMPT_LENGTH) + "\n\n[上下文已被截断...]";
+        }
+
         log.info("Chat prompt构建完成, 长度={}, 前200字={}", prompt.length(),
                 prompt.substring(0, Math.min(200, prompt.length())));
 

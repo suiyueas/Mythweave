@@ -7,6 +7,7 @@ import com.mythweave.web.dto.RegisterRequest;
 import com.mythweave.web.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,7 +40,7 @@ public class AuthController {
      */
     @Operation(summary = "用户注册")
     @PostMapping("/register")
-    public R<?> register(@RequestBody RegisterRequest req) {
+    public R<?> register(@Valid @RequestBody RegisterRequest req) {
         try {
             authService.register(req);
             return R.ok(Map.of("success", true, "message", "注册成功"));
@@ -60,7 +61,7 @@ public class AuthController {
      */
     @Operation(summary = "用户登录")
     @PostMapping("/login")
-    public R<LoginResponse> login(@RequestBody LoginRequest req) {
+    public R<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
         try {
             return R.ok(authService.login(req));
         } catch (RuntimeException e) {

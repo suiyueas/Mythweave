@@ -79,31 +79,36 @@ public class OrchestratorAgent {
         AgentResult readerResult = null;
         String summary = null;
 
+        Future<AgentResult> editorFuture = null;
+        Future<AgentResult> characterFuture = null;
+        Future<AgentResult> styleFuture = null;
+        Future<AgentResult> readerFuture = null;
+
         try {
             AgentContext context = buildContext(projectId, request);
 
-            Future<AgentResult> editorFuture = executor.submit(() -> {
+            editorFuture = executor.submit(() -> {
                 log.info("📝 Editor Agent 开始分析...");
                 AgentResult r = editorAgent.analyze(context);
                 log.info("✅ Editor Agent 完成");
                 return r;
             });
 
-            Future<AgentResult> characterFuture = executor.submit(() -> {
+            characterFuture = executor.submit(() -> {
                 log.info("👤 Character Agent 开始分析...");
                 AgentResult r = characterAgent.analyze(context);
                 log.info("✅ Character Agent 完成");
                 return r;
             });
 
-            Future<AgentResult> styleFuture = executor.submit(() -> {
+            styleFuture = executor.submit(() -> {
                 log.info("🎨 Style Agent 开始分析...");
                 AgentResult r = styleAgent.analyze(context);
                 log.info("✅ Style Agent 完成");
                 return r;
             });
 
-            Future<AgentResult> readerFuture = executor.submit(() -> {
+            readerFuture = executor.submit(() -> {
                 log.info("📖 Reader Agent 开始分析...");
                 AgentResult r = readerAgent.analyze(context);
                 log.info("✅ Reader Agent 完成");
@@ -120,6 +125,7 @@ public class OrchestratorAgent {
 
         } catch (TimeoutException e) {
             log.error("❌ 多Agent协作超时 ({}秒)", ORCHESTRATOR_TIMEOUT_SECONDS, e);
+            cancelFutures(editorFuture, characterFuture, styleFuture, readerFuture);
             return OrchestratorResponse.builder()
                     .editorResult(editorResult)
                     .characterResult(characterResult)
@@ -157,6 +163,14 @@ public class OrchestratorAgent {
                 .totalCostMs(totalCostMs)
                 .success(true)
                 .build();
+    }
+
+    private void cancelFutures(Future<?>... futures) {
+        for (Future<?> future : futures) {
+            if (future != null && !future.isDone()) {
+                future.cancel(true);
+            }
+        }
     }
 
     private String generateSummaryWithTimeout(AgentResult editor, AgentResult character,

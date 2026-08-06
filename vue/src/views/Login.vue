@@ -1,35 +1,36 @@
 <template>
   <div class="login-view">
-    <h2 class="login-title">欢迎回来</h2>
-    <p class="login-desc">登录以继续你的创作</p>
+    <h2 class="page-title">欢迎回来</h2>
+    <p class="page-subtitle">登录以继续你的创作之旅</p>
 
     <form @submit.prevent="handleLogin" class="login-form">
       <div class="field-group">
-        <label class="field-label">用户名</label>
-        <div class="field-input-wrapper">
-          <span class="field-icon">👤</span>
-          <input
-            v-model="form.username"
-            type="text"
-            placeholder="输入用户名或邮箱"
-            required
-            class="field-input"
-          />
-        </div>
+        <input
+          v-model="form.username"
+          type="text"
+          placeholder="输入用户名或邮箱"
+          required
+          class="field-input"
+        />
       </div>
 
       <div class="field-group">
-        <label class="field-label">密码</label>
-        <div class="field-input-wrapper">
-          <span class="field-icon">🔑</span>
+        <div class="password-wrapper">
           <input
             v-model="form.password"
-            type="password"
+            :type="showPassword ? 'text' : 'password'"
             placeholder="输入密码"
             required
             class="field-input"
           />
+          <button type="button" class="password-toggle" @click="showPassword = !showPassword">
+            {{ showPassword ? '👁' : '👁‍🗨' }}
+          </button>
         </div>
+      </div>
+
+      <div class="form-options">
+        <router-link to="/forgot-password" class="forgot-link">忘记密码？</router-link>
       </div>
 
       <transition name="msg">
@@ -38,32 +39,42 @@
         </div>
       </transition>
 
-      <button type="submit" class="submit-btn" :disabled="loading">
+      <button type="submit" class="submit-btn" :disabled="loading" ref="btnRef">
         <span v-if="loading" class="spinner"></span>
         <span v-else>登 录</span>
       </button>
     </form>
 
-    <div class="form-footer">
+    <p class="form-footer">
       还没有账号？
-      <router-link to="/register" class="form-link">创建一个</router-link>
-    </div>
+      <router-link to="/register" class="footer-link">创建新账号</router-link>
+    </p>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
+const authExiting = inject('authExiting')
 
 const form = ref({ username: '', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
+const showPassword = ref(false)
+const btnRef = ref(null)
 
 async function handleLogin() {
+  if (loading.value) return
+
+  if (btnRef.value) {
+    btnRef.value.classList.add('clicked')
+    setTimeout(() => btnRef.value?.classList.remove('clicked'), 600)
+  }
+
   loading.value = true
   errorMessage.value = ''
 
@@ -71,7 +82,9 @@ async function handleLogin() {
   loading.value = false
 
   if (result.success) {
-    router.push('/my-works')
+    authExiting(() => {
+      router.push('/my-works')
+    })
   } else {
     errorMessage.value = result.message
   }
@@ -84,171 +97,224 @@ async function handleLogin() {
   flex-direction: column;
 }
 
-.login-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 26px;
+.page-title {
+  font-size: 28px;
   font-weight: 700;
-  color: #2d2a27;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.3px;
+  color: #5C3D1E;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
 }
 
-.login-desc {
-  font-size: 13px;
-  color: #9c9690;
-  margin: 0 0 28px 0;
+.page-subtitle {
+  font-size: 14px;
+  color: #A08060;
+  margin: 0 0 32px;
 }
 
 /* ═══ 表单 ═══ */
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b6560;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.field-input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border: 1.5px solid #e8e3dc;
-  border-radius: 12px;
-  background: #faf8f5;
-  transition: border-color 0.25s, box-shadow 0.25s;
-}
-
-.field-input-wrapper:focus-within {
-  border-color: #d97706;
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
-  background: #fff;
-}
-
-.field-icon {
-  font-size: 15px;
-  flex-shrink: 0;
-  opacity: 0.6;
+  position: relative;
 }
 
 .field-input {
-  flex: 1;
-  padding: 13px 0;
-  border: none;
-  background: transparent;
-  font-family: 'Crimson Pro', 'Noto Serif SC', serif;
-  font-size: 15px;
-  color: #2d2a27;
-  outline: none;
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid rgba(200, 160, 120, 0.3);
+  border-radius: 14px;
+  color: #5C3D1E;
+  font-size: 14px;
+  transition: border-color 0.25s, box-shadow 0.25s;
+  box-sizing: border-box;
 }
 
 .field-input::placeholder {
-  color: #c4bdb6;
-  font-style: italic;
+  color: #B8A090;
 }
 
-/* ═══ 消息 ═══ */
+.field-input:focus {
+  outline: none;
+  border-color: #E87A3E;
+  box-shadow: 0 0 0 0 rgba(232, 122, 62, 0.4);
+  animation: inputGlow 1.2s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+@keyframes inputGlow {
+  0% {
+    border-color: rgba(232, 122, 62, 0.4);
+    box-shadow: 0 0 0 0 rgba(232, 122, 62, 0.1);
+  }
+  50% {
+    border-color: #E87A3E;
+    box-shadow: 0 0 20px 8px rgba(232, 122, 62, 0.15);
+  }
+  100% {
+    border-color: rgba(232, 122, 62, 0.4);
+    box-shadow: 0 0 0 0 rgba(232, 122, 62, 0.1);
+  }
+}
+
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper .field-input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+
+.password-toggle:hover {
+  opacity: 0.8;
+}
+
+.form-options {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.forgot-link {
+  font-size: 13px;
+  color: #E87A3E;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: #D4692E;
+}
+
 .form-message {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 12px 14px;
   border-radius: 10px;
+  font-size: 13px;
 }
 
 .form-message.error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: rgba(220, 80, 60, 0.1);
+  color: #C05040;
+  border: 1px solid rgba(220, 80, 60, 0.2);
 }
 
-.msg-enter-active, .msg-leave-active {
-  transition: all 0.25s ease;
-}
-.msg-enter-from, .msg-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
+.form-message span {
+  font-size: 14px;
 }
 
-/* ═══ 提交按钮 ═══ */
 .submit-btn {
+  position: relative;
   width: 100%;
   padding: 14px;
+  background: linear-gradient(135deg, #E87A3E 0%, #D4692E 100%);
   border: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #d97706, #b45309);
-  color: #fff;
-  font-family: 'Noto Serif SC', serif;
+  border-radius: 14px;
+  color: #ffffff;
   font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 4px;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  margin-top: 4px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(232, 122, 62, 0.3);
+  margin-top: 8px;
+  overflow: hidden;
 }
 
 .submit-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(217, 119, 6, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(232, 122, 62, 0.4);
 }
 
 .submit-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.97);
+}
+
+.submit-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease-out, height 0.6s ease-out, opacity 0.6s ease-out;
+  opacity: 0;
+}
+
+.submit-btn.clicked::after {
+  width: 300px;
+  height: 300px;
+  opacity: 0;
 }
 
 .submit-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .spinner {
-  width: 20px;
-  height: 20px;
-  border: 2.5px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* ═══ 底部链接 ═══ */
 .form-footer {
-  text-align: center;
-  font-size: 13px;
-  color: #9c9690;
   margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #f3efe8;
+  text-align: center;
+  font-size: 14px;
+  color: #A08060;
 }
 
-.form-link {
-  color: #d97706;
+.footer-link {
+  color: #E87A3E;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
   transition: color 0.2s;
 }
 
-.form-link:hover {
-  color: #b45309;
-  text-decoration: underline;
+.footer-link:hover {
+  color: #D4692E;
+}
+
+/* ═══ 消息动画 ═══ */
+.msg-enter-active,
+.msg-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.msg-enter-from,
+.msg-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 </style>

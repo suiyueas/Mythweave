@@ -122,8 +122,9 @@ public class AiChatController {
     @Operation(summary = "AI流式续写")
     @PostMapping(value = "/stream/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamWrite(@PathVariable Long projectId,
-                                   @RequestBody StreamWriteRequest request) {
+                                   @Valid @RequestBody StreamWriteRequest request) {
         Long userId = userService.getCurrentUserId();
+        vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);
         if (rateLimitBlocked(userId, emitter)) {
             return emitter;
@@ -161,7 +162,7 @@ public class AiChatController {
     @Operation(summary = "AI流式对话")
     @PostMapping(value = "/stream/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(@PathVariable Long projectId,
-                                  @RequestBody StreamChatRequest request) {
+                                  @Valid @RequestBody StreamChatRequest request) {
         Long userId = userService.getCurrentUserId();
         vipAccessValidator.validateVipAccess(userId);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_SECONDS * 1000L);

@@ -62,15 +62,8 @@ public class ChapterController {
     @GetMapping("/{chapterId}")
     public R<NovelChapter> getChapter(@RequestAttribute("userId") Long userId,
                                       @PathVariable Long projectId, @PathVariable Long chapterId) {
-        NovelChapter chapter = chapterService.getChapter(chapterId);
-        if (!chapter.getProjectId().equals(projectId)) {
-            throw new com.mythweave.web.common.BusinessException(403, "章节不属于该作品");
-        }
-        NovelProject project = projectService.getById(projectId);
-        if (!project.getUserId().equals(userId)) {
-            throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
-        }
-        return R.ok(chapter);
+        validateChapterOwnership(userId, projectId, chapterId);
+        return R.ok(chapterService.getChapter(chapterId));
     }
 
     /**
@@ -88,6 +81,7 @@ public class ChapterController {
 
     /**
      * 更新章节内容
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @param chapter 更新后的章节信息
@@ -96,22 +90,27 @@ public class ChapterController {
      */
     @Operation(summary = "更新章节")
     @PutMapping("/{chapterId}")
-    public R<NovelChapter> updateChapter(@PathVariable Long projectId, @PathVariable Long chapterId,
+    public R<NovelChapter> updateChapter(@RequestAttribute("userId") Long userId,
+                                          @PathVariable Long projectId, @PathVariable Long chapterId,
                                           @RequestBody NovelChapter chapter,
                                           @RequestParam(defaultValue = "false") boolean silent) {
+        validateChapterOwnership(userId, projectId, chapterId);
         chapter.setId(chapterId);
         return R.ok(chapterService.updateChapter(chapter, silent));
     }
 
     /**
      * 删除章节（逻辑删除）
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @return 操作结果
      */
     @Operation(summary = "删除章节")
     @DeleteMapping("/{chapterId}")
-    public R<Void> deleteChapter(@PathVariable Long projectId, @PathVariable Long chapterId) {
+    public R<Void> deleteChapter(@RequestAttribute("userId") Long userId,
+                                  @PathVariable Long projectId, @PathVariable Long chapterId) {
+        validateChapterOwnership(userId, projectId, chapterId);
         chapterService.deleteChapter(chapterId);
         return R.ok();
     }
@@ -170,6 +169,26 @@ public class ChapterController {
 
     private void validateProjectOwnership(Long userId, Long projectId) {
         NovelProject project = projectService.getById(projectId);
+        if (project == null) {
+            throw new com.mythweave.web.common.BusinessException(404, "作品不存在");
+        }
+        if (!project.getUserId().equals(userId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
+        }
+    }
+
+    private void validateChapterOwnership(Long userId, Long projectId, Long chapterId) {
+        NovelChapter chapter = chapterService.getChapter(chapterId);
+        if (chapter == null) {
+            throw new com.mythweave.web.common.BusinessException(404, "章节不存在");
+        }
+        if (!chapter.getProjectId().equals(projectId)) {
+            throw new com.mythweave.web.common.BusinessException(403, "章节不属于该作品");
+        }
+        NovelProject project = projectService.getById(projectId);
+        if (project == null) {
+            throw new com.mythweave.web.common.BusinessException(404, "作品不存在");
+        }
         if (!project.getUserId().equals(userId)) {
             throw new com.mythweave.web.common.BusinessException(403, "无权访问该作品");
         }
@@ -179,10 +198,11 @@ public class ChapterController {
 
     /**
      * 伏笔追加补写
-     * 
+     *
      * AI功能：根据已有的伏笔设置，在章节末尾追加符合伏笔发展的内容
      * 用于在写完章节后发现需要呼应之前的伏笔时的辅助创作
-     * 
+     *
+     * @param userId 当前登录用户ID
      * @param projectId 作品ID
      * @param chapterId 章节ID
      * @param request 补写请求（包含伏笔ID、期望长度等参数）
@@ -190,9 +210,11 @@ public class ChapterController {
      */
     @Operation(summary = "伏笔追加补写")
     @PostMapping("/{chapterId}/append-foreshadow")
-    public R<Map<String, Object>> appendForeshadow(@PathVariable Long projectId,
+    public R<Map<String, Object>> appendForeshadow(@RequestAttribute("userId") Long userId,
+                                                    @PathVariable Long projectId,
                                                     @PathVariable Long chapterId,
                                                     @RequestBody AppendForeshadowRequest request) {
+        validateChapterOwnership(userId, projectId, chapterId);
         request.setProjectId(projectId);
         request.setChapterId(chapterId);
         Map<String, Object> result = foreshadowAppendService.appendForeshadowing(request);
