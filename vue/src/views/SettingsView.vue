@@ -18,29 +18,6 @@
       </div>
     </header>
     
-    <!-- ═══ VIP 状态卡片（常驻内容区顶部） ═══ -->
-    <div class="vip-card" :class="vipCardClass">
-      <div class="vip-card-left">
-        <div class="vip-card-badge">👑</div>
-        <div class="vip-card-info">
-          <div class="vip-card-title-row">
-            <span class="vip-level">{{ userStore.vipLevelName }}</span>
-            <span v-if="userStore.isAdmin" class="vip-admin-tag">管理员</span>
-            <span v-if="userStore.isVip" class="vip-expire">到期时间：{{ userStore.vipExpireDate }}</span>
-            <span v-else-if="userStore.vipExpired" class="vip-expired-tag">已过期</span>
-            <span v-else class="vip-free-tag">免费用户</span>
-          </div>
-          <div class="vip-benefits-row">
-            <span v-for="b in vipBenefits" :key="b" class="vip-benefit-tag">{{ b }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="vip-card-actions">
-        <button v-if="userStore.isVip" class="btn-vip-renew" @click="openRecharge">续费</button>
-        <button v-else class="btn-vip-upgrade" @click="openRecharge">立即升级 →</button>
-      </div>
-    </div>
-    
     <!-- ═══ Tab 导航 ═══ -->
     <nav class="tab-bar">
       <button
@@ -63,19 +40,31 @@
         <!-- ══ 账户信息 ══ -->
         <section v-if="activeTab === 'account'" key="account" class="panel">
           <div class="profile-hero">
-            <div class="avatar-frame">
-              <label class="avatar-upload-label" :style="{ cursor: 'pointer' }">
-                <img v-if="avatarDataUrl" :src="avatarDataUrl" class="avatar-img" />
-                <div v-else class="avatar-letter">{{ userStore.avatarText }}</div>
-                <input type="file" accept="image/*" class="avatar-input" @change="handleAvatarUpload" />
-                <div class="avatar-overlay">
-                  <span class="avatar-overlay-icon">📷</span>
-                </div>
-              </label>
+            <div class="profile-left">
+              <div class="avatar-frame">
+                <label class="avatar-upload-label" :style="{ cursor: 'pointer' }">
+                  <img v-if="avatarDataUrl" :src="avatarDataUrl" class="avatar-img" />
+                  <div v-else class="avatar-letter">{{ userStore.avatarText }}</div>
+                  <input type="file" accept="image/*" class="avatar-input" @change="handleAvatarUpload" />
+                  <div class="avatar-overlay">
+                    <span class="avatar-overlay-icon">📷</span>
+                  </div>
+                </label>
+              </div>
+              <div class="profile-meta">
+                <h2 class="profile-name">{{ accountInfo.username || '未命名作者' }}</h2>
+              </div>
             </div>
-            <div class="profile-meta">
-              <h2 class="profile-name">{{ accountInfo.username || '未命名作者' }}</h2>
-              <span class="profile-badge">{{ userRoleBadge }}</span>
+            <div class="profile-vip">
+              <button v-if="!userStore.isVip" class="btn-vip-profile" @click="openRecharge">
+                <span class="vip-icon">👑</span>
+                <span class="vip-text">开通 VIP</span>
+                <span class="vip-arrow">→</span>
+              </button>
+              <button v-else class="btn-vip-profile vip-active" @click="openRecharge">
+                <span class="vip-icon">👑</span>
+                <span class="vip-text">{{ userStore.isAdmin ? 'VIP 永久' : 'VIP 已开通' }}</span>
+              </button>
             </div>
           </div>
 
@@ -410,25 +399,10 @@ const router = useRouter()
 const store = useSettingsStore()
 const userStore = useUserStore()
 
-// ─── VIP 卡片 ───
-const vipBenefits = ['AI 无限生成', '专属模板', '优先支持']
-
-const vipCardClass = computed(() => {
-  if (userStore.isVip) return 'vip-card-active'
-  if (userStore.vipExpired) return 'vip-card-expired'
-  return ''
-})
-
+// ─── VIP 续费/升级 ───
 function openRecharge() {
   openVipModal({ mode: 'recharge' })
 }
-
-// ─── 用户角色 Badge ───
-const userRoleBadge = computed(() => {
-  if (userStore.isAdmin) return '管理员'
-  if (userStore.isVip) return userStore.vipLevelName
-  return '普通用户'
-})
 
 // ─── Tab 切换 ───
 const activeTab = ref('account')
@@ -515,6 +489,17 @@ function saveProfile() {
       userStore.profile.nickname = accountInfo.username
       userStore.profile.email = accountInfo.email
       userStore.profile.bio = accountInfo.bio
+    }
+    // 同步更新 localStorage 中的 user 对象，防止刷新页面后丢失
+    const savedUser = localStorage.getItem('user')
+    if (savedUser) {
+      const userObj = JSON.parse(savedUser)
+      localStorage.setItem('user', JSON.stringify({
+        ...userObj,
+        nickname: accountInfo.username,
+        email: accountInfo.email,
+        bio: accountInfo.bio
+      }))
     }
     // 保存到后端数据库
     if (userStore.profile?.id) {
@@ -728,6 +713,21 @@ function saveAll() {
   // 立即同步用户资料到后端（不等待防抖）
   if (userStore.profile?.id) {
     localStorage.setItem(profileKey(), JSON.stringify({ ...accountInfo, avatarDataUrl: avatarDataUrl.value }))
+    // 同步更新 localStorage 中的 user 对象
+    const savedUser = localStorage.getItem('user')
+    if (savedUser) {
+      const userObj = JSON.parse(savedUser)
+      localStorage.setItem('user', JSON.stringify({
+        ...userObj,
+        nickname: accountInfo.username,
+        email: accountInfo.email,
+        bio: accountInfo.bio
+      }))
+    }
+    // 同时更新 userStore 内存中的数据
+    userStore.profile.nickname = accountInfo.username
+    userStore.profile.email = accountInfo.email
+    userStore.profile.bio = accountInfo.bio
     userApi.updateProfile({
       nickname: accountInfo.username,
       email: accountInfo.email,
@@ -814,6 +814,7 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  align-items: center;
 }
 
 /* ─── 按钮系统 ─── */
@@ -1181,6 +1182,55 @@ onUnmounted(() => {
   font-family: 'Crimson Pro', serif;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* ─── 头像区域左侧 ─── */
+.profile-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ─── VIP 右侧入口 ─── */
+.profile-vip {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.btn-vip-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Crimson Pro', 'Noto Serif SC', serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-vip-profile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(217, 119, 6, 0.45);
+}
+
+.btn-vip-profile .vip-icon { font-size: 18px; }
+.btn-vip-profile .vip-text { letter-spacing: 0.5px; }
+.btn-vip-profile .vip-arrow { font-size: 16px; opacity: 0.8; }
+
+.btn-vip-profile.vip-active {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #b45309;
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.2);
+}
+
+.btn-vip-profile.vip-active:hover {
+  box-shadow: 0 6px 24px rgba(217, 119, 6, 0.3);
 }
 
 /* ─── 设置卡片网格 ─── */

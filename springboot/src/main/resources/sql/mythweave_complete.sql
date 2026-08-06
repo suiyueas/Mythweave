@@ -438,6 +438,28 @@ CREATE TABLE IF NOT EXISTS novel_user_stats (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户统计';
 
 -- =====================================================
+-- 20. VIP 订单表
+-- =====================================================
+CREATE TABLE IF NOT EXISTS vip_order (
+    id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    order_no        VARCHAR(64)     NOT NULL COMMENT '订单号',
+    user_id         BIGINT          NOT NULL COMMENT '用户ID',
+    plan_id         VARCHAR(32)     NOT NULL COMMENT '套餐ID：monthly/permanent',
+    plan_name       VARCHAR(64)     NOT NULL COMMENT '套餐名称',
+    amount          DECIMAL(10,2)   NOT NULL COMMENT '订单金额',
+    status          VARCHAR(16)     NOT NULL DEFAULT 'pending' COMMENT '订单状态：pending-待支付/paid-已支付/cancelled-已取消/expired-已过期',
+    pay_channel     VARCHAR(16)     DEFAULT NULL COMMENT '支付渠道：alipay/wechat',
+    paid_at         DATETIME        DEFAULT NULL COMMENT '支付时间',
+    expire_at       DATETIME        DEFAULT NULL COMMENT '订单过期时间（30分钟）',
+    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE INDEX idx_order_no (order_no),
+    INDEX idx_order_user_plan (user_id, plan_id, status),
+    INDEX idx_order_expire (expire_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='VIP订单表';
+
+-- =====================================================
 -- 第四部分：初始化数据
 -- =====================================================
 

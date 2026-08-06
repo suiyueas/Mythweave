@@ -213,6 +213,48 @@ public class UserController {
     }
 
     /**
+     * 创建 VIP 订单（带去重机制）
+     * 如果用户存在相同套餐的待支付订单且未过期，直接返回该订单
+     */
+    @PostMapping("/vip/order/create")
+    @Operation(summary = "创建VIP订单")
+    public R<Map<String, Object>> createVipOrder(@RequestBody Map<String, String> params) {
+        String planId = params.get("planId");
+        String payChannel = params.getOrDefault("payChannel", "alipay");
+        if (planId == null || planId.isBlank()) {
+            return R.badRequest("套餐不能为空");
+        }
+        return R.ok(userService.createVipOrder(planId, payChannel));
+    }
+
+    /**
+     * 查询当前用户的订单列表
+     */
+    @GetMapping("/vip/orders")
+    @Operation(summary = "查询我的订单")
+    public R<List<Map<String, Object>>> getMyOrders() {
+        return R.ok(userService.getMyOrders());
+    }
+
+    /**
+     * 根据订单号查询订单详情
+     */
+    @GetMapping("/vip/order/{orderNo}")
+    @Operation(summary = "查询订单详情")
+    public R<Map<String, Object>> getOrderByNo(@PathVariable String orderNo) {
+        return R.ok(userService.getOrderByNo(orderNo));
+    }
+
+    /**
+     * 模拟支付成功回调（测试用）
+     */
+    @PostMapping("/vip/order/{orderNo}/pay")
+    @Operation(summary = "模拟支付回调")
+    public R<Map<String, Object>> mockPayCallback(@PathVariable String orderNo) {
+        return R.ok(userService.mockPayCallback(orderNo));
+    }
+
+    /**
      * 激活/续费 VIP（模拟支付成功，后续可对接真实支付回调）
      */
     @PostMapping("/vip/activate")

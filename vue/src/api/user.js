@@ -18,5 +18,13 @@ export const userApi = {
   // ─── VIP 会员 ───
   getVipPlans: () => get('/api/users/vip/plans'),
 
+  createVipOrder: (planId, payChannel) => post('/api/users/vip/order/create', { planId, payChannel }),
+
+  getMyOrders: () => get('/api/users/vip/orders'),
+
+  getOrderByNo: (orderNo) => get(`/api/users/vip/order/${orderNo}`),
+
+  mockPayCallback: (orderNo) => post(`/api/users/vip/order/${orderNo}/pay`),
+
   activateVip: (planId) => post('/api/users/vip/activate', { planId })
 }

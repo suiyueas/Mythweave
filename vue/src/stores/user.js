@@ -36,19 +36,23 @@ export const useUserStore = defineStore('user', () => {
 
   // ─── VIP 状态 ───
   // vipStatus: none-未开通 / active-生效中 / expired-已过期
+  // admin 用户永久享受 VIP 钻石待遇
   const isVip = computed(() => {
     const p = profile.value
+    if (p.role === 'admin') return true
     return Number(p.vipLevel) > 0 && !!p.vipExpireAt && new Date(p.vipExpireAt) > new Date()
   })
 
   const vipExpired = computed(() => {
     const p = profile.value
+    if (p.role === 'admin') return false
     return Number(p.vipLevel) > 0 && !!p.vipExpireAt && new Date(p.vipExpireAt) <= new Date()
   })
 
   const vipLevelName = computed(() => {
-    const names = { 0: '普通用户', 1: 'VIP 白银', 2: 'VIP 黄金', 3: 'VIP 钻石' }
-    return names[Number(profile.value.vipLevel)] || '普通用户'
+    const p = profile.value
+    if (p.role === 'admin') return 'VIP 永久'
+    return 'VIP'
   })
 
   const vipExpireDate = computed(() => {
@@ -82,7 +86,7 @@ export const useUserStore = defineStore('user', () => {
       nickname: data.user.nickname || '',
       email: data.user.email || '',
       phone: '',
-      bio: '',
+      bio: data.user.bio || '',
       avatar: data.user.avatar || '',
       createdAt: data.user.createdAt || null,
       emailVerified: false,
@@ -137,7 +141,7 @@ export const useUserStore = defineStore('user', () => {
           nickname: user.nickname || '',
           email: user.email || '',
           phone: '',
-          bio: '',
+          bio: user.bio || '',
           avatar: user.avatar || '',
           createdAt: user.createdAt || null,
           emailVerified: false,
@@ -235,6 +239,11 @@ export const useUserStore = defineStore('user', () => {
     try {
       await userApi.updateProfile(data)
       profile.value = { ...profile.value, ...data }
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) {
+        const userObj = JSON.parse(savedUser)
+        localStorage.setItem('user', JSON.stringify({ ...userObj, ...data }))
+      }
       return { success: true }
     } catch (e) {
       return { success: false, message: e.message || '更新失败' }
@@ -306,6 +315,30 @@ export const useUserStore = defineStore('user', () => {
       return { success: false, message: e.message || '开通失败' }
     }
   }
+
+  async function createVipOrder(planId, payChannel) {
+    try {
+      const data = await userApi.createVipOrder(planId, payChannel)
+      return { success: true, ...data }
+    } catch (e) {
+      return { success: false, message: e.message || '创建订单失败' }
+    }
+  }
+
+  async function mockPayCallback(orderNo) {
+    try {
+      const data = await userApi.mockPayCallback(orderNo)
+      if (data) {
+        profile.value.vipLevel = data.vipLevel ?? profile.value.vipLevel
+        profile.value.vipExpireAt = data.vipExpireAt || profile.value.vipExpireAt
+        profile.value.vipPurchasedAt = data.vipPurchasedAt || profile.value.vipPurchasedAt
+        profile.value.vipStatus = data.vipStatus || 'active'
+      }
+      return { success: true, data }
+    } catch (e) {
+      return { success: false, message: e.message || '支付失败' }
+    }
+  }
   
   async function refreshVip() {
     try {
@@ -349,6 +382,8 @@ export const useUserStore = defineStore('user', () => {
     changePassword,
     sendEmailVerification,
     getVipPlans,
+    createVipOrder,
+    mockPayCallback,
     activateVip,
     refreshVip
   }
