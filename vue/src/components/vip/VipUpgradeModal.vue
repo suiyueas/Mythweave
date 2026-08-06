@@ -234,12 +234,11 @@ async function handlePay() {
       return
     }
 
-    // 2. 模拟支付回调
+    // 2. 模拟支付回调（mockPayCallback 内部已更新 profile）
     const payRes = await userStore.mockPayCallback(orderRes.orderNo)
     paying.value = false
 
     if (payRes.success) {
-      await userStore.refreshVip()
       paySuccess.value = true
       setTimeout(() => {
         paySuccess.value = false

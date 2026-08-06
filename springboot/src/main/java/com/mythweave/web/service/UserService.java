@@ -353,8 +353,10 @@ public class UserService extends ServiceImpl<NovelUserMapper, NovelUser> {
         LocalDateTime expireAt;
         if ("permanent".equals(planId)) {
             expireAt = LocalDateTime.of(2099, 12, 31, 23, 59, 59);
-        } else {
+        } else if (months != null) {
             expireAt = base.plusMonths(months);
+        } else {
+            throw new IllegalStateException("VIP 套餐配置错误: " + planId);
         }
     
         user.setVipLevel(ROLE_ADMIN.equals(user.getRole()) ? 3 : 1);
