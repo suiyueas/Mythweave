@@ -1,15 +1,19 @@
-# Mythweave AI - AI智能小说创作平台
+<p align="center">
+  <h1 align="center">Mythweave AI - AI智能小说创作平台</h1>
+</p>
 
-<div align="center">
+<p align="center">
+  <strong>让 AI 成为作者的副脑 — 全能型 AI 写作工作台</strong>
+</p>
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Java Version](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-green.svg)](https://spring.io/projects/spring-boot)
-[![Vue](https://img.shields.io/badge/Vue-3.4-brightgreen.svg)](https://vuejs.org/)
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/Java-21-orange.svg" alt="Java">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.5-brightgreen.svg" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/Vue-3.4-4FC08D.svg" alt="Vue">
+</p>
 
-**让 AI 成为作者的副脑 — 全能型 AI 写作工作台**
-
-</div>
+---
 
 ## ✨ 功能特性
 
