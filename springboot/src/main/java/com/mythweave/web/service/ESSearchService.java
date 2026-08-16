@@ -139,6 +139,41 @@ public class ESSearchService {
         }
     }
 
+    /**
+     * 纯 BM25 关键词检索（混合检索的对照基线，亦可作为无向量场景的兜底检索）
+     */
+    public List<ContextDocument> bm25Search(Long novelId, String keyword, int topK) throws IOException {
+        if (!esState.isUsable()) {
+            log.warn("ES 不可用，BM25 检索降级返回空结果（{}）", esState.getLastError());
+            return List.of();
+        }
+        try {
+            SearchRequest request = SearchRequest.of(s -> s
+                    .index("novel_context")
+                    .query(q -> q
+                            .bool(b -> b
+                                    .must(m -> m.term(t -> t.field("novelId").value(novelId)))
+                                    .must(m -> m.match(mm -> mm.field("chunkText").query(keyword)))
+                            )
+                    )
+                    .size(topK)
+            );
+
+            SearchResponse<ContextDocument> response = esClient.search(request, ContextDocument.class);
+            List<ContextDocument> results = new ArrayList<>();
+            for (Hit<ContextDocument> hit : response.hits().hits()) {
+                if (hit.source() != null) {
+                    results.add(hit.source());
+                }
+            }
+            return results;
+        } catch (Exception e) {
+            esState.markUnavailable(e.getMessage());
+            log.warn("ES BM25 检索失败，已熔断降级：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
     private List<Float> toFloatList(double[] array) {
         List<Float> list = new ArrayList<>(array.length);
         for (double v : array) list.add((float) v);

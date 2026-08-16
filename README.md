@@ -115,6 +115,19 @@
 | 智能巡检 | 规则引擎 + 关键词统计构建 4 类扫描器，规则热更新，WebSocket 秒级告警 |
 | 稳定性治理 | Redis 熔断降级、AI 调用指数退避重试、启动缓存预热 |
 
+## 📊 Benchmark
+
+混合检索 Recall@5、延迟 P95、多 Agent 并行加速比等性能声明均由本仓库内评测集与脚本实测得出，可一键复现：
+
+- 运行手册与结果记录：[docs/benchmark.md](docs/benchmark.md)
+- 评测集：`springboot/src/test/resources/benchmark/sample-data.json`（44 份设定文档 + 40 条标注问题）
+- 实测报告：`docs/benchmark-results/`（运行后自动生成）
+
+```bash
+mvn test -Dtest=HybridSearchBenchmark -DfailIfNoTests=false   # 实验①+②：召回率与延迟
+mvn test -Dtest=AgentParallelBenchmark -DfailIfNoTests=false  # 实验③：多 Agent 串/并行对比
+```
+
 ## 🔐 安全机制
 
 | 层级 | 机制 | 说明 |
