@@ -1,10 +1,20 @@
 # ========================================================
-# Mythweave AI 一键容器化部署（Docker Compose · 开发/演示）
+# Mythweave AI 一键容器化部署（Docker Compose · 生产就绪）
 # 编排：MySQL / Redis / Elasticsearch / 后端 / 前端
-# 使用：先复制 .env.docker.example 为 .env 并填写密钥，然后：
-#   docker compose up -d --build
-# 前端：http://localhost:80    后端：http://localhost:8080
-# 生产部署请叠加 docker-compose.prod.yml（内网隔离 + 资源限制 + 日志轮转）
+#
+# 安全加固（单文件内置，开发与生产行为一致）：
+#   1. 网络安全隔离：MySQL/Redis/ES 位于 internal 内网（无网关、不可被宿主机直连，
+#      仅后端可达），不暴露宿主机端口；前端仅监听 127.0.0.1
+#   2. 资源限制：各容器 CPU/内存上限（docker compose up 即生效）
+#   3. 日志配置：json-file 驱动 + 轮转，避免日志占满磁盘
+#   4. 其他加固：Redis 内存上限与淘汰策略、后端 init 进程守护、
+#      优雅停机、no-new-privileges
+#
+# 使用：
+#   1. 复制 .env.docker.example 为 .env 并填写密钥
+#   2. docker compose up -d --build
+#   3. 前端 http://127.0.0.1:80   后端 API http://127.0.0.1:8080（仅本机可访问）
+#   4. 对外访问：前置 Nginx/Caddy 反向代理终止 TLS 后转发到 127.0.0.1:80
 # ========================================================
 name: mythweave
 
@@ -20,8 +30,6 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-mythweave}
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
-    ports:
-      - "127.0.0.1:${DB_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       # 首次启动自动初始化数据库结构与默认账号
@@ -33,18 +41,26 @@ services:
       retries: 12
       start_period: 30s
     networks:
-      - mythweave-net
+      - mythweave-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # ==================== Redis 7 ====================
   redis:
     image: redis:7-alpine
     container_name: mythweave-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}
-    ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -54,7 +70,17 @@ services:
       retries: 12
       start_period: 10s
     networks:
-      - mythweave-net
+      - mythweave-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ==================== Elasticsearch 8（含 IK 中文分词）====================
   elasticsearch:
@@ -72,8 +98,6 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
       - ingest.geoip.downloader.enabled=false
       - TZ=Asia/Shanghai
-    ports:
-      - "127.0.0.1:${ES_PORT:-9200}:9200"
     volumes:
       - es-data:/usr/share/elasticsearch/data
     ulimits:
@@ -90,7 +114,17 @@ services:
       retries: 20
       start_period: 40s
     networks:
-      - mythweave-net
+      - mythweave-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # ==================== 后端服务（Spring Boot，prod+docker 双 Profile）====================
   backend:
@@ -99,6 +133,10 @@ services:
     image: mythweave-backend:latest
     container_name: mythweave-backend
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: prod,docker
       DB_HOST: mysql
@@ -136,6 +174,17 @@ services:
       start_period: 60s
     networks:
       - mythweave-net
+      - mythweave-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   # ==================== 前端服务（Nginx 托管静态资源 + 反向代理 /api）====================
   frontend:
@@ -146,17 +195,34 @@ services:
     image: mythweave-frontend:latest
     container_name: mythweave-frontend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-80}:80"
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - mythweave-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 networks:
+  # 对外网络：后端需访问外网 AI 接口（DeepSeek/千问），前端经此网络访问后端
   mythweave-net:
     driver: bridge
+  # 基础设施内网：无网关，容器无法访问外网，宿主机也无法直连，仅后端可达
+  mythweave-internal:
+    driver: bridge
+    internal: true
 
 volumes:
   mysql-data:

@@ -168,8 +168,7 @@ AI-novel/
 │   └── .dockerignore
 ├── elasticsearch/
 │   └── Dockerfile              # ES 8 + IK 中文分词插件镜像
-├── docker-compose.yml          # MySQL/Redis/ES/后端/前端 一键编排（开发/演示）
-├── docker-compose.prod.yml     # 生产加固覆盖：内网隔离 + 资源限制 + 日志轮转
+├── docker-compose.yml          # MySQL/Redis/ES/后端/前端 一键编排（内置生产加固）
 ├── .env.docker.example         # Docker 部署环境变量模板
 ├── .env.example                # 本地开发环境变量模板
 ├── .gitignore                  # Git 忽略配置
@@ -186,9 +185,19 @@ AI-novel/
 - Redis 6.x
 - Elasticsearch 8.x
 
-### 0. Docker 一键启动（推荐）
+### 0. Docker 一键启动（生产就绪）
 
-无需安装 JDK / Node / MySQL / Redis / Elasticsearch，一条命令拉起全套环境（MySQL 8 + Redis 7 + ES 8 + 后端 + 前端）。
+无需安装 JDK / Node / MySQL / Redis / Elasticsearch，一条命令拉起全套环境（MySQL 8 + Redis 7 + ES 8 + 后端 + 前端）。Compose 文件已内置生产加固，开发与生产行为一致。
+
+内置加固一览：
+
+| 加固项 | 说明 |
+|--------|------|
+| 🔒 网络安全隔离 | MySQL/Redis/ES 位于 `internal` 内网（无网关、不可被宿主机直连，仅后端可达），不暴露宿主机端口；前端仅监听 `127.0.0.1` |
+| ⚙️ 资源限制 | 各容器 CPU/内存上限（MySQL 2C/2G、ES 2C/1G、Redis 0.5C/512M、后端 2C/2G、前端 0.5C/256M），`docker compose up` 即生效 |
+| 📋 日志配置 | `json-file` 驱动 + 轮转（后端单文件 100M×5，其余 20~50M×3~5），避免日志占满磁盘 |
+
+另含 Redis `maxmemory 256mb + allkeys-lru` 淘汰策略、后端 `init` 进程守护、`stop_grace_period 30s` 优雅停机、`no-new-privileges` 权限收紧。
 
 ```bash
 # 1. 准备环境变量（模板中为占位符，请替换为真实值）
@@ -202,8 +211,7 @@ docker compose up -d --build
 docker compose ps
 
 # 4. 访问
-# 前端：http://localhost:80        后端 API：http://localhost:8080
-# MySQL/Redis/ES 已绑定 127.0.0.1，可用本机客户端直连调试
+# 前端：http://127.0.0.1:80        后端 API：http://127.0.0.1:8080（均仅本机可访问）
 
 # 5. 停止 / 清理
 docker compose down          # 停止（数据保留在命名卷中）
@@ -212,41 +220,15 @@ docker compose down -v       # 停止并删除数据卷（会清空数据库，�
 
 > 💡 说明：
 > - 需要 **Docker 24+ / Docker Compose v2**（Windows/Mac 请使用 Docker Desktop）。
+> - 基础设施已移入 internal 内网，宿主机无法直连；需调试数据库时可临时进容器：
+>   `docker compose exec mysql mysql -uroot -p`、`docker compose exec redis redis-cli -a <密码>`、`docker compose exec elasticsearch curl -s localhost:9200`
+> - 前端仅监听 `127.0.0.1`，对外访问请在前置主机级反向代理（Nginx/Caddy）终止 TLS 后转发到 `127.0.0.1:${FRONTEND_PORT:-80}`。
 > - 首次启动 MySQL 会自动执行 `springboot/src/main/resources/sql/mythweave_complete.sql` 初始化库表与默认账号 `admin`。
 > - Elasticsearch 镜像内置 IK 中文分词插件（RAG 混合检索依赖 `ik_max_word`），ES 版本通过 `.env` 中 `ES_VERSION` 控制；若修改 `ES_PASSWORD`，需先 `docker compose down -v` 清空 ES 数据卷再重建。
 > - Linux 宿主机需满足 ES 内存映射要求：`sudo sysctl -w vm.max_map_count=262144`（Windows/Mac 的 Docker Desktop 已默认配置）。
 > - 前端 Nginx 已配置 `/api` 同源反向代理与 SSE 流式直通（`proxy_buffering off`）；如需前端直连后端，可构建时传 `--build-arg VITE_API_BASE=http://127.0.0.1:8080`。
 > - 国内网络拉取 npm 依赖较慢时，可传 `--build-arg NPM_REGISTRY=https://registry.npmmirror.com` 加速。
-
-### 0.1 生产环境部署（加固）
-
-生产部署请叠加 `docker-compose.prod.yml`，在开发编排基础上增加三层加固：
-
-| 加固项 | 说明 |
-|--------|------|
-| 🔒 网络安全隔离 | MySQL/Redis/ES 移入 `internal` 内网（无网关、不可被宿主机直连，仅后端可达），并移除其宿主机端口；前端仅监听 `127.0.0.1` |
-| ⚙️ 资源限制 | 各容器 CPU/内存上限（MySQL 2C/2G、ES 2C/1G、Redis 0.5C/512M、后端 2C/2G、前端 0.5C/256M），`docker compose up` 即生效 |
-| 📋 日志配置 | `json-file` 驱动 + 轮转（后端单文件 100M×5，其余 20~50M×3~5），避免日志占满磁盘 |
-
-另含 Redis `maxmemory 256mb + allkeys-lru` 淘汰策略、后端 `init` 进程守护、`stop_grace_period 30s` 优雅停机、`no-new-privileges` 权限收紧。
-
-```bash
-# 需要 Docker Compose v2.24+（依赖 !override 合并语义）
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-
-# 查看合并后的完整配置（推荐先跑这一步确认）
-docker compose -f docker-compose.yml -f docker-compose.prod.yml config
-
-# 停止 / 清理
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v   # 清空数据卷，慎用
-```
-
-> ⚠️ 生产模式注意事项：
-> - 基础设施不再暴露宿主机端口，本机客户端无法直连；需要调试时可临时进容器：
->   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec mysql mysql -uroot -p`
-> - 前端仅监听 `127.0.0.1`，对外访问请在前置主机级反向代理（Nginx/Caddy）终止 TLS 后转发到 `127.0.0.1:${FRONTEND_PORT:-80}`。
-> - 资源限制为合理默认值，可按机器规格在 `docker-compose.prod.yml` 中调整。
+> - 资源限制为合理默认值，可按机器规格在 `docker-compose.yml` 中调整。
 
 > 以下步骤为本地手动开发方式，与 Docker 方式二选一。
 
