@@ -1,0 +1,25 @@
+# 编译产物
+target/
+
+# 含密钥的本地开发配置，绝不进入镜像
+src/main/resources/application.yml
+src/main/resources/application-local*.yml
+src/main/resources/application-local*.properties
+src/main/resources/application-dev*.yml
+src/main/resources/application-dev*.properties
+
+# 版本控制 / IDE / 系统文件
+.git
+.idea
+*.iml
+.vscode
+.settings
+.classpath
+.project
+*.log
+.DS_Store
+Thumbs.db
+
+# 测试与日志
+*.hprof
+*.pid

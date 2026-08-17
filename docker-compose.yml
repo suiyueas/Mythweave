@@ -1,0 +1,164 @@
+# ========================================================
+# Mythweave AI 一键容器化部署（Docker Compose）
+# 编排：MySQL / Redis / Elasticsearch / 后端 / 前端
+# 使用：先复制 .env.docker.example 为 .env 并填写密钥，然后：
+#   docker compose up -d --build
+# 前端：http://localhost:80    后端：http://localhost:8080
+# ========================================================
+name: mythweave
+
+services:
+  # ==================== MySQL 8 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: mythweave-mysql
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?请先复制 .env.docker.example 为 .env 并设置 DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-mythweave}
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动初始化数据库结构与默认账号
+      - ./springboot/src/main/resources/sql/mythweave_complete.sql:/docker-entrypoint-initdb.d/01-mythweave-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - mythweave-net
+
+  # ==================== Redis 7 ====================
+  redis:
+    image: redis:7-alpine
+    container_name: mythweave-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - mythweave-net
+
+  # ==================== Elasticsearch 8（含 IK 中文分词）====================
+  elasticsearch:
+    build:
+      context: ./elasticsearch
+      args:
+        ES_VERSION: ${ES_VERSION:-8.18.8}
+    container_name: mythweave-es
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ES_PASSWORD:?请设置 ES_PASSWORD}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ingest.geoip.downloader.enabled=false
+      - TZ=Asia/Shanghai
+    ports:
+      - "127.0.0.1:${ES_PORT:-9200}:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:$$ELASTIC_PASSWORD 'http://localhost:9200/_cluster/health' | grep -qE '\"(green|yellow)\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
+    networks:
+      - mythweave-net
+
+  # ==================== 后端服务（Spring Boot，prod+docker 双 Profile）====================
+  backend:
+    build:
+      context: ./springboot
+    image: mythweave-backend:latest
+    container_name: mythweave-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,docker
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-mythweave}
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:?请设置 DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}
+      ES_USERNAME: elastic
+      ES_PASSWORD: ${ES_PASSWORD:?请设置 ES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?请设置 JWT_SECRET}
+      SERVER_PORT: "8080"
+      UPLOAD_AVATAR_PATH: /var/lib/mythweave/avatar
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MIMO_API_KEY: ${MIMO_API_KEY:-}
+      QIANWEN_API_KEY: ${QIANWEN_API_KEY:-}
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+    volumes:
+      - avatar-data:/var/lib/mythweave/avatar
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - mythweave-net
+
+  # ==================== 前端服务（Nginx 托管静态资源 + 反向代理 /api）====================
+  frontend:
+    build:
+      context: ./vue
+      args:
+        VITE_API_BASE: ""
+    image: mythweave-frontend:latest
+    container_name: mythweave-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - mythweave-net
+
+networks:
+  mythweave-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  es-data:
+  avatar-data:

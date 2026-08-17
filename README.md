@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/Java-21-orange.svg" alt="Java">
   <img src="https://img.shields.io/badge/Spring%20Boot-3.5-brightgreen.svg" alt="Spring Boot">
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D.svg" alt="Vue">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED.svg" alt="Docker">
 </p>
 
 ---
@@ -95,6 +96,7 @@
 - **实时通信**：SSE 流式 + WebSocket
 - **API 文档**：Knife4j
 - **AI**：DeepSeek / Mimo / 千问 Embedding（多模型适配层）
+- **部署**：Docker Compose 一键编排（MySQL/Redis/ES/前后端）
 
 ### 前端
 - **框架**：Vue 3.4
@@ -147,6 +149,8 @@ mvn test -Dtest=AgentParallelBenchmark -DfailIfNoTests=false  # 实验③：多 
 ```
 AI-novel/
 ├── springboot/                 # Spring Boot 3.5 后端项目
+│   ├── Dockerfile              # 后端多阶段构建镜像（Maven 编译 → JRE 运行）
+│   ├── .dockerignore
 │   ├── src/
 │   │   ├── main/
 │   │   │   ├── java/           # Java 源代码
@@ -155,11 +159,18 @@ AI-novel/
 │   │   │       ├── sql/        # 数据库 SQL 脚本
 │   │   │       ├── application.yml           # 本地配置（不入库，含密钥）
 │   │   │       ├── application.example.yml   # 配置模板（入库存档）
-│   │   │       └── application-prod.yml      # 生产配置（环境变量）
+│   │   │       └── application-prod.yml      # 生产配置（环境变量 + docker Profile）
 │   │   └── test/               # 测试代码
 │   └── pom.xml                 # Maven 依赖配置
 ├── vue/                        # Vue 3 前端项目
-├── .env.example                # 环境变量模板
+│   ├── Dockerfile              # 前端多阶段构建镜像（Node 编译 → Nginx 托管）
+│   ├── nginx.conf              # Nginx 静态资源 + /api 反向代理（含 SSE 直通）
+│   └── .dockerignore
+├── elasticsearch/
+│   └── Dockerfile              # ES 8 + IK 中文分词插件镜像
+├── docker-compose.yml          # MySQL/Redis/ES/后端/前端 一键编排
+├── .env.docker.example         # Docker 部署环境变量模板
+├── .env.example                # 本地开发环境变量模板
 ├── .gitignore                  # Git 忽略配置
 └── README.md                   # 项目说明文档
 ```
@@ -173,6 +184,40 @@ AI-novel/
 - MySQL 8.x
 - Redis 6.x
 - Elasticsearch 8.x
+
+### 0. Docker 一键启动（推荐）
+
+无需安装 JDK / Node / MySQL / Redis / Elasticsearch，一条命令拉起全套环境（MySQL 8 + Redis 7 + ES 8 + 后端 + 前端）。
+
+```bash
+# 1. 准备环境变量（模板中为占位符，请替换为真实值）
+copy .env.docker.example .env
+# 编辑 .env，至少填写：DB_PASSWORD、REDIS_PASSWORD、ES_PASSWORD、JWT_SECRET、DEEPSEEK_API_KEY
+
+# 2. 构建并启动（首次构建需拉取镜像，耗时较长）
+docker compose up -d --build
+
+# 3. 查看各服务健康状态（等待 mysql/redis/es 通过健康检查）
+docker compose ps
+
+# 4. 访问
+# 前端：http://localhost:80        后端 API：http://localhost:8080
+# MySQL/Redis/ES 已绑定 127.0.0.1，可用本机客户端直连调试
+
+# 5. 停止 / 清理
+docker compose down          # 停止（数据保留在命名卷中）
+docker compose down -v       # 停止并删除数据卷（会清空数据库，慎用）
+```
+
+> 💡 说明：
+> - 需要 **Docker 24+ / Docker Compose v2**（Windows/Mac 请使用 Docker Desktop）。
+> - 首次启动 MySQL 会自动执行 `springboot/src/main/resources/sql/mythweave_complete.sql` 初始化库表与默认账号 `admin`。
+> - Elasticsearch 镜像内置 IK 中文分词插件（RAG 混合检索依赖 `ik_max_word`），ES 版本通过 `.env` 中 `ES_VERSION` 控制；若修改 `ES_PASSWORD`，需先 `docker compose down -v` 清空 ES 数据卷再重建。
+> - Linux 宿主机需满足 ES 内存映射要求：`sudo sysctl -w vm.max_map_count=262144`（Windows/Mac 的 Docker Desktop 已默认配置）。
+> - 前端 Nginx 已配置 `/api` 同源反向代理与 SSE 流式直通（`proxy_buffering off`）；如需前端直连后端，可构建时传 `--build-arg VITE_API_BASE=http://127.0.0.1:8080`。
+> - 国内网络拉取 npm 依赖较慢时，可传 `--build-arg NPM_REGISTRY=https://registry.npmmirror.com` 加速。
+
+> 以下步骤为本地手动开发方式，与 Docker 方式二选一。
 
 ### 1. 克隆项目
 

@@ -1,5 +1,6 @@
 // 开发环境走 Vite 代理（同源无 CORS），生产环境直连后端
-const BASE_URL = import.meta.env.DEV ? '' : 'http://localhost:8080'
+// Docker 部署时可通过构建参数 VITE_API_BASE="" 改走 Nginx 同源反代
+const BASE_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE ?? 'http://localhost:8080')
 
 async function request(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers }
