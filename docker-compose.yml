@@ -1,9 +1,10 @@
 # ========================================================
-# Mythweave AI 一键容器化部署（Docker Compose）
+# Mythweave AI 一键容器化部署（Docker Compose · 开发/演示）
 # 编排：MySQL / Redis / Elasticsearch / 后端 / 前端
 # 使用：先复制 .env.docker.example 为 .env 并填写密钥，然后：
 #   docker compose up -d --build
 # 前端：http://localhost:80    后端：http://localhost:8080
+# 生产部署请叠加 docker-compose.prod.yml（内网隔离 + 资源限制 + 日志轮转）
 # ========================================================
 name: mythweave
 
