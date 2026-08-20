@@ -19,10 +19,20 @@
 | ① | 混合检索 Recall@5 对比（纯向量 kNN / 纯 BM25 / kNN+BM25 混合） | 混合检索相对单一检索的召回增益 | `docs/benchmark-results/hybrid-search.md` |
 | ② | 混合检索延迟 P50/P95/P99/QPS（预热 10 次 + 连续 200 次） | P95 延迟控制 | `docs/benchmark-results/hybrid-search-latency.md` |
 | ③ | 多 Agent 串行 vs 并行耗时（4 Agent，默认 3 轮） | 并行调度加速比 | `docs/benchmark-results/agent-parallel.md` |
+| ④ | 流式首字延迟 TTFT（真实模式，N 轮） | 首字响应延迟声明 | 客户端日志（`DeepSeek流式首字延迟`）或 `docs/benchmark-results/ttft.md` |
+
+> ⚠️ **口径声明（面试/简历防御用）**：截至当前提交，实验① ② 与 ③ 真实模式、④ 均 **待跑**（仓库无对应结果文件）。
+> 简历/README 中 "Recall@5 提升约 40%"、"P95 <100ms"、"新书设定 8s→2s"、"首字 1.5s" 等数字
+> **不可引用为已测结果**，需先运行下方命令生成结果文件后方可引用。仅 ③ Mock 模式（4.0x）已入库。
 
 ## 运行命令
 
 ```powershell
+# 一键全量（自动检查 ES/MySQL/Redis/Key，缺依赖的实验自动跳过并提示）
+.\scripts\run-benchmarks.ps1            # 全部实验
+.\scripts\run-benchmarks.ps1 -Experiment 3   # 仅实验③
+
+# 手动运行
 # 实验①+②（需要 ES + 千问 Key）
 mvn test -Dtest=HybridSearchBenchmark -DfailIfNoTests=false
 
@@ -36,6 +46,20 @@ mvn test -Dtest=AgentParallelBenchmark -DfailIfNoTests=false -Dbenchmark.agent.m
 可选参数：
 - `-Dbenchmark.latency.iterations=200`：实验②采样次数（默认 200）
 - `-Dbenchmark.agent.rounds=5`：实验③轮数（默认真实 3 / Mock 5）
+
+### 实验④：流式首字延迟 TTFT
+
+首字延迟（Time-To-First-Token）由流式客户端自动观测，无需单独运行测试：
+
+1. 配置 `DEEPSEEK_API_KEY` 并启动应用
+2. 触发一次长文生成（SSE 流式写作）
+3. 从日志中采集首字延迟样本：
+   ```
+   DeepSeek流式首字延迟(模型=deepseek-v4-flash, thinking=enabled): 1523ms
+   ```
+4. 连续 N 次采样后汇总 P50/P95，写入 `docs/benchmark-results/ttft.md` 即可引用
+
+> 注意：仅观测"从请求发出到首个正文 token 到达"的延迟；思考模式（thinking=enabled）需先生成推理内容、首字明显慢于非思考模式（thinking=disabled），记录时必须标注 thinking 模式。
 
 > 注意：Benchmark 类名不带 `Test` 后缀，**不会**随 `mvn test` 自动执行；且不消耗 CI。
 
@@ -80,3 +104,5 @@ mvn test -Dtest=AgentParallelBenchmark -DfailIfNoTests=false -Dbenchmark.agent.m
 2. **数据规模**：44 文档/40 问题的自建评测集——小但可辩护；这是个人开源项目的合理做法，不虚构线上用户量
 3. **P95 采集方式**：JVM 内直调 `hybridSearch`（不走 HTTP），消除网络/框架噪音，反映检索本身延迟；如需端到端延迟可另行压测 HTTP 接口
 4. **Mock/真实双模式**：实验③的 Mock 模式验证调度机制本身（固定 800ms/Agent，加速比理论上限 4x），真实模式反映生产管线；两者分别呈现，不混用
+5. **结果与声明分离**：`docs/benchmark-results/` 中只有存在结果文件的声明才可写进简历；当前仅 ③ Mock 结果入库，①②③真实/④ 均为待跑
+6. **思考模式降级与 TTFT**：`DeepSeekClient`/`AiChatClient` 已实现思考模式（thinking=enabled）失败时自动降级为非思考模式（thinking=disabled）重试（仅失败且未产出首字时触发）与首字延迟观测日志，属代码能力声明，性能数字需按实验④实测后引用

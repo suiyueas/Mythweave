@@ -112,14 +112,14 @@
 |------|------|
 | RAG 混合检索 | 设定数据向量化入库，kNN 向量召回 + BM25 加权融合，相似度阈值过滤保证召回质量 |
 | SSE 流式生成 | 异步流式替代轮询，30s 心跳保活 + 3 次指数退避重连，长文生成不中断 |
-| 推理模型 Token 治理 | 通过 `max_reasoning_tokens` 划分离推理与正文预算，解决思维链过长导致的正文截断 |
+| 思考模式治理 | 单一 V4 模型下用 `thinking.type` 切换思考/非思考模式，`reasoning_effort` 控制思考强度，避免思考过长耗尽预算导致正文截断；失败自动降级为非思考模式 |
 | 多 Agent 协作 | 编辑/人物/风格/读者 4 个职责单一 Agent，协调器流水线并行调度 |
 | 智能巡检 | 规则引擎 + 关键词统计构建 4 类扫描器，规则热更新，WebSocket 秒级告警 |
 | 稳定性治理 | Redis 熔断降级、AI 调用指数退避重试、启动缓存预热 |
 
 ## 📊 Benchmark
 
-混合检索 Recall@5、延迟 P95、多 Agent 并行加速比等性能声明均由本仓库内评测集与脚本实测得出，可一键复现：
+性能声明采用"结果与声明分离"口径：仅入库的实测结果可引用，其余为待跑实验。当前已入库：多 Agent 并行调度 Mock 实测 **4.0x 加速比**（3239ms → 810ms）；混合检索 Recall@5 / P95 延迟 / 流式首字延迟 TTFT 实验已就绪待运行：
 
 - 运行手册与结果记录：[docs/benchmark.md](docs/benchmark.md)
 - 评测集：`springboot/src/test/resources/benchmark/sample-data.json`（44 份设定文档 + 40 条标注问题）
@@ -300,7 +300,9 @@ npm run dev
 | `JWT_SECRET` | JWT 签名密钥（建议 64 位随机串） | 必填 |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | 必填 |
 | `DEEPSEEK_MAX_TOKEN` | DeepSeek 生成上限 | `16384` |
-| `DEEPSEEK_MAX_REASONING_TOKEN` | 推理模型思维链上限 | `2048` |
+| `DEEPSEEK_THINKING` | 思考模式：`enabled`（思考）/ `disabled`（非思考） | `enabled` |
+| `DEEPSEEK_REASONING_EFFORT` | 思考强度：`low` / `high` / `max` | `high` |
+| `DEEPSEEK_DEGRADE_ON_FAILURE` | 思考模式失败时降级为非思考模式重试 | `true` |
 | `MIMO_API_KEY` | Mimo API Key | 可选 |
 | `QIANWEN_API_KEY` | 千问（通义）API Key | 可选 |
 | `AVATAR_PATH` | 头像存储路径 | `./vue/public/avatar` |

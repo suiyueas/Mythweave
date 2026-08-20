@@ -177,8 +177,13 @@ mythweave:
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
       model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
+      # 思考模式（V4: thinking.type）：enabled=思考（默认）/ disabled=非思考
+      thinking: ${DEEPSEEK_THINKING:enabled}
+      # 思考强度（reasoning_effort）：low/high/max，仅思考模式生效；思考与正文共享 max_tokens 预算，长文生成建议 low 或 high 留预算给正文
+      reasoning-effort: ${DEEPSEEK_REASONING_EFFORT:high}
+      # 思考模式调用失败时自动降级为非思考模式重试一次
+      degrade-on-failure: ${DEEPSEEK_DEGRADE_ON_FAILURE:true}
       max-token: ${DEEPSEEK_MAX_TOKEN:16384}
-      max-reasoning-token: ${DEEPSEEK_MAX_REASONING_TOKEN:2048}
       temperature: 0.7
       top-p: 0.9
       stream-timeout: 120s

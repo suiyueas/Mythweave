@@ -105,9 +105,13 @@ mythweave:
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: https://api.deepseek.com
       model: deepseek-v4-flash
+      # 思考模式（V4: thinking.type）：enabled=思考（默认，响应携带 reasoning_content）/ disabled=非思考
+      thinking: ${DEEPSEEK_THINKING:enabled}
+      # 思考强度（reasoning_effort）：low/high/max，仅思考模式生效；思考与正文共享 max_tokens 预算，长文生成建议 low 或 high 留预算给正文
+      reasoning-effort: ${DEEPSEEK_REASONING_EFFORT:high}
+      # 思考模式调用失败（网络/5xx/仅推理无正文等）时自动降级为非思考模式重试一次
+      degrade-on-failure: ${DEEPSEEK_DEGRADE_ON_FAILURE:true}
       max-token: 4096
-      # 推理模型（deepseek-reasoner）思维链 token 上限：防止推理过长耗尽预算导致正文截断；仅推理模型生效，建议为 max-token 的 50%~70%
-      max-reasoning-token: 4096
       temperature: 0.7
       top-p: 0.9
       stream-timeout: 120s

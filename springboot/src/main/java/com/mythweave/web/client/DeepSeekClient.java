@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * DeepSeek API 客户端
@@ -23,13 +22,20 @@ import java.util.concurrent.TimeUnit;
  * 配置项（从AiProperties读取）：
  * - baseUrl: DeepSeek API地址
  * - apiKey: API密钥
- * - model: 使用的模型名称
+ * - model: 使用的模型名称（V4 仅 deepseek-v4-flash / deepseek-v4-pro）
  * - connectTimeout: 连接超时时间
  * - readTimeout: 读取超时时间
+ * 
+ * 思考模式（V4 API，原 deepseek-reasoner/chat 已退役合并为单一模型的模式开关）：
+ * - thinking.type=enabled（默认）：思考模式，响应携带 reasoning_content
+ * - thinking.type=disabled：非思考模式（原 deepseek-chat 等价）
+ * - reasoning_effort=low/high/max：思考强度，仅思考模式生效
+ * - 思考模式调用失败时自动降级为非思考模式重试一次（同模型）
  * 
  * 重试机制：
  * - 当遇到 5xx 错误、网络超时、连接问题时自动重试
  * - 默认重试 3 次，指数退避间隔（1s, 2s, 4s）
+ * - 流式场景下仅当首个 token 尚未产出时才降级（避免重复输出）
  */
 @Slf4j
 @Component
@@ -37,7 +43,7 @@ public class DeepSeekClient {
 
     private static final int MAX_RETRIES = 3;
     private static final long INITIAL_RETRY_DELAY_MS = 1000;
-    
+
     private final AiProperties aiProperties;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -64,7 +70,7 @@ public class DeepSeekClient {
      * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens) throws IOException {
-        return chat(systemPrompt, userMessage, temperature, maxTokens, (List<String>) null, (Integer) null);
+        return chat(systemPrompt, userMessage, temperature, maxTokens, (List<String>) null);
     }
 
     /**
@@ -79,38 +85,29 @@ public class DeepSeekClient {
      * @throws IOException 调用失败时抛出
      */
     public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop) throws IOException {
-        return chat(systemPrompt, userMessage, temperature, maxTokens, stop, (Integer) null);
+        String thinking = primaryThinking();
+        try {
+            return chatWithThinking(thinking, systemPrompt, userMessage, temperature, maxTokens, stop);
+        } catch (IOException primaryError) {
+            if (shouldDegrade(thinking)) {
+                log.warn("思考模式调用失败（{}），自动降级为非思考模式重试一次", primaryError.getMessage());
+                return chatWithThinking("disabled", systemPrompt, userMessage, temperature, maxTokens, stop);
+            }
+            throw primaryError;
+        }
     }
 
     /**
-     * 非流式调用（带推理 token 上限）
-     * 
-     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
-     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
+     * 单模式非流式调用（带自动重试）：重试 + 空内容/仅推理内容判定均在本方法内完成，
+     * 外层负责思考/非思考模式降级编排
      */
-    public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, Integer maxReasoningTokens) throws IOException {
-        return chat(systemPrompt, userMessage, temperature, maxTokens, (List<String>) null, maxReasoningTokens);
-    }
-
-    /**
-     * 非流式调用（完整参数）- 带自动重试
-     * 
-     * @param systemPrompt 系统提示词
-     * @param userMessage 用户消息
-     * @param temperature 温度参数
-     * @param maxTokens 最大生成token数
-     * @param stop 停止序列列表（如 ["\\n\\n"]），命中后提前终止生成，可为null
-     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
-     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
-     * @return AI生成的完整回复
-     * @throws IOException 调用失败时抛出
-     */
-    public String chat(String systemPrompt, String userMessage, double temperature, int maxTokens, List<String> stop, Integer maxReasoningTokens) throws IOException {
+    private String chatWithThinking(String thinking, String systemPrompt, String userMessage,
+                                    double temperature, int maxTokens, List<String> stop) throws IOException {
         Map<String, Object> body = new HashMap<>();
         body.put("model", aiProperties.getDeepseek().getModel());
         body.put("temperature", temperature);
         body.put("max_tokens", maxTokens);
-        applyMaxReasoningTokens(body, maxReasoningTokens);
+        applyThinkingMode(body, thinking);
         if (stop != null && !stop.isEmpty()) {
             body.put("stop", stop);
         }
@@ -167,13 +164,15 @@ public class DeepSeekClient {
                 String reasoningContent = message.path("reasoning_content").asText(null);
                 String finishReason = choices.get(0).path("finish_reason").asText();
 
-                log.info("DeepSeek响应: finish_reason={}, content={}, reasoning_content长度={}",
-                        finishReason, content != null ? "\"" + content.substring(0, Math.min(50, content.length())) + "...\"" : "null", reasoningContent != null ? reasoningContent.length() : 0);
+                log.info("DeepSeek响应(thinking={}): finish_reason={}, content={}, reasoning_content长度={}",
+                        thinking, finishReason,
+                        content != null ? "\"" + content.substring(0, Math.min(50, content.length())) + "...\"" : "null",
+                        reasoningContent != null ? reasoningContent.length() : 0);
 
                 if (content != null && !content.trim().isEmpty()) {
                     return content.trim();
                 }
-                // content 为空：推理过程（reasoning_content）不可作为业务结果，
+                // content 为空：思考过程（reasoning_content）不可作为业务结果，
                 // 明确抛错以触发上层降级/重试，避免把推理文字当作正文使用
                 // 日志用 WARN：多数调用方有降级/重试机制，属可恢复场景，业务层失败时另有 ERROR 日志
                 if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
@@ -222,23 +221,33 @@ public class DeepSeekClient {
      */
     public int chatStream(String systemPrompt, String userMessage, double temperature,
                            int maxTokens, java.util.function.Consumer<String> onToken) throws IOException {
-        return chatStream(systemPrompt, userMessage, temperature, maxTokens, onToken, null);
+        String thinking = primaryThinking();
+        boolean[] delivered = {false};
+        java.util.function.Consumer<String> guarded = token -> {
+            delivered[0] = true;
+            onToken.accept(token);
+        };
+        try {
+            return chatStreamWithThinking(thinking, systemPrompt, userMessage, temperature, maxTokens, guarded);
+        } catch (IOException primaryError) {
+            if (shouldDegrade(thinking) && !delivered[0]) {
+                log.warn("思考模式流式调用失败且未产出首字（{}），自动降级为非思考模式重试一次", primaryError.getMessage());
+                return chatStreamWithThinking("disabled", systemPrompt, userMessage, temperature, maxTokens, onToken);
+            }
+            throw primaryError;
+        }
     }
 
     /**
-     * 流式SSE调用（带推理 token 上限）
-     * 
-     * @param maxReasoningTokens 推理模型思维链 token 上限（max_reasoning_tokens），
-     *                           限制推理长度以保证正文 token 配额，null 时回退到配置默认值
+     * 单模式流式调用：透传首字延迟（TTFT）到日志，便于观测"首字响应"性能声明
      */
-    public int chatStream(String systemPrompt, String userMessage, double temperature,
-                           int maxTokens, java.util.function.Consumer<String> onToken,
-                           Integer maxReasoningTokens) throws IOException {
+    private int chatStreamWithThinking(String thinking, String systemPrompt, String userMessage, double temperature,
+                                       int maxTokens, java.util.function.Consumer<String> onToken) throws IOException {
         Map<String, Object> body = new HashMap<>();
         body.put("model", aiProperties.getDeepseek().getModel());
         body.put("temperature", temperature);
         body.put("max_tokens", maxTokens);
-        applyMaxReasoningTokens(body, maxReasoningTokens);
+        applyThinkingMode(body, thinking);
         body.put("stream", true);
         body.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
@@ -252,6 +261,8 @@ public class DeepSeekClient {
                 .post(RequestBody.create(objectMapper.writeValueAsString(body), MediaType.parse("application/json")))
                 .build();
 
+        long startNanos = System.nanoTime();
+        long ttftMs = -1;
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("DeepSeek API error: " + response.code());
@@ -268,6 +279,11 @@ public class DeepSeekClient {
                             JsonNode root = objectMapper.readTree(json);
                             JsonNode delta = root.path("choices").get(0).path("delta").path("content");
                             if (!delta.isMissingNode() && !delta.asText().isEmpty()) {
+                                if (ttftMs < 0) {
+                                    ttftMs = (System.nanoTime() - startNanos) / 1_000_000;
+                                    log.info("DeepSeek流式首字延迟(模型={}, thinking={}): {}ms",
+                                            aiProperties.getDeepseek().getModel(), thinking, ttftMs);
+                                }
                                 onToken.accept(delta.asText());
                             }
                             JsonNode usage = root.path("usage");
@@ -275,7 +291,7 @@ public class DeepSeekClient {
                                 if (usage.has("total_tokens")) {
                                     totalTokens = usage.path("total_tokens").asInt();
                                 }
-                                // 推理 token 统计（deepseek-reasoner 流式响应携带），用于观测推理消耗
+                                // 推理 token 统计（思考模式流式响应携带），用于观测推理消耗
                                 JsonNode details = usage.path("completion_tokens_details");
                                 if (details.has("reasoning_tokens")) {
                                     reasoningTokens = details.path("reasoning_tokens").asInt();
@@ -286,27 +302,41 @@ public class DeepSeekClient {
                         }
                     }
                 }
-                log.info("DeepSeek流式完成: totalTokens={}, reasoningTokens={}", totalTokens, reasoningTokens);
+                log.info("DeepSeek流式完成(模型={}, thinking={}): totalTokens={}, reasoningTokens={}, ttftMs={}",
+                        aiProperties.getDeepseek().getModel(), thinking, totalTokens, reasoningTokens,
+                        ttftMs < 0 ? "无正文输出" : ttftMs);
                 return totalTokens;
             }
         }
     }
 
     /**
-     * 为推理模型设置 max_reasoning_tokens：独立限制思维链长度，
-     * 防止推理过长耗尽 max_tokens 预算导致正文（content）被截断或缺失。
-     * 该参数仅 deepseek-reasoner 等推理模型支持，非推理模型传参会报错，故按模型名自动判断。
-     * 显式传入的参数优先，否则回退到配置默认值。
+     * 设置 V4 思考模式参数：
+     * - thinking.type：enabled=思考模式（默认）/ disabled=非思考模式
+     * - reasoning_effort：思考强度，仅思考模式生效（非思考模式传参会报错，故不携带）
      */
-    private void applyMaxReasoningTokens(Map<String, Object> body, Integer maxReasoningTokens) {
-        if (maxReasoningTokens == null) {
-            maxReasoningTokens = aiProperties.getDeepseek().getMaxReasoningToken();
+    private void applyThinkingMode(Map<String, Object> body, String thinking) {
+        body.put("thinking", Map.of("type", thinking));
+        if ("enabled".equals(thinking)) {
+            String effort = aiProperties.getDeepseek().getReasoningEffort();
+            if (effort != null && !effort.isBlank()) {
+                body.put("reasoning_effort", effort);
+            }
         }
-        String model = aiProperties.getDeepseek().getModel();
-        boolean reasoningModel = model != null && model.toLowerCase().contains("reasoner");
-        if (reasoningModel && maxReasoningTokens != null && maxReasoningTokens > 0) {
-            body.put("max_reasoning_tokens", maxReasoningTokens);
-            log.debug("已设置 max_reasoning_tokens={}（模型={}）", maxReasoningTokens, model);
+    }
+
+    /** 主调用使用的思考模式（配置缺省时按 API 默认 enabled 处理） */
+    private String primaryThinking() {
+        String thinking = aiProperties.getDeepseek().getThinking();
+        return (thinking == null || thinking.isBlank()) ? "enabled" : thinking.trim();
+    }
+
+    /** 降级判定：主调用为思考模式且未禁用降级时生效 */
+    private boolean shouldDegrade(String thinking) {
+        if (!"enabled".equals(thinking)) {
+            return false;
         }
+        Boolean degrade = aiProperties.getDeepseek().getDegradeOnFailure();
+        return degrade == null || degrade;
     }
 }

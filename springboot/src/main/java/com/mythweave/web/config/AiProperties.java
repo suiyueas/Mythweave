@@ -19,14 +19,25 @@ public class AiProperties {
         private String apiKey;
         private String baseUrl = "https://api.deepseek.com";
         private String model = "deepseek-v4-flash";
-        private Integer maxToken = 4096;
         /**
-         * 推理模型（deepseek-reasoner）思维链 token 上限（max_reasoning_tokens）：
-         * 推理与正文共享 max_tokens 预算，推理过长会耗尽预算导致正文被截断（finish_reason=length）。
-         * 独立限制推理长度后，剩余预算自动留给正文。仅对推理模型生效，非推理模型自动忽略。
-         * 建议设为 maxToken 的 50%~70%（如 8192 总预算配 4096）。null 表示不限制。
+         * 思考模式（V4 API：thinking.type）：
+         * enabled = 思考模式（对应原 deepseek-reasoner，响应携带 reasoning_content）；
+         * disabled = 非思考模式（对应原 deepseek-chat）。
+         * 默认 enabled，与 V4 API 默认一致。
          */
-        private Integer maxReasoningToken = 4096;
+        private String thinking = "enabled";
+        /**
+         * 思考强度（reasoning_effort）：low / high / max，仅思考模式生效。
+         * 思考与正文共享 max_tokens 预算，思考强度越高推理越长，越容易耗尽预算导致正文截断（finish_reason=length），
+         * 长文生成场景建议用 low 或 high，把预算留给正文。
+         */
+        private String reasoningEffort = "high";
+        /**
+         * 思考模式调用失败（网络/5xx/仅推理无正文/空内容等）时，
+         * 自动降级为非思考模式（同模型）重试一次，保证创作链路不中断。默认 true。
+         */
+        private Boolean degradeOnFailure = true;
+        private Integer maxToken = 4096;
         private Double temperature = 0.7;
         private Double topP = 0.9;
         private Duration streamTimeout = Duration.ofSeconds(120);
