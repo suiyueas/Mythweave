@@ -65,7 +65,13 @@ public class JwtFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             if (jwtUtil.validateToken(token)) {
-                request.setAttribute("userId", jwtUtil.getUserIdFromToken(token));
+                Long userId = jwtUtil.getUserIdFromToken(token);
+                String role = jwtUtil.getRoleFromToken(token);
+                request.setAttribute("userId", userId);
+                request.setAttribute("userRole", role);
+                // VIP 判断：role=vip 或 role=admin 或 vipLevel>0 时视为 VIP
+                boolean isVip = "vip".equals(role) || "admin".equals(role);
+                request.setAttribute("isVip", isVip);
                 chain.doFilter(request, response);
                 return;
             }

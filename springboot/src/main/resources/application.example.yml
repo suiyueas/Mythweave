@@ -89,6 +89,11 @@ mythweave:
     enabled: ${ES_ENABLED:true}
     # 连接失败后的熔断冷却时间，冷却结束自动重试探测
     retry-after: 60s
+  # 混合检索权重：final_score = α × kNN向量分 + β × BM25关键词分（min-max 归一化后加权求和）
+  search:
+    weight-vector: ${SEARCH_WEIGHT_VECTOR:0.7}
+    weight-bm25: ${SEARCH_WEIGHT_BM25:0.3}
+    candidate-multiplier: ${SEARCH_CANDIDATE_MULTIPLIER:2}
   # AI 安全策略：输入过滤/输出审核/频率限制
   security:
     enabled: ${SECURITY_ENABLED:true}

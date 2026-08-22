@@ -23,24 +23,34 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
-        // 从 URL 参数中获取 token 进行认证
         if (request instanceof ServletServerHttpRequest servletRequest) {
             HttpServletRequest httpRequest = servletRequest.getServletRequest();
             String token = httpRequest.getParameter("token");
-            Long userId = null;
-            try {
-                userId = jwtUtil.getUserIdFromToken(token);
-            } catch (Exception e) {
-                log.warn("WebSocket 认证失败: token无效");
+            if (token == null || token.isBlank()) {
+                log.warn("WebSocket 握手拒绝: 未携带 token 参数");
+                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+                return false;
             }
-            if (userId != null) {
+            try {
+                if (!jwtUtil.validateToken(token)) {
+                    log.warn("WebSocket 握手拒绝: token 无效或已过期");
+                    response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+                    return false;
+                }
+                Long userId = jwtUtil.getUserIdFromToken(token);
+                String role = jwtUtil.getRoleFromToken(token);
                 attributes.put("userId", userId);
-                log.debug("WebSocket 认证成功: userId={}", userId);
+                attributes.put("role", role);
+                log.debug("WebSocket 认证成功: userId={}, role={}", userId, role);
                 return true;
+            } catch (Exception e) {
+                log.warn("WebSocket 握手拒绝: token 解析失败 - {}", e.getMessage());
+                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+                return false;
             }
         }
-        // token 认证失败仍然允许连接（在业务层做更细粒度的控制）
-        return true;
+        response.setStatusCode(org.springframework.http.HttpStatus.BAD_REQUEST);
+        return false;
     }
 
     @Override

@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 接口频率限制：
- * - 滑动窗口计数（Redis 优先，Redis 不可用时降级为本地内存计数）
+ * - 滑动窗口计数（Redis Sorted Set 优先，Redis 不可用时降级为本地内存滑动窗口）
  * - 连续违规达到阈值后触发熔断冷却（成功请求自动清零违规计数）
  * mythweave.security.enabled=false 时全部放行
  */
@@ -25,13 +25,12 @@ public class RateLimitService {
     private final StringRedisTemplate redisTemplate;
     private final SecurityProperties securityProperties;
 
-    /** Redis 不可用时的本地降级计数窗口 */
-    private static class LocalWindow {
-        long windowStart = System.currentTimeMillis();
-        int count = 0;
+    /** Redis 不可用时的本地降级：每个用户维护一个滑动窗口（时间戳列表） */
+    private static class LocalSlidingWindow {
+        final java.util.TreeSet<Long> timestamps = new java.util.TreeSet<>();
     }
 
-    private final Map<Long, LocalWindow> localCounters = new ConcurrentHashMap<>();
+    private final Map<Long, LocalSlidingWindow> localWindows = new ConcurrentHashMap<>();
     /** 熔断冷却截止时间：userId -> 时间戳 */
     private final Map<Long, Long> circuitBreakers = new ConcurrentHashMap<>();
     /** 连续违规计数：userId -> 次数 */
@@ -64,8 +63,8 @@ public class RateLimitService {
         int limit = isVip ? cfg.getVipLimit() : cfg.getFreeLimit();
         int windowSeconds = cfg.getWindowSeconds();
 
-        // 2. 计数（Redis 优先，异常降级本地）
-        int count = incrementCount(userId, windowSeconds);
+        // 2. 滑动窗口计数（Redis Sorted Set 优先，异常降级本地）
+        int count = incrementSlidingWindow(userId, windowSeconds);
 
         // 3. 超限：登记违规，达到阈值熔断
         if (count > limit) {
@@ -79,32 +78,38 @@ public class RateLimitService {
     }
 
     /**
-     * 递增窗口计数：Redis 可用走 Redis（原子 + 自动过期），
-     * Redis 异常时降级为本地内存窗口（进程内有效，重启重置）
+     * 滑动窗口计数：Redis Sorted Set 以时间戳为 score，
+     * 每次请求插入当前时间戳，移除窗口外的过期成员，返回窗口内请求数
      */
-    private int incrementCount(Long userId, int windowSeconds) {
+    private int incrementSlidingWindow(Long userId, int windowSeconds) {
         try {
-            String key = "ratelimit:user:" + userId;
-            Long newCount = redisTemplate.opsForValue().increment(key);
-            if (newCount != null && newCount == 1) {
-                redisTemplate.expire(key, Duration.ofSeconds(windowSeconds));
-            }
-            return newCount != null ? newCount.intValue() : 0;
+            String key = "ratelimit:sliding:" + userId;
+            long now = System.currentTimeMillis();
+            long windowStart = now - windowSeconds * 1000L;
+            String member = String.valueOf(now) + ":" + Thread.currentThread().getId();
+
+            // 原子操作：添加当前请求 + 移除窗口外成员 + 统计窗口内成员数
+            redisTemplate.opsForZSet().add(key, member, now);
+            redisTemplate.opsForZSet().removeRangeByScore(key, 0, windowStart);
+            Long count = redisTemplate.opsForZSet().zCard(key);
+            // 设置过期时间，避免冷用户占用内存
+            redisTemplate.expire(key, Duration.ofSeconds(windowSeconds + 1));
+            return count != null ? count.intValue() : 0;
         } catch (Exception e) {
-            return localIncrement(userId, windowSeconds);
+            return localSlidingIncrement(userId, windowSeconds);
         }
     }
 
-    private int localIncrement(Long userId, int windowSeconds) {
+    /** 本地降级：TreeSet 维护滑动窗口时间戳，Redis 不可用时进程内有效 */
+    private int localSlidingIncrement(Long userId, int windowSeconds) {
         long now = System.currentTimeMillis();
-        long windowMillis = windowSeconds * 1000L;
-        LocalWindow window = localCounters.computeIfAbsent(userId, k -> new LocalWindow());
+        long windowStart = now - windowSeconds * 1000L;
+        LocalSlidingWindow window = localWindows.computeIfAbsent(userId, k -> new LocalSlidingWindow());
         synchronized (window) {
-            if (now - window.windowStart >= windowMillis) {
-                window.windowStart = now;
-                window.count = 0;
-            }
-            return ++window.count;
+            window.timestamps.add(now);
+            // 移除窗口外的过期时间戳
+            window.timestamps.headSet(windowStart, true).clear();
+            return window.timestamps.size();
         }
     }
 

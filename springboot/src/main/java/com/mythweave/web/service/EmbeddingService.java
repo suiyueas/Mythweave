@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Embedding 服务：文本切块 → 千问向量化 → ES 索引
- * ES 不可用时自动跳过索引（含向量化调用），不阻塞章节保存等主流程
+ * Embedding 服务：文本切块 -> 千问向量化 -> ES 索引
+ * ES 不可用时自动缓冲写入请求（EsPendingWriteBuffer），ES 恢复后自动重放，不丢数据
  */
 @Slf4j
 @Service
@@ -29,13 +29,15 @@ public class EmbeddingService {
     private final QianwenEmbeddingClient embeddingClient;
     private final ElasticsearchOperations esOps;
     private final EsConnectionState esState;
+    private final EsPendingWriteBuffer pendingWriteBuffer;
 
     /**
      * 将章节内容切块、向量化并写入ES
      */
     public void indexChapterContent(Long novelId, Long chapterId, String content) throws IOException {
         if (!esState.isUsable()) {
-            log.warn("ES 不可用，跳过章节{}内容索引（{}）", chapterId, esState.getLastError());
+            // ES 不可用时缓冲写入请求，ES 恢复后自动重放（不丢数据）
+            pendingWriteBuffer.bufferChapterContent(novelId, chapterId, content);
             return;
         }
         List<String> chunks = splitText(content, 500); // 每500字一切块
@@ -74,7 +76,7 @@ public class EmbeddingService {
      */
     public void indexEntity(Long novelId, String chunkType, String text) throws IOException {
         if (!esState.isUsable()) {
-            log.warn("ES 不可用，跳过[{}]实体索引（{}）", chunkType, esState.getLastError());
+            pendingWriteBuffer.bufferEntity(novelId, chunkType, text);
             return;
         }
         try {

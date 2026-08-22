@@ -27,6 +27,11 @@ public class SecurityProperties {
     private List<String> sensitiveWords = new ArrayList<>();
 
     /**
+     * 敏感词白名单：白名单中的词不会被 DFA 过滤器命中（如"杀青"中的"杀"）
+     */
+    private List<String> whitelistWords = new ArrayList<>();
+
+    /**
      * 频率限制配置
      */
     private RateLimit rateLimit = new RateLimit();

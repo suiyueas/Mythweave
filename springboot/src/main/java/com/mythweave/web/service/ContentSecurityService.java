@@ -1,6 +1,7 @@
 package com.mythweave.web.service;
 
 import com.mythweave.web.config.SecurityProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -9,7 +10,7 @@ import java.util.regex.Pattern;
 
 /**
  * AI 输入安全过滤：
- * 1. 敏感词库匹配（可配置，硬拦截）
+ * 1. 敏感词库匹配（DFA 确定有限自动态机，O(n) 扫描，可配置白名单排除正常创作词汇）
  * 2. 越狱（Jailbreak）检测（硬拦截）
  * 3. Prompt 注入攻击检测（硬拦截）
  * mythweave.security.enabled=false 时全部放行
@@ -20,6 +21,30 @@ import java.util.regex.Pattern;
 public class ContentSecurityService {
 
     private final SecurityProperties securityProperties;
+    private volatile DfaFilter dfaFilter;
+
+    @PostConstruct
+    public void init() {
+        dfaFilter = buildFilter();
+        log.info("输入敏感词 DFA 过滤器初始化完成，词库 {} 条，白名单 {} 条",
+                dfaFilter.size(), securityProperties.getWhitelistWords() != null
+                        ? securityProperties.getWhitelistWords().size() : 0);
+    }
+
+    /**
+     * 热更新 DFA 过滤器：运营修改配置后调用此方法即可刷新，无需重启服务
+     */
+    public synchronized void reload() {
+        dfaFilter = buildFilter();
+        log.info("输入敏感词 DFA 过滤器已热更新，词库 {} 条", dfaFilter.size());
+    }
+
+    private DfaFilter buildFilter() {
+        return DfaFilter.build(
+                securityProperties.getSensitiveWords(),
+                securityProperties.getWhitelistWords()
+        );
+    }
 
     /** 越狱检测：诱导模型无视系统限制的指令模式 */
     private static final Pattern JAILBREAK_PATTERN = Pattern.compile(
@@ -57,12 +82,10 @@ public class ContentSecurityService {
 
         String lower = userInput.toLowerCase();
 
-        // 1. 敏感词检测（配置词库）
-        for (String word : securityProperties.getSensitiveWords()) {
-            if (word != null && !word.isBlank() && lower.contains(word.toLowerCase())) {
-                log.warn("输入触发敏感词过滤: {}", maskSensitive(word));
-                return SecurityCheckResult.blocked("输入包含敏感内容，请调整后重试");
-            }
+        // 1. 敏感词检测（DFA 确定有限自动态机，O(n) 全量扫描，时间复杂度与词库大小无关）
+        if (dfaFilter.containsAny(lower)) {
+            log.warn("输入触发敏感词过滤: {}", dfaFilter.scan(lower));
+            return SecurityCheckResult.blocked("输入包含敏感内容，请调整后重试");
         }
 
         // 2. 越狱检测
@@ -78,12 +101,6 @@ public class ContentSecurityService {
         }
 
         return SecurityCheckResult.pass();
-    }
-
-    /** 敏感词脱敏展示（保留首尾字符） */
-    private String maskSensitive(String word) {
-        if (word == null || word.length() <= 2) return "***";
-        return word.charAt(0) + "***" + word.charAt(word.length() - 1);
     }
 
     private String truncateForLog(String text) {

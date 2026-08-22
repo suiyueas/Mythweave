@@ -79,9 +79,13 @@ public class AuthService {
         // 管理员VIP自动补全
         ensureAdminVip(user);
 
+        // VIP 状态：active 且未过期 → vip，否则 free
+        String jwtRole = "active".equals(calcVipStatus(user)) ? "vip" : "free";
+        if ("admin".equals(user.getRole())) jwtRole = "admin";
+
         // 构建登录响应
         return LoginResponse.builder()
-                .token(jwtUtil.generateToken(user.getId(), user.getUsername()))
+                .token(jwtUtil.generateToken(user.getId(), user.getUsername(), jwtRole))
                 .user(LoginResponse.UserInfo.builder()
                         .id(user.getId())
                         .username(user.getUsername())

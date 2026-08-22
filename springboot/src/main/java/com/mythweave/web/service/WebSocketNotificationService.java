@@ -11,13 +11,18 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+/**
+ * WebSocket 通知服务：
+ * - 按项目维度管理连接，推送哨兵告警 / 通用通知
+ * - 消息缓冲：每条消息分配递增 eventId，保留最近 100 条消息
+ * - 断线重连补偿：客户端重连时携带 lastEventId，服务端补推该 ID 之后的消息
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,6 +31,25 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
 
     private final Map<Long, Set<WebSocketSession>> projectSessions = new ConcurrentHashMap<>();
+
+    /** 消息 ID 自增器 */
+    private final AtomicLong eventIdCounter = new AtomicLong(0);
+
+    /** 每个项目的消息缓冲（最近 100 条，FIFO） */
+    private static final int MESSAGE_BUFFER_SIZE = 100;
+    private final Map<Long, LinkedList<BufferedMessage>> messageBuffers = new ConcurrentHashMap<>();
+
+    private static class BufferedMessage {
+        final long eventId;
+        final String json;
+        final long timestamp;
+
+        BufferedMessage(long eventId, String json, long timestamp) {
+            this.eventId = eventId;
+            this.json = json;
+            this.timestamp = timestamp;
+        }
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -39,6 +63,17 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
         projectSessions.computeIfAbsent(projectId, k -> new CopyOnWriteArraySet<>()).add(session);
         log.info("WebSocket 连接已建立: projectId={}, sessionId={}, 当前连接数={}",
                 projectId, session.getId(), projectSessions.get(projectId).size());
+
+        // 断线重连补偿：客户端携带 lastEventId，补推该 ID 之后的消息
+        String lastEventIdStr = extractQueryParam(session, "lastEventId");
+        if (lastEventIdStr != null) {
+            try {
+                long lastEventId = Long.parseLong(lastEventIdStr);
+                replayMissedMessages(session, projectId, lastEventId);
+            } catch (NumberFormatException e) {
+                log.warn("无效的 lastEventId: {}", lastEventIdStr);
+            }
+        }
     }
 
     @Override
@@ -74,7 +109,9 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
             return;
         }
 
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        long eventId = eventIdCounter.incrementAndGet();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventId", eventId);
         payload.put("type", "sentinel_alert");
         payload.put("projectId", projectId);
         payload.put("count", alerts.size());
@@ -89,6 +126,9 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
             return;
         }
 
+        // 缓冲消息（用于断线重连补发）
+        bufferMessage(projectId, eventId, json);
+
         int successCount = 0;
         for (WebSocketSession session : sessions) {
             if (session.isOpen()) {
@@ -100,7 +140,7 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
                 }
             }
         }
-        log.info("✅ 哨兵告警已推送至项目 {}: {} 条告警, {} 个连接", projectId, alerts.size(), successCount);
+        log.info("哨兵告警已推送至项目 {}: {} 条告警, {} 个连接, eventId={}", projectId, alerts.size(), successCount, eventId);
     }
 
     /**
@@ -115,7 +155,9 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
             return;
         }
 
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        long eventId = eventIdCounter.incrementAndGet();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventId", eventId);
         payload.put("type", "notification");
         payload.put("projectId", projectId);
         payload.put("title", title);
@@ -131,6 +173,8 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
             return;
         }
 
+        bufferMessage(projectId, eventId, json);
+
         for (WebSocketSession session : sessions) {
             if (session.isOpen()) {
                 try {
@@ -142,8 +186,49 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 缓冲消息到项目环形缓冲区（最近 MESSAGE_BUFFER_SIZE 条）
+     */
+    private void bufferMessage(Long projectId, long eventId, String json) {
+        LinkedList<BufferedMessage> buffer = messageBuffers.computeIfAbsent(projectId, k -> new LinkedList<>());
+        synchronized (buffer) {
+            buffer.addLast(new BufferedMessage(eventId, json, System.currentTimeMillis()));
+            while (buffer.size() > MESSAGE_BUFFER_SIZE) {
+                buffer.removeFirst();
+            }
+        }
+    }
+
+    /**
+     * 断线重连补偿：补发 lastEventId 之后的所有缓冲消息
+     */
+    private void replayMissedMessages(WebSocketSession session, Long projectId, long lastEventId) {
+        LinkedList<BufferedMessage> buffer = messageBuffers.get(projectId);
+        if (buffer == null) return;
+
+        int replayCount = 0;
+        synchronized (buffer) {
+            for (BufferedMessage msg : buffer) {
+                if (msg.eventId > lastEventId) {
+                    try {
+                        if (session.isOpen()) {
+                            session.sendMessage(new TextMessage(msg.json));
+                            replayCount++;
+                        }
+                    } catch (IOException e) {
+                        log.warn("重连补偿推送失败: sessionId={}, eventId={}", session.getId(), msg.eventId);
+                        break;
+                    }
+                }
+            }
+        }
+        if (replayCount > 0) {
+            log.info("断线重连补偿完成: projectId={}, 补发 {} 条消息 (lastEventId={})", projectId, replayCount, lastEventId);
+        }
+    }
+
     private Map<String, Object> toAlertDTO(NovelSentinelAlert alert) {
-        Map<String, Object> dto = new java.util.LinkedHashMap<>();
+        Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("id", alert.getId());
         dto.put("type", alert.getType());
         dto.put("title", alert.getTitle());
@@ -156,18 +241,22 @@ public class WebSocketNotificationService extends TextWebSocketHandler {
     }
 
     private Long extractProjectId(WebSocketSession session) {
+        return parseLong(extractQueryParam(session, "projectId"));
+    }
+
+    private String extractQueryParam(WebSocketSession session, String param) {
         String query = session.getUri() != null ? session.getUri().getQuery() : null;
         if (query == null) return null;
-        for (String param : query.split("&")) {
-            String[] kv = param.split("=");
-            if (kv.length == 2 && "projectId".equals(kv[0])) {
-                try {
-                    return Long.parseLong(kv[1]);
-                } catch (NumberFormatException ignored) {
-                }
-            }
+        for (String pair : query.split("&")) {
+            String[] kv = pair.split("=", 2);
+            if (kv.length == 2 && param.equals(kv[0])) return kv[1];
         }
         return null;
+    }
+
+    private Long parseLong(String s) {
+        if (s == null) return null;
+        try { return Long.parseLong(s); } catch (NumberFormatException e) { return null; }
     }
 
     public int getConnectionCount(Long projectId) {

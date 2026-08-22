@@ -35,8 +35,8 @@ public abstract class BaseAgent implements WritingAgent {
     private static final long TIMEOUT_SECONDS = 120;
 
     protected final DeepSeekClient deepSeekClient;
-    /** 线程池用于异步执行AI调用 */
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    /** 固定线程池用于重试执行AI调用（避免CachedThreadPool无界创建） */
+    private final ExecutorService executor = Executors.newFixedThreadPool(2);
 
     protected BaseAgent(DeepSeekClient deepSeekClient) {
         this.deepSeekClient = deepSeekClient;

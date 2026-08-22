@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.*;
 
 /**
@@ -51,8 +52,8 @@ public class OrchestratorAgent {
     private final NovelCharacterMapper characterMapper;
     private final NovelForeshadowingMapper foreshadowingMapper;
 
-    /** 线程池，用于并行执行多个Agent任务 */
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    /** 固定线程池：4个Agent并行 + 1个协调线程，避免CachedThreadPool无界创建 */
+    private final ExecutorService executor = Executors.newFixedThreadPool(5);
 
     /**
      * 执行多Agent协作分析
@@ -79,80 +80,66 @@ public class OrchestratorAgent {
         AgentResult readerResult = null;
         String summary = null;
 
-        Future<AgentResult> editorFuture = null;
-        Future<AgentResult> characterFuture = null;
-        Future<AgentResult> styleFuture = null;
-        Future<AgentResult> readerFuture = null;
+        CompletableFuture<AgentResult> editorCf = null;
+        CompletableFuture<AgentResult> characterCf = null;
+        CompletableFuture<AgentResult> styleCf = null;
+        CompletableFuture<AgentResult> readerCf = null;
 
         try {
             AgentContext context = buildContext(projectId, request);
+            AgentContext snapshot = context.snapshot();
 
-            editorFuture = executor.submit(() -> {
+            // 四个 Agent 并行提交，各自独立超时（BaseAgent 内部 120s）
+            editorCf = CompletableFuture.supplyAsync(() -> {
                 log.info("📝 Editor Agent 开始分析...");
-                AgentResult r = editorAgent.analyze(context);
+                AgentResult r = editorAgent.analyze(snapshot);
                 log.info("✅ Editor Agent 完成");
                 return r;
-            });
+            }, executor);
 
-            characterFuture = executor.submit(() -> {
+            characterCf = CompletableFuture.supplyAsync(() -> {
                 log.info("👤 Character Agent 开始分析...");
-                AgentResult r = characterAgent.analyze(context);
+                AgentResult r = characterAgent.analyze(snapshot);
                 log.info("✅ Character Agent 完成");
                 return r;
-            });
+            }, executor);
 
-            styleFuture = executor.submit(() -> {
+            styleCf = CompletableFuture.supplyAsync(() -> {
                 log.info("🎨 Style Agent 开始分析...");
-                AgentResult r = styleAgent.analyze(context);
+                AgentResult r = styleAgent.analyze(snapshot);
                 log.info("✅ Style Agent 完成");
                 return r;
-            });
+            }, executor);
 
-            readerFuture = executor.submit(() -> {
+            readerCf = CompletableFuture.supplyAsync(() -> {
                 log.info("📖 Reader Agent 开始分析...");
-                AgentResult r = readerAgent.analyze(context);
+                AgentResult r = readerAgent.analyze(snapshot);
                 log.info("✅ Reader Agent 完成");
                 return r;
-            });
+            }, executor);
 
-            editorResult = editorFuture.get(ORCHESTRATOR_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            characterResult = characterFuture.get(ORCHESTRATOR_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            styleResult = styleFuture.get(ORCHESTRATOR_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            readerResult = readerFuture.get(ORCHESTRATOR_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            // 全局超时：allOf 等待所有完成，任一超时触发 TimeoutException 进入 catch
+            CompletableFuture.allOf(editorCf, characterCf, styleCf, readerCf)
+                    .orTimeout(ORCHESTRATOR_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .join();
+
+            // 逐个获取结果（已完成的拿正常值，超时/异常的拿 null）
+            editorResult = getCfResult(editorCf);
+            characterResult = getCfResult(characterCf);
+            styleResult = getCfResult(styleCf);
+            readerResult = getCfResult(readerCf);
 
             log.info("📋 开始生成综合建议...");
-            summary = generateSummaryWithTimeout(editorResult, characterResult, styleResult, readerResult, context);
-
-        } catch (TimeoutException e) {
-            log.error("❌ 多Agent协作超时 ({}秒)", ORCHESTRATOR_TIMEOUT_SECONDS, e);
-            cancelFutures(editorFuture, characterFuture, styleFuture, readerFuture);
-            return OrchestratorResponse.builder()
-                    .editorResult(editorResult)
-                    .characterResult(characterResult)
-                    .styleResult(styleResult)
-                    .readerResult(readerResult)
-                    .summary(summary != null ? summary : "协作超时，部分分析结果可能不完整")
-                    .totalCostMs(System.currentTimeMillis() - startTime)
-                    .success(false)
-                    .errorMessage("协作超时 (120秒)")
-                    .build();
+            summary = generateSummaryWithTimeout(editorResult, characterResult, styleResult, readerResult, snapshot);
 
         } catch (Exception e) {
             log.error("❌ 多Agent协作执行失败: {}", e.getMessage(), e);
-            return OrchestratorResponse.builder()
-                    .editorResult(editorResult)
-                    .characterResult(characterResult)
-                    .styleResult(styleResult)
-                    .readerResult(readerResult)
-                    .summary(summary != null ? summary : "执行失败: " + e.getMessage())
-                    .totalCostMs(System.currentTimeMillis() - startTime)
-                    .success(false)
-                    .errorMessage(e.getMessage())
-                    .build();
+            cancelCfs(editorCf, characterCf, styleCf, readerCf);
         }
 
         long totalCostMs = System.currentTimeMillis() - startTime;
-        log.info("🤖 多Agent协作完成，总耗时: {}ms", totalCostMs);
+        boolean success = editorResult != null && characterResult != null && styleResult != null && readerResult != null;
+        log.info("🤖 多Agent协作{}，总耗时: {}ms", success ? "完成" : "部分完成", totalCostMs);
 
         return OrchestratorResponse.builder()
                 .editorResult(editorResult)
@@ -161,14 +148,25 @@ public class OrchestratorAgent {
                 .readerResult(readerResult)
                 .summary(summary)
                 .totalCostMs(totalCostMs)
-                .success(true)
+                .success(success)
+                .errorMessage(success ? null : "部分Agent执行超时或失败")
                 .build();
     }
 
-    private void cancelFutures(Future<?>... futures) {
-        for (Future<?> future : futures) {
-            if (future != null && !future.isDone()) {
-                future.cancel(true);
+    /** 安全获取 CompletableFuture 结果，异常/超时返回 null */
+    private AgentResult getCfResult(CompletableFuture<AgentResult> cf) {
+        if (cf == null) return null;
+        try {
+            return cf.isDone() && !cf.isCompletedExceptionally() ? cf.getNow(null) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void cancelCfs(CompletableFuture<?>... cfs) {
+        for (CompletableFuture<?> cf : cfs) {
+            if (cf != null && !cf.isDone()) {
+                cf.cancel(true);
             }
         }
     }
@@ -252,18 +250,32 @@ public class OrchestratorAgent {
     private String generateSummary(AgentResult editor, AgentResult character,
                                    AgentResult style, AgentResult reader,
                                    AgentContext context) {
-        String editorContent = (editor != null && editor.getContent() != null) ? editor.getContent() : "（无）";
-        String characterContent = (character != null && character.getContent() != null) ? character.getContent() : "（无）";
-        String styleContent = (style != null && style.getContent() != null) ? style.getContent() : "（无）";
-        String readerContent = (reader != null && reader.getContent() != null) ? reader.getContent() : "（无）";
+        // 统计成功/失败的 Agent
+        List<String> successAgents = new java.util.ArrayList<>();
+        List<String> failedAgents = new java.util.ArrayList<>();
+        if (editor != null && editor.isSuccess()) successAgents.add("编辑");
+        else failedAgents.add("编辑");
+        if (character != null && character.isSuccess()) successAgents.add("人物");
+        else failedAgents.add("人物");
+        if (style != null && style.isSuccess()) successAgents.add("风格");
+        else failedAgents.add("风格");
+        if (reader != null && reader.isSuccess()) successAgents.add("读者");
+        else failedAgents.add("读者");
+
+        String editorContent = (editor != null && editor.isSuccess() && editor.getContent() != null) ? editor.getContent() : "（未完成）";
+        String characterContent = (character != null && character.isSuccess() && character.getContent() != null) ? character.getContent() : "（未完成）";
+        String styleContent = (style != null && style.isSuccess() && style.getContent() != null) ? style.getContent() : "（未完成）";
+        String readerContent = (reader != null && reader.isSuccess() && reader.getContent() != null) ? reader.getContent() : "（未完成）";
 
         String prompt = String.format("""
-                你是小说主编。综合以下4个分析，给出1-3条核心建议（每条50字内）：
+                你是小说主编。综合以下分析给出 1-3 条核心建议（每条 50 字内）。
+                成功完成的分析：[%s]；未完成的标记为"（未完成）"请忽略。
                 编辑：%s
                 人物：%s
                 风格：%s
                 读者：%s
                 """,
+                String.join("、", successAgents),
                 editorContent, characterContent, styleContent, readerContent);
 
         try {

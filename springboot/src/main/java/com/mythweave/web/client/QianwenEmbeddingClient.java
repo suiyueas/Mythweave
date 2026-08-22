@@ -32,7 +32,7 @@ public class QianwenEmbeddingClient {
     }
 
     /**
-     * 文本向量化（1024维）
+     * 文本向量化（1024维），失败时指数退避重试最多 2 次
      */
     public double[] embed(String text) throws IOException {
         Map<String, Object> body = Map.of(
@@ -41,24 +41,38 @@ public class QianwenEmbeddingClient {
                 "parameters", Map.of("text_type", "document")
         );
 
-        Request request = new Request.Builder()
-                .url(aiProperties.getQianwen().getBaseUrl() + aiProperties.getQianwen().getEmbeddingEndpoint())
-                .header("Authorization", "Bearer " + aiProperties.getQianwen().getApiKey())
-                .header("Content-Type", "application/json")
-                .post(RequestBody.create(objectMapper.writeValueAsString(body), MediaType.parse("application/json")))
-                .build();
+        int maxRetries = 2;
+        IOException lastException = null;
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                Request request = new Request.Builder()
+                        .url(aiProperties.getQianwen().getBaseUrl() + aiProperties.getQianwen().getEmbeddingEndpoint())
+                        .header("Authorization", "Bearer " + aiProperties.getQianwen().getApiKey())
+                        .header("Content-Type", "application/json")
+                        .post(RequestBody.create(objectMapper.writeValueAsString(body), MediaType.parse("application/json")))
+                        .build();
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Qianwen Embedding error: " + response.code());
+                try (Response response = httpClient.newCall(request).execute()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Qianwen Embedding error: " + response.code());
+                    }
+                    JsonNode root = objectMapper.readTree(response.body().string());
+                    JsonNode embeddings = root.path("output").path("embeddings").get(0).path("embedding");
+                    double[] result = new double[embeddings.size()];
+                    for (int i = 0; i < embeddings.size(); i++) {
+                        result[i] = embeddings.get(i).asDouble();
+                    }
+                    return result;
+                }
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < maxRetries) {
+                    long delay = (long) Math.pow(2, attempt) * 500;
+                    log.warn("千问 Embedding 第{}次调用失败，{}ms 后重试: {}", attempt + 1, delay, e.getMessage());
+                    try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
             }
-            JsonNode root = objectMapper.readTree(response.body().string());
-            JsonNode embeddings = root.path("output").path("embeddings").get(0).path("embedding");
-            double[] result = new double[embeddings.size()];
-            for (int i = 0; i < embeddings.size(); i++) {
-                result[i] = embeddings.get(i).asDouble();
-            }
-            return result;
         }
+        throw lastException != null ? lastException : new IOException("千问 Embedding 调用失败");
     }
 }

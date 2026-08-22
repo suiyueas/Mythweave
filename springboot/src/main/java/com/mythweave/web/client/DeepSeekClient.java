@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * DeepSeek API 客户端
@@ -47,6 +48,28 @@ public class DeepSeekClient {
     private final AiProperties aiProperties;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+
+    /** AI 调用统计（内存累计，供监控查询） */
+    private final AtomicLong totalApiCalls = new AtomicLong(0);
+    private final AtomicLong totalTokens = new AtomicLong(0);
+    private final AtomicLong totalInputTokens = new AtomicLong(0);
+    private final AtomicLong totalOutputTokens = new AtomicLong(0);
+
+    public record UsageStats(long apiCalls, long totalTokens, long inputTokens, long outputTokens) {}
+
+    public UsageStats getUsageStats() {
+        return new UsageStats(totalApiCalls.get(), totalTokens.get(), totalInputTokens.get(), totalOutputTokens.get());
+    }
+
+    private void recordUsage(JsonNode usage) {
+        if (usage == null || usage.isMissingNode()) return;
+        totalApiCalls.incrementAndGet();
+        long prompt = usage.path("prompt_tokens").asLong(0);
+        long completion = usage.path("completion_tokens").asLong(0);
+        totalInputTokens.addAndGet(prompt);
+        totalOutputTokens.addAndGet(completion);
+        totalTokens.addAndGet(prompt + completion);
+    }
 
     public DeepSeekClient(AiProperties aiProperties) {
         this.aiProperties = aiProperties;
@@ -149,6 +172,7 @@ public class DeepSeekClient {
                 }
 
                 JsonNode root = objectMapper.readTree(responseBody);
+                recordUsage(root.path("usage"));
                 JsonNode choices = root.path("choices");
                 if (choices.isMissingNode() || choices.isEmpty() || choices.get(0) == null) {
                     log.error("DeepSeek API 响应中无choices: {}", responseBody);
@@ -305,6 +329,10 @@ public class DeepSeekClient {
                 log.info("DeepSeek流式完成(模型={}, thinking={}): totalTokens={}, reasoningTokens={}, ttftMs={}",
                         aiProperties.getDeepseek().getModel(), thinking, totalTokens, reasoningTokens,
                         ttftMs < 0 ? "无正文输出" : ttftMs);
+                // 流式响应的 token 统计已通过 chunk 内的 usage 字段累计
+                this.totalApiCalls.incrementAndGet();
+                this.totalTokens.addAndGet(totalTokens);
+                this.totalOutputTokens.addAndGet(totalTokens);
                 return totalTokens;
             }
         }
